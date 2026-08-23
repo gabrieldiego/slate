@@ -607,19 +607,10 @@ impl ProfileSyncService {
         let latest_object_id = candidates
             .first()
             .map(|candidate| candidate.object_id.clone());
-        let latest_object_available = latest_object_id.as_deref().is_some_and(|object_id| {
-            find_online_object(
-                &store,
-                self.provider_id.as_str(),
-                request.profile.as_str(),
-                object_id,
-            )
-            .is_some()
-        });
-        let delayed_object_provider_ids = latest_object_id
+        let latest_object_providers = latest_object_id
             .as_deref()
             .map(|object_id| {
-                delayed_object_provider_ids(
+                latest_object_provider_availability(
                     &store,
                     self.provider_id.as_str(),
                     request.profile.as_str(),
@@ -627,6 +618,7 @@ impl ProfileSyncService {
                 )
             })
             .unwrap_or_default();
+        let latest_object_available = !latest_object_providers.available_provider_ids.is_empty();
         let online_retaining_providers = latest_object_id
             .as_deref()
             .map(|object_id| {
@@ -637,7 +629,9 @@ impl ProfileSyncService {
             candidates.len(),
             delayed_candidates.len(),
             latest_object_available,
-            delayed_object_provider_ids.len(),
+            latest_object_providers.delayed_provider_ids.len(),
+            latest_object_providers.stale_provider_ids.len(),
+            latest_object_providers.offline_provider_ids.len(),
             online_retaining_providers,
             request.minimum_online_retaining_providers,
         );
@@ -651,7 +645,11 @@ impl ProfileSyncService {
                 delayed_publisher_provider_ids,
                 latest_object_id,
                 latest_object_available,
-                delayed_object_provider_ids,
+                latest_object_available_provider_ids: latest_object_providers
+                    .available_provider_ids,
+                latest_object_stale_provider_ids: latest_object_providers.stale_provider_ids,
+                latest_object_offline_provider_ids: latest_object_providers.offline_provider_ids,
+                delayed_object_provider_ids: latest_object_providers.delayed_provider_ids,
                 online_retaining_providers,
                 minimum_online_retaining_providers: request.minimum_online_retaining_providers,
                 degraded,
@@ -925,6 +923,62 @@ impl ProfileSyncService {
             ProfileSyncRequest::RootHealth(request) => self.root_health(request),
         }
     }
+}
+
+/*
+ * The local fixture has to model protocol behavior without leaking those models
+ * into protocol adapters. Root health therefore reports modeled transport
+ * states as service-level provider IDs; adapters still fetch through their
+ * normal request/executor path.
+ */
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct LatestObjectProviderAvailability {
+    available_provider_ids: Vec<String>,
+    delayed_provider_ids: Vec<String>,
+    stale_provider_ids: Vec<String>,
+    offline_provider_ids: Vec<String>,
+}
+
+fn latest_object_provider_availability(
+    store: &ProfileSyncStore,
+    requester_provider_id: &str,
+    profile: &str,
+    object_id: &str,
+) -> LatestObjectProviderAvailability {
+    let mut availability = LatestObjectProviderAvailability::default();
+    for (provider_id, stored_profile, stored_object_id) in store.objects.keys() {
+        if stored_profile != profile || stored_object_id != object_id {
+            continue;
+        }
+
+        let Some(state) = store.providers.get(provider_id) else {
+            if transfer_available(store, provider_id, requester_provider_id) {
+                availability
+                    .available_provider_ids
+                    .push(provider_id.clone());
+            } else {
+                availability.delayed_provider_ids.push(provider_id.clone());
+            }
+            continue;
+        };
+
+        if !state.roles.object_transfer {
+            continue;
+        }
+        if !provider_is_online(store, provider_id, state.roles) {
+            availability.offline_provider_ids.push(provider_id.clone());
+        } else if !provider_is_fresh(store, state.last_seen_sequence) {
+            availability.stale_provider_ids.push(provider_id.clone());
+        } else if !transfer_available(store, provider_id, requester_provider_id) {
+            availability.delayed_provider_ids.push(provider_id.clone());
+        } else {
+            availability
+                .available_provider_ids
+                .push(provider_id.clone());
+        }
+    }
+
+    availability
 }
 
 #[cfg(any(test, feature = "test-fixtures"))]
@@ -1488,6 +1542,8 @@ fn profile_sync_root_health_message(
     delayed_candidates: usize,
     latest_object_available: bool,
     delayed_object_providers: usize,
+    stale_object_providers: usize,
+    offline_object_providers: usize,
     online_retaining_providers: usize,
     minimum_online_retaining_providers: usize,
 ) -> (bool, String) {
@@ -1510,6 +1566,22 @@ fn profile_sync_root_health_message(
                 true,
                 format!(
                     "profile sync root object is blocked by {delayed_object_providers} delayed object-transfer provider(s) in the local fixture"
+                ),
+            );
+        }
+        if stale_object_providers > 0 {
+            return (
+                true,
+                format!(
+                    "profile sync root object is only held by {stale_object_providers} stale object-transfer provider(s) in the local fixture"
+                ),
+            );
+        }
+        if offline_object_providers > 0 {
+            return (
+                true,
+                format!(
+                    "profile sync root object is only held by {offline_object_providers} offline object-transfer provider(s) in the local fixture"
                 ),
             );
         }
@@ -1571,31 +1643,6 @@ fn find_online_object<'a>(
                 && transfer_available(store, provider_id, requester_provider_id)
         })
         .map(|(_, bytes)| bytes)
-}
-
-fn delayed_object_provider_ids(
-    store: &ProfileSyncStore,
-    requester_provider_id: &str,
-    profile: &str,
-    object_id: &str,
-) -> Vec<String> {
-    store
-        .objects
-        .keys()
-        .filter_map(|(provider_id, stored_profile, stored_object_id)| {
-            if stored_profile == profile
-                && stored_object_id == object_id
-                && provider_is_fresh_online_for_role(store, provider_id, |roles| {
-                    roles.object_transfer
-                })
-                && !transfer_available(store, provider_id, requester_provider_id)
-            {
-                Some(provider_id.clone())
-            } else {
-                None
-            }
-        })
-        .collect()
 }
 
 fn transfer_available(
@@ -3124,6 +3171,13 @@ mod tests {
         };
         assert_eq!(health.latest_object_id.as_deref(), Some(object_id.as_str()));
         assert!(health.latest_object_available);
+        assert_eq!(
+            health.latest_object_available_provider_ids,
+            vec!["local-fixture-device-a".to_string()]
+        );
+        assert!(health.latest_object_stale_provider_ids.is_empty());
+        assert!(health.latest_object_offline_provider_ids.is_empty());
+        assert!(health.delayed_object_provider_ids.is_empty());
         assert_eq!(health.online_retaining_providers, 0);
         assert!(health.degraded);
         assert!(health.message.contains("not retained"));
@@ -3145,6 +3199,174 @@ mod tests {
         };
         assert_eq!(health.online_retaining_providers, 1);
         assert!(!health.degraded);
+    }
+
+    #[test]
+    fn local_fixture_root_health_reports_stale_latest_object_holders() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut device_b = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        device_b.register_service(fixture.service_for_device("b"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted object on stale device".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put stale-object fixture data");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "settings/latest",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can publish stale-object root");
+
+        fixture
+            .expire_current_provider_freshness()
+            .expect("expire current provider freshness");
+        fixture.mark_device_seen("b").expect("mark receiver fresh");
+        let stale_health = device_b
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("receiver can inspect stale-object root health");
+        let ProfileSyncResponse::RootHealth { health } = stale_health else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.visible_candidates, 1);
+        assert_eq!(health.latest_object_id.as_deref(), Some(object_id.as_str()));
+        assert!(!health.latest_object_available);
+        assert!(health.latest_object_available_provider_ids.is_empty());
+        assert_eq!(
+            health.latest_object_stale_provider_ids,
+            vec!["local-fixture-device-a".to_string()]
+        );
+        assert!(health.latest_object_offline_provider_ids.is_empty());
+        assert!(health.delayed_object_provider_ids.is_empty());
+        assert!(health.degraded);
+        assert!(health.message.contains("stale object-transfer"));
+
+        fixture.mark_device_seen("a").expect("mark source fresh");
+        let recovered_health = device_b
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("receiver can inspect recovered stale-object root health");
+        let ProfileSyncResponse::RootHealth { health } = recovered_health else {
+            panic!("unexpected root health response");
+        };
+        assert!(health.latest_object_available);
+        assert_eq!(
+            health.latest_object_available_provider_ids,
+            vec!["local-fixture-device-a".to_string()]
+        );
+        assert!(health.latest_object_stale_provider_ids.is_empty());
+        assert!(health.latest_object_offline_provider_ids.is_empty());
+    }
+
+    #[test]
+    fn local_fixture_root_health_reports_offline_latest_object_holders() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut device_b = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        device_b.register_service(fixture.service_for_device("b"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted object on offline device".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put offline-object fixture data");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "settings/latest",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can publish offline-object root");
+
+        fixture
+            .set_device_online("a", false)
+            .expect("mark source provider offline");
+        let offline_health = device_b
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("receiver can inspect offline-object root health");
+        let ProfileSyncResponse::RootHealth { health } = offline_health else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.visible_candidates, 1);
+        assert_eq!(health.latest_object_id.as_deref(), Some(object_id.as_str()));
+        assert!(!health.latest_object_available);
+        assert!(health.latest_object_available_provider_ids.is_empty());
+        assert!(health.latest_object_stale_provider_ids.is_empty());
+        assert_eq!(
+            health.latest_object_offline_provider_ids,
+            vec!["local-fixture-device-a".to_string()]
+        );
+        assert!(health.delayed_object_provider_ids.is_empty());
+        assert!(health.degraded);
+        assert!(health.message.contains("offline object-transfer"));
+
+        fixture
+            .set_device_online("a", true)
+            .expect("mark source provider online");
+        let recovered_health = device_b
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("receiver can inspect recovered offline-object root health");
+        let ProfileSyncResponse::RootHealth { health } = recovered_health else {
+            panic!("unexpected root health response");
+        };
+        assert!(health.latest_object_available);
+        assert_eq!(
+            health.latest_object_available_provider_ids,
+            vec!["local-fixture-device-a".to_string()]
+        );
+        assert!(health.latest_object_offline_provider_ids.is_empty());
     }
 
     #[test]

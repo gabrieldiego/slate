@@ -474,6 +474,11 @@ Current baseline:
   `local-preview-fixtures` feature explicitly, so simulated broadweb models can
   back user-facing local trials without intermingling with production protocol
   adapter code or default dependency graphs.
+- Socketless profile-sync root health now reports which fresh provider IDs can
+  serve the latest root object, and separately names stale or offline providers
+  that still hold that object. This lets schedulers and UI distinguish missing
+  bytes from delayed transfer, stale rendezvous, and offline availability in
+  deterministic local tests before real broadweb transports are enabled.
 - Trusted device-head receives now ignore stale root rollback: if a resolved
   device head points at an older sequence than a locally applied head for the
   same trusted device, Slate leaves the newer settings and device-head roots in
