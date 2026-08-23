@@ -174,6 +174,14 @@ require_text \
     crates/broadwebd/src/daemon.rs \
     'impl BroadwebdClient for BroadwebDaemon' \
     'BroadwebDaemon must implement the IPC-neutral broadwebd client boundary.'
+require_text \
+    crates/broadwebd/src/daemon.rs \
+    'dispatch_service_request' \
+    'BroadwebdClient must expose one request-envelope dispatch path for future IPC clients.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'daemon_dispatches_profile_sync_through_service_request_envelope' \
+    'broadwebd must cover profile-sync dispatch through the IPC-shaped service request envelope.'
 
 protocol_model_terms='slate-fixture|InProcessBroadwebNetwork|Internal[A-Za-z0-9_]*Fixture|ProfileSyncModel|socketless-fixture|in-process-fixture|simulated|Simulation|fixture model|internal model'
 
@@ -384,9 +392,17 @@ require_text \
     '`BroadwebdClient` trait' \
     'broadwebd architecture must document the current IPC-neutral in-process client trait.'
 require_text \
+    docs/architecture/broadwebd.md \
+    '`dispatch_service_request` entry point over' \
+    'broadwebd architecture must document the IPC-shaped service request envelope.'
+require_text \
     docs/roadmap.md \
     'public `BroadwebdClient` trait' \
     'Roadmap must record the current broadwebd client boundary.'
+require_text \
+    docs/roadmap.md \
+    '`dispatch_service_request` method over `ServiceRequest`' \
+    'Roadmap must record broadwebd service-envelope dispatch.'
 require_text \
     docs/architecture/profile-sync.md \
     '`ProfileSyncObjectSource` trait over broadwebd'\''s `BroadwebdClient` boundary' \
@@ -558,6 +574,7 @@ run_test_with_features slate-broadwebd test-fixtures registry_can_opt_into_kubo_
 run_test_with_features slate-broadwebd test-fixtures registry_can_apply_kubo_profile_sync_runtime_config
 run_test_with_features slate-broadwebd test-fixtures registry_rejects_external_kubo_profile_sync_endpoint
 run_test slate-broadwebd daemon_dispatches_through_ipc_neutral_client_trait
+run_test slate-broadwebd daemon_dispatches_profile_sync_through_service_request_envelope
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_get_uses_transport_bytes_not_local_upload_metadata
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_round_trips_state_without_canned_responses
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_release_updates_retention_health

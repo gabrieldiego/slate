@@ -3,7 +3,8 @@ use crate::{
     DownloadRecord, FetchDisposition, FetchPurpose, HttpFetchRequest, HttpFetchResponse,
     IpfsConfig, PluginInstallReport, PluginMetadata, PluginRegistry, ProfileSyncRequest,
     ProfileSyncResponse, ProfileSyncRuntimeConfig, ProtocolInstallReport, ProtocolService,
-    ResourceBudget, StateRoot, TemporaryDownloadRecord, TransportPlugin,
+    ResourceBudget, ServiceRequest, ServiceResponse, StateRoot, TemporaryDownloadRecord,
+    TransportPlugin,
 };
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -22,12 +23,33 @@ pub trait BroadwebdClient {
 
     fn status_snapshot(&self) -> BroadwebStatusSnapshot;
 
-    fn fetch_http(&self, request: HttpFetchRequest) -> Result<HttpFetchResponse, BroadwebdError>;
+    fn dispatch_service_request(
+        &self,
+        request: ServiceRequest,
+    ) -> Result<ServiceResponse, BroadwebdError>;
+
+    fn fetch_http(&self, request: HttpFetchRequest) -> Result<HttpFetchResponse, BroadwebdError> {
+        let response = self.dispatch_service_request(ServiceRequest::HttpFetch(request))?;
+        let ServiceResponse::HttpFetch(response) = response else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "HTTP fetch dispatch returned a non-HTTP response".to_string(),
+            ));
+        };
+        Ok(response)
+    }
 
     fn profile_sync(
         &self,
         request: ProfileSyncRequest,
-    ) -> Result<ProfileSyncResponse, BroadwebdError>;
+    ) -> Result<ProfileSyncResponse, BroadwebdError> {
+        let response = self.dispatch_service_request(ServiceRequest::ProfileSync(request))?;
+        let ServiceResponse::ProfileSync(response) = response else {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync dispatch returned a non-profile-sync response".to_string(),
+            ));
+        };
+        Ok(response)
+    }
 
     fn temporary_downloads(
         &self,
@@ -182,6 +204,20 @@ impl BroadwebDaemon {
         self.registry.profile_sync(request, &self.budget)
     }
 
+    pub fn dispatch_service_request(
+        &self,
+        request: ServiceRequest,
+    ) -> Result<ServiceResponse, BroadwebdError> {
+        match request {
+            ServiceRequest::HttpFetch(request) => {
+                self.fetch_http(request).map(ServiceResponse::HttpFetch)
+            }
+            ServiceRequest::ProfileSync(request) => {
+                self.profile_sync(request).map(ServiceResponse::ProfileSync)
+            }
+        }
+    }
+
     pub fn temporary_downloads(
         &self,
         profile: &str,
@@ -230,15 +266,11 @@ impl BroadwebdClient for BroadwebDaemon {
         BroadwebDaemon::status_snapshot(self)
     }
 
-    fn fetch_http(&self, request: HttpFetchRequest) -> Result<HttpFetchResponse, BroadwebdError> {
-        BroadwebDaemon::fetch_http(self, request)
-    }
-
-    fn profile_sync(
+    fn dispatch_service_request(
         &self,
-        request: ProfileSyncRequest,
-    ) -> Result<ProfileSyncResponse, BroadwebdError> {
-        BroadwebDaemon::profile_sync(self, request)
+        request: ServiceRequest,
+    ) -> Result<ServiceResponse, BroadwebdError> {
+        BroadwebDaemon::dispatch_service_request(self, request)
     }
 
     fn temporary_downloads(

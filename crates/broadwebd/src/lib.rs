@@ -926,9 +926,9 @@ mod tests {
         ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
         ProfileSyncRootHealthRequest, ProfileSyncRootRequest, ProfileSyncRootUpdate,
         ProfileSyncRuntimeBackend, ProfileSyncRuntimeConfig, ProfileSyncService, ProtocolService,
-        ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
-        TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest, TransportPlugin,
-        ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
+        ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, ServiceRequest, ServiceResponse,
+        StateRoot, TOR_ARTI_HTTP_PLUGIN, TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest,
+        TransportPlugin, ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
         ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
         ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
         ipfs_kubo_profile_sync_pin_ls_has_recursive_pin, ipfs_kubo_profile_sync_pin_ls_url,
@@ -1134,6 +1134,45 @@ mod tests {
                 .downloads("default")
                 .expect("list downloads through broadwebd client trait")
                 .is_empty()
+        );
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
+    fn daemon_dispatches_profile_sync_through_service_request_envelope() {
+        let daemon =
+            BroadwebDaemon::start(test_state_root("service-request-envelope")).expect("daemon");
+        let client: &dyn BroadwebdClient = &daemon;
+
+        let put = client
+            .dispatch_service_request(ServiceRequest::ProfileSync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted service request object".to_vec(),
+                )),
+            ))
+            .expect("put through broadwebd service request envelope");
+        let ServiceResponse::ProfileSync(ProfileSyncResponse::PutEncryptedObject { object_id }) =
+            put
+        else {
+            panic!("unexpected put response through broadwebd service request envelope");
+        };
+
+        let fetched = client
+            .dispatch_service_request(ServiceRequest::ProfileSync(
+                ProfileSyncRequest::GetEncryptedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+            ))
+            .expect("fetch through broadwebd service request envelope");
+        assert_eq!(
+            fetched,
+            ServiceResponse::ProfileSync(ProfileSyncResponse::GetEncryptedObject {
+                object_id,
+                bytes: b"encrypted service request object".to_vec()
+            })
         );
 
         let _ = fs::remove_dir_all(daemon.state_root().path());

@@ -418,7 +418,12 @@ network behavior without guessing from URLs.
 The current in-process implementation exposes that shape through the
 `BroadwebdClient` trait. `BroadwebDaemon` implements the trait directly today;
 future IPC clients should implement the same request/response boundary instead
-of exposing daemon internals or protocol-specific backends to Slate callers.
+of exposing daemon internals or protocol-specific backends to Slate callers. The
+trait now has a single `dispatch_service_request` entry point over
+`ServiceRequest` and `ServiceResponse` envelopes for application-service work,
+with typed convenience methods such as HTTP fetch and profile sync layered over
+that dispatch path. This keeps the in-process API aligned with the later IPC
+shape without opening sockets during local tests.
 
 ## IPFS Initial Shape
 

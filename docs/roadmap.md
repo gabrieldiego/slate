@@ -272,6 +272,11 @@ Current baseline:
   Slate callers and future IPC clients a stable boundary for HTTP fetches,
   profile-sync requests, health, status, and download listing without exposing
   protocol internals.
+- The broadwebd client boundary now includes a single
+  `dispatch_service_request` method over `ServiceRequest` and `ServiceResponse`
+  envelopes. The typed HTTP and profile-sync client methods are convenience
+  wrappers over that dispatch path, so future IPC clients can implement one
+  command surface while Slate retains typed call sites.
 - `slate-profile-sync` has started consuming that boundary directly: its
   source, publisher, runner, and scheduler bridge wrappers now hold
   `BroadwebdClient` trait objects instead of concrete daemon references.
