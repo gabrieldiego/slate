@@ -425,6 +425,11 @@ with typed convenience methods such as HTTP fetch and profile sync layered over
 that dispatch path. This keeps the in-process API aligned with the later IPC
 shape without opening sockets during local tests.
 
+The current service request and response envelopes round-trip through JSON in
+unit tests. That does not define the final IPC transport, authentication,
+streaming, cancellation, or backpressure protocol yet, but it keeps the Rust
+boundary as serializable DTOs rather than process-local object references.
+
 ## IPFS Initial Shape
 
 IPFS should be the first broadweb protocol to use the daemon because `ipfs://`

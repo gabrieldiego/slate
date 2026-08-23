@@ -1179,6 +1179,76 @@ mod tests {
     }
 
     #[test]
+    fn service_request_response_envelopes_round_trip_for_ipc_framing() {
+        let request = ServiceRequest::ProfileSync(ProfileSyncRequest::PutEncryptedObject(
+            ProfileSyncPutObjectRequest::new("default", b"encrypted ipc object".to_vec()),
+        ));
+        let request_bytes = serde_json::to_vec(&request).expect("encode service request envelope");
+        let decoded_request: ServiceRequest =
+            serde_json::from_slice(request_bytes.as_slice()).expect("decode service request");
+        assert_eq!(decoded_request, request);
+
+        let http_response = ServiceResponse::HttpFetch(
+            HttpFetchResponse::new(
+                "ipfs://bafybeigdyrztk/hello.html",
+                200,
+                Some("text/html".to_string()),
+                vec![super::HttpHeader {
+                    name: "content-type".to_string(),
+                    value: "text/html".to_string(),
+                }],
+                b"<h1>hello</h1>".to_vec(),
+            )
+            .with_route(super::FetchRouteInfo::new(
+                "default",
+                IPFS_GATEWAY_PLUGIN,
+                "local gateway",
+                FetchPurpose::Navigation,
+            ))
+            .with_download(super::DownloadRecord::new(
+                "default",
+                "hello.html",
+                PathBuf::from("/tmp/slate-downloads/hello.html"),
+                14,
+                Some("text/html".to_string()),
+            )),
+        );
+        let http_response_bytes =
+            serde_json::to_vec(&http_response).expect("encode HTTP service response");
+        let decoded_http_response: ServiceResponse =
+            serde_json::from_slice(http_response_bytes.as_slice())
+                .expect("decode HTTP service response");
+        assert_eq!(decoded_http_response, http_response);
+
+        let profile_sync_response = ServiceResponse::ProfileSync(ProfileSyncResponse::RootHealth {
+            health: super::ProfileSyncRootHealth {
+                profile: "default".to_string(),
+                root_id: "settings/latest".to_string(),
+                visible_candidates: 1,
+                delayed_candidates: 0,
+                delayed_publisher_provider_ids: Vec::new(),
+                latest_object_id: Some("object-a".to_string()),
+                latest_object_available: true,
+                latest_object_available_provider_ids: vec!["provider-a".to_string()],
+                latest_object_stale_provider_ids: Vec::new(),
+                latest_object_offline_provider_ids: Vec::new(),
+                delayed_object_provider_ids: Vec::new(),
+                unavailable_retaining_provider_ids: Vec::new(),
+                online_retaining_providers: 1,
+                minimum_online_retaining_providers: 1,
+                degraded: false,
+                message: "Ready".to_string(),
+            },
+        });
+        let profile_sync_response_bytes =
+            serde_json::to_vec(&profile_sync_response).expect("encode profile-sync response");
+        let decoded_profile_sync_response: ServiceResponse =
+            serde_json::from_slice(profile_sync_response_bytes.as_slice())
+                .expect("decode profile-sync response");
+        assert_eq!(decoded_profile_sync_response, profile_sync_response);
+    }
+
+    #[test]
     fn local_preview_profile_sync_service_stores_retains_and_resolves_local_objects() {
         let daemon = BroadwebDaemon::start(test_state_root("profile-sync")).expect("daemon");
         let metadata = daemon

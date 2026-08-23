@@ -179,9 +179,25 @@ require_text \
     'dispatch_service_request' \
     'BroadwebdClient must expose one request-envelope dispatch path for future IPC clients.'
 require_text \
+    crates/broadwebd/src/http.rs \
+    'pub enum ServiceRequest' \
+    'broadwebd must keep the IPC-shaped service request envelope as a public DTO.'
+require_text \
     crates/broadwebd/src/lib.rs \
     'daemon_dispatches_profile_sync_through_service_request_envelope' \
     'broadwebd must cover profile-sync dispatch through the IPC-shaped service request envelope.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'service_request_response_envelopes_round_trip_for_ipc_framing' \
+    'broadwebd must cover service request/response envelope serialization for future IPC framing.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'serde_json::to_vec\(&request\)' \
+    'broadwebd serialization coverage must encode the service request envelope.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'serde_json::from_slice\(request_bytes.as_slice\(\)\)' \
+    'broadwebd serialization coverage must decode the service request envelope.'
 require_text \
     crates/profile-sync/src/lib.rs \
     'daemon: &.*dyn BroadwebdClient' \
@@ -428,6 +444,10 @@ require_text \
     '`dispatch_service_request` entry point over' \
     'broadwebd architecture must document the IPC-shaped service request envelope.'
 require_text \
+    docs/architecture/broadwebd.md \
+    'round-trip through JSON' \
+    'broadwebd architecture must document that service envelopes are serializable before IPC.'
+require_text \
     docs/roadmap.md \
     'public `BroadwebdClient` trait' \
     'Roadmap must record the current broadwebd client boundary.'
@@ -435,6 +455,10 @@ require_text \
     docs/roadmap.md \
     '`dispatch_service_request` method over `ServiceRequest`' \
     'Roadmap must record broadwebd service-envelope dispatch.'
+require_text \
+    docs/roadmap.md \
+    'round-trip through JSON' \
+    'Roadmap must record service-envelope serialization for future IPC framing.'
 require_text \
     docs/architecture/profile-sync.md \
     '`ProfileSyncObjectSource` trait over broadwebd'\''s `BroadwebdClient` boundary' \

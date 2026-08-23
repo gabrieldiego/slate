@@ -1,4 +1,5 @@
 use crate::{BroadwebdError, DEFAULT_PROFILE, ResourceBudget};
+use serde::{Deserialize, Serialize};
 use slate_net::BROWSER_USER_AGENT;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -8,7 +9,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(12);
 #[cfg(any(test, feature = "test-fixtures"))]
 const INTERNAL_HTTP_FIXTURE_SCHEME: &str = "slate-fixture-http";
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct HttpFetchRequest {
     pub profile: String,
     pub url: String,
@@ -48,33 +49,33 @@ impl HttpFetchRequest {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub enum FetchPurpose {
     Navigation,
     Subresource,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct TransportHttpRequest {
     pub profile: String,
     pub url: String,
     pub purpose: FetchPurpose,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct HttpHeader {
     pub name: String,
     pub value: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub enum FetchDisposition {
     RenderHtml,
     Download { suggested_filename: String },
     ErrorPage { status_code: u16 },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct FetchRouteInfo {
     pub profile: String,
     pub transport_id: String,
@@ -98,7 +99,7 @@ impl FetchRouteInfo {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct DownloadRecord {
     pub profile: String,
     pub filename: String,
@@ -125,7 +126,7 @@ impl DownloadRecord {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct HttpFetchResponse {
     pub final_url: String,
     pub status_code: u16,
@@ -186,19 +187,19 @@ impl HttpFetchResponse {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub enum ServiceRequest {
     HttpFetch(HttpFetchRequest),
     ProfileSync(ProfileSyncRequest),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub enum ServiceResponse {
     HttpFetch(HttpFetchResponse),
     ProfileSync(ProfileSyncResponse),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub enum ProfileSyncRequest {
     PutEncryptedObject(ProfileSyncPutObjectRequest),
     GetEncryptedObject(ProfileSyncObjectRequest),
@@ -214,7 +215,7 @@ pub enum ProfileSyncRequest {
     RootHealth(ProfileSyncRootHealthRequest),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncPutObjectRequest {
     pub profile: String,
     pub bytes: Vec<u8>,
@@ -229,7 +230,7 @@ impl ProfileSyncPutObjectRequest {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncObjectRequest {
     pub profile: String,
     pub object_id: String,
@@ -244,7 +245,7 @@ impl ProfileSyncObjectRequest {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncRootRequest {
     pub profile: String,
     pub root_id: String,
@@ -259,7 +260,7 @@ impl ProfileSyncRootRequest {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncRootUpdate {
     pub profile: String,
     pub root_id: String,
@@ -280,7 +281,7 @@ impl ProfileSyncRootUpdate {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncRootHealthRequest {
     pub profile: String,
     pub root_id: String,
@@ -305,7 +306,7 @@ impl ProfileSyncRootHealthRequest {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncProfileRequest {
     pub profile: String,
 }
@@ -318,7 +319,7 @@ impl ProfileSyncProfileRequest {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub enum ProfileSyncResponse {
     PutEncryptedObject {
         object_id: String,
@@ -362,14 +363,14 @@ pub enum ProfileSyncResponse {
     },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncRootCandidate {
     pub publisher_provider_id: String,
     pub object_id: String,
     pub publish_sequence: u64,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncProviderRecord {
     pub provider_id: String,
     pub provider_kind: String,
@@ -379,7 +380,7 @@ pub struct ProfileSyncProviderRecord {
     pub can_publish_roots: bool,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncProviderHealth {
     pub profile: String,
     pub known_providers: usize,
@@ -399,7 +400,7 @@ pub struct ProfileSyncProviderHealth {
     pub message: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncRootHealth {
     pub profile: String,
     pub root_id: String,
@@ -419,7 +420,7 @@ pub struct ProfileSyncRootHealth {
     pub message: String,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct ProfileSyncProviderRoles {
     pub discovery: bool,
     pub connectivity: bool,

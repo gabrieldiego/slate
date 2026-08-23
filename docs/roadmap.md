@@ -277,6 +277,10 @@ Current baseline:
   envelopes. The typed HTTP and profile-sync client methods are convenience
   wrappers over that dispatch path, so future IPC clients can implement one
   command surface while Slate retains typed call sites.
+- The same service request/response envelopes now round-trip through JSON in
+  broadwebd unit tests. This does not choose the final IPC transport yet, but it
+  keeps the API boundary framed-message-ready instead of relying on
+  process-local object references.
 - `slate-profile-sync` has started consuming that boundary directly: its
   source, publisher, runner, and scheduler bridge wrappers now hold
   `BroadwebdClient` trait objects instead of concrete daemon references.

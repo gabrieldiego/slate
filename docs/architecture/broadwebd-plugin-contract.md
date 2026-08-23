@@ -386,6 +386,10 @@ SubscribeEvents
 
 IPC must carry the same policy-approved request types. The daemon process
 should not infer policy from raw URLs.
+The current `ServiceRequest` and `ServiceResponse` envelopes round-trip through
+JSON in unit tests, which keeps the in-process API framed-message-ready while
+the final local IPC transport and streaming protocol are still open design
+work.
 
 ## Testing Contract
 
