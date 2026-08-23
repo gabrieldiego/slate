@@ -351,6 +351,13 @@ payload cannot be acknowledged as applied by accident.
 Runtime code can use storage's typed app-domain watcher wrapper for the same
 contract: initialize at the domain head, poll bounded decoded batches, and
 acknowledge only after the app has applied the batch.
+The low-memory profile-sync boundary gate cannot compile the full chrome crate
+by default because that currently pulls Servo script bindings, so it statically
+checks the chrome synced-settings watcher wiring while storage tests exercise
+the raw watcher behavior dynamically. Those static checks require the desktop
+app to own and poll `SyncedChromeSettingsWatcher`, the watcher to use
+`AppSyncDomainWatcher` for the `settings` sync domain, and the chrome apply path
+to update runtime zoom and keybinding state before the cursor is acknowledged.
 The broadwebd runtime bridge fixture now covers this watcher contract after a
 trusted receive: Calendar, Chat, Contacts, Downloads, Files, and Storage
 cursors are initialized before sync, the signed encrypted snapshot is applied,

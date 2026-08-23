@@ -1710,8 +1710,12 @@ Current baseline:
   compiling `slate-chrome` currently pulls Servo
   script bindings and exceeded the 2 GiB low-memory profile during
   verification, the gate also performs static chrome/resource assertions for
-  the Settings handoff routes and controls while full chrome watcher coverage
-  remains opt-in.
+  the Settings handoff routes and controls. The static chrome assertions now
+  also cover the synced-settings watcher wiring: the desktop app must own and
+  poll `SyncedChromeSettingsWatcher`, the watcher must use storage's
+  `AppSyncDomainWatcher` for only the `settings` sync domain, and batches must
+  flow through the runtime zoom and keybinding apply paths before the watcher
+  cursor advances. Full dynamic chrome watcher coverage remains opt-in.
 - The next networking checkpoint is deliberately internal-first. Profile sync
   should continue using socketless, deterministic simulated broadweb fixtures
   until the local model covers delayed roots, unavailable objects, stale/replayed

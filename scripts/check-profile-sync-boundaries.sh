@@ -424,6 +424,14 @@ require_text \
     'envelope-only `BroadwebdClient` regression' \
     'Roadmap must record envelope-only profile-sync bridge coverage.'
 require_text \
+    docs/architecture/profile-sync.md \
+    'checks the chrome synced-settings watcher wiring' \
+    'Profile-sync architecture must document the low-memory chrome watcher verification strategy.'
+require_text \
+    docs/roadmap.md \
+    'also cover the synced-settings watcher wiring' \
+    'Roadmap must record low-memory static chrome watcher verification.'
+require_text \
     docs/roadmap.md \
     'Socketless broadweb models must stay behind transport shims' \
     'Roadmap must record that protocol models only replace socket IO, not protocol implementation logic.'
@@ -488,6 +496,42 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'handoff/import' \
     'Slate settings page must call the handoff import route.'
+require_text \
+    crates/chrome/src/desktop/settings_watcher.rs \
+    'AppSyncDomainWatcher::new' \
+    'Chrome synced-settings watcher must use storage raw app-domain watcher instead of ad hoc revision polling.'
+require_text \
+    crates/chrome/src/desktop/settings_watcher.rs \
+    'SYNC_DOMAIN_SETTINGS' \
+    'Chrome synced-settings watcher must subscribe only to the settings sync domain.'
+require_text \
+    crates/chrome/src/desktop/settings_watcher.rs \
+    'poll_apply_and_acknowledge' \
+    'Chrome synced-settings watcher must advance its cursor only after applying a batch.'
+require_text \
+    crates/chrome/src/desktop/settings_watcher.rs \
+    'apply_synced_chrome_settings_events' \
+    'Chrome synced-settings watcher must dispatch storage events through the chrome settings apply path.'
+require_text \
+    crates/chrome/src/desktop/settings_watcher.rs \
+    'initialize_chrome_settings_from_database' \
+    'Chrome synced-settings watcher must initialize runtime chrome state from slate-settings.db.'
+require_text \
+    crates/chrome/src/desktop/app.rs \
+    'synced_settings_watcher: SyncedChromeSettingsWatcher' \
+    'Chrome app must own the synced settings watcher.'
+require_text \
+    crates/chrome/src/desktop/app.rs \
+    'self.synced_settings_watcher.poll_once_logged\(\);' \
+    'Chrome app must poll synced settings during the runtime update loop.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'apply_key_binding_setting' \
+    'Chrome synced settings must apply keybinding updates through the runtime keybinding path.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'set_current_chrome_element_zoom_setting' \
+    'Chrome synced settings must apply zoom updates through the runtime zoom path.'
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
     'root_object_provider_issues' \
