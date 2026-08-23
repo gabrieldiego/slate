@@ -496,10 +496,14 @@ Current baseline:
   providers from `slate-settings.db`. The settings preview also exposes each
   active provider's stored endpoint reference as metadata, giving local trials
   a visible distinction between fixture, multiaddr, and future adapter
-  endpoints without letting the UI inspect fixture model state. Those records
-  remain profile state while protocol adapters continue to behave as real-web
-  clients with only their socket or daemon transport swapped by local
-  deterministic shims in tests.
+  endpoints without letting the UI inspect fixture model state. Local preview
+  sync run reports now also carry a compact selected-endpoint materialization
+  summary: fixture-ready providers, pending protocol-provider work, missing
+  endpoint metadata, fail-closed endpoints, and whether a protocol materializer
+  is required. The settings page renders that summary from protocol-neutral
+  report fields. Those records remain profile state while protocol adapters
+  continue to behave as real-web clients with only their socket or daemon
+  transport swapped by local deterministic shims in tests.
 - Trusted device-head receives now ignore stale root rollback: if a resolved
   device head points at an older sequence than a locally applied head for the
   same trusted device, Slate leaves the newer settings and device-head roots in

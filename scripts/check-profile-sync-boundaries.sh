@@ -413,6 +413,10 @@ require_text \
     '"endpoint_ref": provider.endpoint_ref.as_deref\(\)' \
     'Slate settings profile-sync JSON must expose provider endpoint refs as profile metadata.'
 require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'selected_endpoint_pending_protocol_provider_count' \
+    'Slate settings profile-sync JSON must expose selected endpoint materialization summary counts.'
+require_text \
     resources/resource_protocol/slate-settings.html \
     'Sync issues' \
     'Slate settings page must show profile-sync issue status.'
@@ -432,6 +436,14 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'profileSyncProviderEndpointStatus' \
     'Slate settings page must render provider endpoint metadata without scheduler internals.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Endpoint status' \
+    'Slate settings page must show selected endpoint materialization status.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'profileSyncEndpointMaterializationStatus' \
+    'Slate settings page must render endpoint materialization status from protocol-neutral reports.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Issue details' \

@@ -1201,6 +1201,40 @@
       return run.degraded_after ? "degraded" : "none";
     }
 
+    function profileSyncEndpointMaterializationStatus(state) {
+      const run = profileSyncLatestIssueRun(state);
+      if (!run) {
+        return "not checked";
+      }
+      const ready = Number.isFinite(run.selected_endpoint_ready_provider_count) ?
+        run.selected_endpoint_ready_provider_count :
+        0;
+      const pendingProtocol =
+        Number.isFinite(run.selected_endpoint_pending_protocol_provider_count) ?
+          run.selected_endpoint_pending_protocol_provider_count :
+          0;
+      const missing = Number.isFinite(run.selected_endpoint_missing_provider_count) ?
+        run.selected_endpoint_missing_provider_count :
+        0;
+      const failClosed = Number.isFinite(run.selected_endpoint_fail_closed_provider_count) ?
+        run.selected_endpoint_fail_closed_provider_count :
+        0;
+      const details = [`${ready} ready`];
+      if (pendingProtocol > 0) {
+        details.push(`${pendingProtocol} protocol pending`);
+      }
+      if (missing > 0) {
+        details.push(`${missing} missing`);
+      }
+      if (failClosed > 0) {
+        details.push(`${failClosed} fail closed`);
+      }
+      if (run.selected_endpoint_requires_protocol_materializer) {
+        details.push("adapter required");
+      }
+      return details.join("; ");
+    }
+
     function profileSyncIssueLabel(value, fallback) {
       return profileSyncText(value, fallback).replace(/_/g, " ");
     }
@@ -1261,6 +1295,7 @@
         ["Current sync", profileSyncCurrentSyncStatus(state)],
         ["Local trial", profileSyncLocalTrialStatus(state)],
         ["Two-device trial", profileSyncTwoDeviceTrialStatus(state)],
+        ["Endpoint status", profileSyncEndpointMaterializationStatus(state)],
         ["Sync issues", profileSyncIssueStatus(state)]
       ];
       const issueDetails = profileSyncIssueDetails(state);

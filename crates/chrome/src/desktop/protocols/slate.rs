@@ -950,6 +950,11 @@ struct ProfileSyncPreviewCurrentSyncState {
     stored_provider_metadata_issue_count: usize,
     stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     all_fixture_providers_materialized: bool,
+    selected_endpoint_ready_provider_count: usize,
+    selected_endpoint_pending_protocol_provider_count: usize,
+    selected_endpoint_missing_provider_count: usize,
+    selected_endpoint_fail_closed_provider_count: usize,
+    selected_endpoint_requires_protocol_materializer: bool,
     degraded_before: bool,
     degraded_after: bool,
     root_object_provider_issue_count: usize,
@@ -977,6 +982,15 @@ impl ProfileSyncPreviewCurrentSyncState {
             stored_provider_metadata_issue_count: report.stored_provider_metadata_issue_count,
             stored_provider_metadata_issues: report.stored_provider_metadata_issues.clone(),
             all_fixture_providers_materialized: report.all_fixture_providers_materialized,
+            selected_endpoint_ready_provider_count: report.selected_endpoint_ready_provider_count,
+            selected_endpoint_pending_protocol_provider_count: report
+                .selected_endpoint_pending_protocol_provider_count,
+            selected_endpoint_missing_provider_count: report
+                .selected_endpoint_missing_provider_count,
+            selected_endpoint_fail_closed_provider_count: report
+                .selected_endpoint_fail_closed_provider_count,
+            selected_endpoint_requires_protocol_materializer: report
+                .selected_endpoint_requires_protocol_materializer,
             degraded_before: report.degraded_before,
             degraded_after: report.degraded_after,
             root_object_provider_issue_count: report.root_object_provider_issue_count,
@@ -1003,6 +1017,11 @@ impl ProfileSyncPreviewCurrentSyncState {
             "stored_provider_metadata_issue_count": self.stored_provider_metadata_issue_count,
             "stored_provider_metadata_issues": profile_sync_provider_issues_json(self.stored_provider_metadata_issues.as_slice()),
             "all_fixture_providers_materialized": self.all_fixture_providers_materialized,
+            "selected_endpoint_ready_provider_count": self.selected_endpoint_ready_provider_count,
+            "selected_endpoint_pending_protocol_provider_count": self.selected_endpoint_pending_protocol_provider_count,
+            "selected_endpoint_missing_provider_count": self.selected_endpoint_missing_provider_count,
+            "selected_endpoint_fail_closed_provider_count": self.selected_endpoint_fail_closed_provider_count,
+            "selected_endpoint_requires_protocol_materializer": self.selected_endpoint_requires_protocol_materializer,
             "degraded_before": self.degraded_before,
             "degraded_after": self.degraded_after,
             "root_object_provider_issue_count": self.root_object_provider_issue_count,
@@ -1032,6 +1051,11 @@ struct ProfileSyncPreviewTrialState {
     stored_provider_metadata_issue_count: usize,
     stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     all_fixture_providers_materialized: bool,
+    selected_endpoint_ready_provider_count: usize,
+    selected_endpoint_pending_protocol_provider_count: usize,
+    selected_endpoint_missing_provider_count: usize,
+    selected_endpoint_fail_closed_provider_count: usize,
+    selected_endpoint_requires_protocol_materializer: bool,
     degraded_before: bool,
     degraded_after: bool,
     root_object_provider_issue_count: usize,
@@ -1061,6 +1085,15 @@ impl ProfileSyncPreviewTrialState {
             stored_provider_metadata_issue_count: report.stored_provider_metadata_issue_count,
             stored_provider_metadata_issues: report.stored_provider_metadata_issues.clone(),
             all_fixture_providers_materialized: report.all_fixture_providers_materialized,
+            selected_endpoint_ready_provider_count: report.selected_endpoint_ready_provider_count,
+            selected_endpoint_pending_protocol_provider_count: report
+                .selected_endpoint_pending_protocol_provider_count,
+            selected_endpoint_missing_provider_count: report
+                .selected_endpoint_missing_provider_count,
+            selected_endpoint_fail_closed_provider_count: report
+                .selected_endpoint_fail_closed_provider_count,
+            selected_endpoint_requires_protocol_materializer: report
+                .selected_endpoint_requires_protocol_materializer,
             degraded_before: report.degraded_before,
             degraded_after: report.degraded_after,
             root_object_provider_issue_count: report.root_object_provider_issue_count,
@@ -1089,6 +1122,11 @@ impl ProfileSyncPreviewTrialState {
             "stored_provider_metadata_issue_count": self.stored_provider_metadata_issue_count,
             "stored_provider_metadata_issues": profile_sync_provider_issues_json(self.stored_provider_metadata_issues.as_slice()),
             "all_fixture_providers_materialized": self.all_fixture_providers_materialized,
+            "selected_endpoint_ready_provider_count": self.selected_endpoint_ready_provider_count,
+            "selected_endpoint_pending_protocol_provider_count": self.selected_endpoint_pending_protocol_provider_count,
+            "selected_endpoint_missing_provider_count": self.selected_endpoint_missing_provider_count,
+            "selected_endpoint_fail_closed_provider_count": self.selected_endpoint_fail_closed_provider_count,
+            "selected_endpoint_requires_protocol_materializer": self.selected_endpoint_requires_protocol_materializer,
             "degraded_before": self.degraded_before,
             "degraded_after": self.degraded_after,
             "root_object_provider_issue_count": self.root_object_provider_issue_count,
@@ -2594,6 +2632,11 @@ mod tests {
                 kind: "unauthorized".to_string(),
             }],
             all_fixture_providers_materialized: true,
+            selected_endpoint_ready_provider_count: 1,
+            selected_endpoint_pending_protocol_provider_count: 2,
+            selected_endpoint_missing_provider_count: 1,
+            selected_endpoint_fail_closed_provider_count: 1,
+            selected_endpoint_requires_protocol_materializer: true,
             degraded_before: true,
             degraded_after: true,
             root_object_provider_issue_count: 1,
@@ -2652,6 +2695,14 @@ mod tests {
         assert_eq!(
             json["stored_provider_metadata_issues"][0]["kind"],
             "unauthorized"
+        );
+        assert_eq!(json["selected_endpoint_ready_provider_count"], 1);
+        assert_eq!(json["selected_endpoint_pending_protocol_provider_count"], 2);
+        assert_eq!(json["selected_endpoint_missing_provider_count"], 1);
+        assert_eq!(json["selected_endpoint_fail_closed_provider_count"], 1);
+        assert_eq!(
+            json["selected_endpoint_requires_protocol_materializer"],
+            true
         );
     }
 

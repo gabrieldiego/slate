@@ -237,6 +237,11 @@ pub struct LocalSettingsSyncPreviewCycleReport {
     pub stored_provider_metadata_issue_count: usize,
     pub stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     pub all_fixture_providers_materialized: bool,
+    pub selected_endpoint_ready_provider_count: usize,
+    pub selected_endpoint_pending_protocol_provider_count: usize,
+    pub selected_endpoint_missing_provider_count: usize,
+    pub selected_endpoint_fail_closed_provider_count: usize,
+    pub selected_endpoint_requires_protocol_materializer: bool,
     pub degraded_before: bool,
     pub degraded_after: bool,
     pub root_object_provider_issue_count: usize,
@@ -265,6 +270,11 @@ pub struct LocalSettingsSyncCurrentCycleReport {
     pub stored_provider_metadata_issue_count: usize,
     pub stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     pub all_fixture_providers_materialized: bool,
+    pub selected_endpoint_ready_provider_count: usize,
+    pub selected_endpoint_pending_protocol_provider_count: usize,
+    pub selected_endpoint_missing_provider_count: usize,
+    pub selected_endpoint_fail_closed_provider_count: usize,
+    pub selected_endpoint_requires_protocol_materializer: bool,
     pub degraded_before: bool,
     pub degraded_after: bool,
     pub root_object_provider_issue_count: usize,
@@ -9287,6 +9297,11 @@ struct LocalSettingsSyncFixtureCycleSummary {
     stored_provider_metadata_issue_count: usize,
     stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     all_fixture_providers_materialized: bool,
+    selected_endpoint_ready_provider_count: usize,
+    selected_endpoint_pending_protocol_provider_count: usize,
+    selected_endpoint_missing_provider_count: usize,
+    selected_endpoint_fail_closed_provider_count: usize,
+    selected_endpoint_requires_protocol_materializer: bool,
     degraded_before: bool,
     degraded_after: bool,
     root_object_provider_issue_count: usize,
@@ -9392,6 +9407,11 @@ fn run_local_settings_sync_fixture_cycle(
         local_settings_sync_stored_provider_metadata_issue_summaries(
             run.stored_provider_metadata_issues(),
         );
+    let endpoint_plan = run
+        .run
+        .stored_provider_plan
+        .selected_endpoint_materialization_plan();
+    let protocol_plan = endpoint_plan.protocol_materialization_plan();
 
     Ok(LocalSettingsSyncFixtureCycleSummary {
         profile: profile.to_string(),
@@ -9413,6 +9433,12 @@ fn run_local_settings_sync_fixture_cycle(
         stored_provider_metadata_issue_count: stored_provider_metadata_issues.len(),
         stored_provider_metadata_issues,
         all_fixture_providers_materialized: run.all_fixture_providers_materialized(),
+        selected_endpoint_ready_provider_count: endpoint_plan.fixture_ready_request_count(),
+        selected_endpoint_pending_protocol_provider_count: protocol_plan.protocol_request_count(),
+        selected_endpoint_missing_provider_count: protocol_plan.missing_endpoint_provider_count(),
+        selected_endpoint_fail_closed_provider_count: protocol_plan.fail_closed_provider_count(),
+        selected_endpoint_requires_protocol_materializer: protocol_plan
+            .requires_protocol_materializer(),
         degraded_before: run.run.preflight.preflight.before_health.degraded(),
         degraded_after: after_health.degraded(),
         root_object_provider_issue_count: root_object_provider_issues.len(),
@@ -9456,6 +9482,14 @@ pub fn run_local_settings_sync_current_cycle(
         stored_provider_metadata_issue_count: summary.stored_provider_metadata_issue_count,
         stored_provider_metadata_issues: summary.stored_provider_metadata_issues,
         all_fixture_providers_materialized: summary.all_fixture_providers_materialized,
+        selected_endpoint_ready_provider_count: summary.selected_endpoint_ready_provider_count,
+        selected_endpoint_pending_protocol_provider_count: summary
+            .selected_endpoint_pending_protocol_provider_count,
+        selected_endpoint_missing_provider_count: summary.selected_endpoint_missing_provider_count,
+        selected_endpoint_fail_closed_provider_count: summary
+            .selected_endpoint_fail_closed_provider_count,
+        selected_endpoint_requires_protocol_materializer: summary
+            .selected_endpoint_requires_protocol_materializer,
         degraded_before: summary.degraded_before,
         degraded_after: summary.degraded_after,
         root_object_provider_issue_count: summary.root_object_provider_issue_count,
@@ -9515,6 +9549,14 @@ pub fn run_local_settings_sync_preview_cycle(
         stored_provider_metadata_issue_count: summary.stored_provider_metadata_issue_count,
         stored_provider_metadata_issues: summary.stored_provider_metadata_issues,
         all_fixture_providers_materialized: summary.all_fixture_providers_materialized,
+        selected_endpoint_ready_provider_count: summary.selected_endpoint_ready_provider_count,
+        selected_endpoint_pending_protocol_provider_count: summary
+            .selected_endpoint_pending_protocol_provider_count,
+        selected_endpoint_missing_provider_count: summary.selected_endpoint_missing_provider_count,
+        selected_endpoint_fail_closed_provider_count: summary
+            .selected_endpoint_fail_closed_provider_count,
+        selected_endpoint_requires_protocol_materializer: summary
+            .selected_endpoint_requires_protocol_materializer,
         degraded_before: summary.degraded_before,
         degraded_after: summary.degraded_after,
         root_object_provider_issue_count: summary.root_object_provider_issue_count,
@@ -14984,6 +15026,11 @@ mod tests {
         assert_eq!(report.stored_provider_metadata_issue_count, 0);
         assert!(report.stored_provider_metadata_issues.is_empty());
         assert!(report.all_fixture_providers_materialized);
+        assert_eq!(report.selected_endpoint_ready_provider_count, 1);
+        assert_eq!(report.selected_endpoint_pending_protocol_provider_count, 0);
+        assert_eq!(report.selected_endpoint_missing_provider_count, 0);
+        assert_eq!(report.selected_endpoint_fail_closed_provider_count, 0);
+        assert!(!report.selected_endpoint_requires_protocol_materializer);
         assert!(report.degraded_before);
         assert!(!report.degraded_after);
         assert_eq!(report.root_object_provider_issue_count, 0);
@@ -15052,6 +15099,11 @@ mod tests {
         assert_eq!(report.stored_provider_metadata_issue_count, 0);
         assert!(report.stored_provider_metadata_issues.is_empty());
         assert!(report.all_fixture_providers_materialized);
+        assert_eq!(report.selected_endpoint_ready_provider_count, 1);
+        assert_eq!(report.selected_endpoint_pending_protocol_provider_count, 0);
+        assert_eq!(report.selected_endpoint_missing_provider_count, 0);
+        assert_eq!(report.selected_endpoint_fail_closed_provider_count, 0);
+        assert!(!report.selected_endpoint_requires_protocol_materializer);
         assert!(report.degraded_before);
         assert!(!report.degraded_after);
         assert_eq!(report.root_object_provider_issue_count, 0);
