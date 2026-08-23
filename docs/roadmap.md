@@ -791,6 +791,11 @@ Current baseline:
 - Internal protocol models are constrained to transport/test boundaries:
   protocol implementations must keep real-web request/response semantics and
   can only swap socket IO for internal shims in local deterministic fixtures.
+- The profile-sync boundary gate now rejects simulator endpoint/model language
+  from production protocol and routing modules. Fixture models can still live
+  in the dedicated test-fixture layer, but IPFS, Kubo/IPNS, Tor, protocol
+  routing, and gateway code must stay shaped like real network adapters whose
+  sockets are replaced only through executor or transport shims.
 - Stored-provider runtime ticks now require supplied materialized provider
   handles to match the stored `endpoint_ref` when one is configured. Endpoint
   mismatches are excluded from the materialized provider quorum, preventing a

@@ -167,10 +167,61 @@ reject_protocol_model_leak \
     'pub use services::profile_sync::LocalProfileSyncFixture|profile_sync::\{LocalProfileSyncFixture|LocalProfileSyncFixture, ProfileSyncRuntime' \
     'LocalProfileSyncFixture must not be exported from broadwebd root API; use test_fixtures instead.'
 
+protocol_model_terms='slate-fixture|InProcessBroadwebNetwork|Internal[A-Za-z0-9_]*Fixture|ProfileSyncModel|socketless-fixture|in-process-fixture|simulated|Simulation|fixture model|internal model'
+
+reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/mod.rs \
+    "$protocol_model_terms" \
+    'Protocol registry modules must stay fixture-blind; internal broadweb models belong below transport shims.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/ipfs/address.rs \
+    "$protocol_model_terms" \
+    'IPFS address parsing must stay production-shaped; internal broadweb models belong below transport shims.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/ipfs/config.rs \
+    "$protocol_model_terms" \
+    'IPFS runtime config must not know simulator endpoints or fixture model state.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/ipfs/kubo.rs \
+    "$protocol_model_terms" \
+    'Kubo protocol implementation must build and parse real Kubo RPC semantics; fixture models may only swap the executor.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/ipfs/gateway.rs \
+    "$protocol_model_terms" \
+    'IPFS gateway implementation must build real gateway requests; fixture models may only swap the HTTP executor.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/ipfs/service.rs \
+    "$protocol_model_terms" \
+    'IPFS protocol service must remain unaware of internal broadweb simulation models.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/tor/address.rs \
+    "$protocol_model_terms" \
+    'Tor address parsing must stay production-shaped; internal broadweb models belong below transport shims.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/tor/arti_http.rs \
+    "$protocol_model_terms" \
+    'Tor transport implementation must not import internal broadweb simulation models.'
+reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/tor/service.rs \
+    "$protocol_model_terms" \
+    'Tor protocol service must remain unaware of internal broadweb simulation models.'
+reject_protocol_model_leak \
+    crates/protocols/src/lib.rs \
+    "$protocol_model_terms" \
+    'slate-protocols must describe broadweb routing semantics without depending on deterministic fixture models.'
+reject_protocol_model_leak \
+    crates/routing/src/lib.rs \
+    "$protocol_model_terms" \
+    'slate-routing must parse and carry real routing plans without depending on deterministic fixture models.'
+
 require_text \
     crates/broadwebd/src/protocols/ipfs/kubo_fixtures.rs \
     'impl IpfsKuboProfileSyncRpcExecutor for InternalKuboRpcTransportShim' \
     'Kubo fixture models must be reachable through the profile-sync RPC executor shim.'
+require_text \
+    crates/broadwebd/src/protocols/ipfs/kubo_fixtures.rs \
+    'The shim only redirects Kubo-shaped requests to an in-process fixture' \
+    'Kubo fixture shims must document that they replace socket IO, not protocol semantics.'
 
 require_text \
     crates/broadwebd/src/protocols/ipfs/kubo_fixtures.rs \
