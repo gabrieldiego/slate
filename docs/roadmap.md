@@ -1699,6 +1699,10 @@ Current baseline:
   domains. This makes the current local trial boundary visible: Settings,
   Bookmarks, and Downloads metadata may be enabled while file/content payload
   domains remain disabled until their privacy and retention policies are ready.
+- The Profile Sync Preview now also exposes per-domain applied revision heads
+  from `slate-settings.db`, letting local fixture trials show whether Settings,
+  Bookmarks, Downloads, or future rail-app domains have local sync activity
+  without inspecting the database manually.
 - The Profile Sync Preview now also has a local-only "Sync current settings"
   action. It reuses the session key file and stored preview provider metadata
   to publish/receive the current pending `slate-settings.db` changes through

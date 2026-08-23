@@ -2540,6 +2540,13 @@ pub struct AppSyncDomainRecord {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppSyncDomainReadinessRecord {
+    pub profile: String,
+    pub domain: String,
+    pub latest_revision: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AppSyncDomainCursorRecord {
     pub profile: String,
     pub domain: String,
@@ -2679,6 +2686,7 @@ pub struct ProfileSyncLocalReadinessReport {
     pub enabled_app_domain_count: usize,
     pub enabled_sync_content_domain_count: usize,
     pub app_domains: Vec<AppSyncDomainRecord>,
+    pub app_domain_readiness: Vec<AppSyncDomainReadinessRecord>,
     pub storage_provider_count: usize,
     pub enabled_storage_provider_count: usize,
     pub retention_capable_provider_count: usize,
@@ -6612,6 +6620,15 @@ impl SlateProfileDatabase {
             .iter()
             .filter(|domain| domain.enabled && domain.sync_content)
             .count();
+        let mut app_domain_readiness = Vec::with_capacity(app_domains.len());
+        for domain in &app_domains {
+            app_domain_readiness.push(AppSyncDomainReadinessRecord {
+                profile: profile.to_string(),
+                domain: domain.domain.clone(),
+                latest_revision: self
+                    .latest_sync_revision_for_domain(profile, domain.domain.as_str())?,
+            });
+        }
         let storage_providers = self.storage_providers(profile, u32::MAX)?;
         let enabled_storage_provider_count = storage_providers
             .iter()
@@ -6667,6 +6684,7 @@ impl SlateProfileDatabase {
             enabled_app_domain_count,
             enabled_sync_content_domain_count,
             app_domains,
+            app_domain_readiness,
             storage_provider_count: storage_providers.len(),
             enabled_storage_provider_count,
             retention_capable_provider_count,
@@ -17446,6 +17464,10 @@ mod tests {
         assert!(!initial_report.metadata_ready);
         assert!(!initial_report.ready_for_manual_sync);
         assert_eq!(
+            initial_report.app_domain_count,
+            initial_report.app_domain_readiness.len()
+        );
+        assert_eq!(
             initial_report.blocked_reason.as_deref(),
             Some("missing active content-key metadata")
         );
@@ -17469,6 +17491,7 @@ mod tests {
         );
         assert!(report.local_device_registered);
         assert_eq!(report.app_domain_count, report.app_domains.len());
+        assert_eq!(report.app_domain_count, report.app_domain_readiness.len());
         assert_eq!(report.enabled_sync_content_domain_count, 0);
         assert!(report.enabled_app_domain_count > 0);
         assert!(
@@ -17545,6 +17568,7 @@ mod tests {
                 .count(),
             report.enabled_app_domain_count
         );
+        assert_eq!(report.app_domain_count, report.app_domain_readiness.len());
         assert_eq!(report.enabled_sync_content_domain_count, 0);
         assert_eq!(report.storage_provider_count, 1);
         assert_eq!(
@@ -17599,6 +17623,57 @@ mod tests {
         assert!(report.app_domains.iter().any(|domain| {
             domain.domain == SYNC_DOMAIN_FILES && domain.enabled && domain.sync_content
         }));
+    }
+
+    #[test]
+    fn profile_sync_local_readiness_reports_app_domain_revisions() {
+        let database_path =
+            test_dir("profile-sync-local-readiness-revisions").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-preview")
+                .unwrap();
+
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_SETTINGS,
+                "ui.theme",
+                "slate",
+            )
+            .unwrap();
+        database
+            .set_sync_setting_text(
+                DEFAULT_PROFILE_ID,
+                SYNC_DOMAIN_BOOKMARKS,
+                "home.slot.0",
+                "https://example.com/",
+            )
+            .unwrap();
+        let settings_revision = database
+            .latest_sync_revision_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_SETTINGS)
+            .unwrap();
+        let bookmarks_revision = database
+            .latest_sync_revision_for_domain(DEFAULT_PROFILE_ID, SYNC_DOMAIN_BOOKMARKS)
+            .unwrap();
+
+        let report = database
+            .profile_sync_local_readiness(DEFAULT_PROFILE_ID)
+            .unwrap();
+        let domain_revisions = report
+            .app_domain_readiness
+            .iter()
+            .map(|domain| (domain.domain.as_str(), domain.latest_revision))
+            .collect::<BTreeMap<_, _>>();
+
+        assert_eq!(
+            domain_revisions.get(SYNC_DOMAIN_SETTINGS),
+            Some(&settings_revision)
+        );
+        assert_eq!(
+            domain_revisions.get(SYNC_DOMAIN_BOOKMARKS),
+            Some(&bookmarks_revision)
+        );
+        assert_eq!(domain_revisions.get(SYNC_DOMAIN_CALENDAR), Some(&0));
     }
 
     #[test]

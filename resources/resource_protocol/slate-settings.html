@@ -1086,6 +1086,37 @@
       return visibleDomains.join(", ");
     }
 
+    function profileSyncAppDomainHeadStatus(state) {
+      const localSync = state && state.local_sync ? state.local_sync : null;
+      const domains = localSync && Array.isArray(localSync.app_domains) ?
+        localSync.app_domains :
+        [];
+      const readiness = localSync && Array.isArray(localSync.app_domain_readiness) ?
+        localSync.app_domain_readiness :
+        [];
+      const revisions = new Map(readiness
+        .filter((domain) => domain && domain.domain)
+        .map((domain) => [
+          domain.domain,
+          Number.isFinite(domain.latest_revision) ? domain.latest_revision : 0
+        ]));
+      const enabledHeads = domains
+        .filter((domain) => domain && domain.enabled)
+        .map((domain) => {
+          const name = profileSyncText(domain.domain, "unknown").replace(/_/g, " ");
+          const revision = revisions.get(domain.domain) || 0;
+          return `${name} r${revision}`;
+        });
+      if (enabledHeads.length === 0) {
+        return "none";
+      }
+      const visibleHeads = enabledHeads.slice(0, 4);
+      if (enabledHeads.length > visibleHeads.length) {
+        visibleHeads.push(`${enabledHeads.length - visibleHeads.length} more`);
+      }
+      return visibleHeads.join(", ");
+    }
+
     function profileSyncContentAppDomainStatus(state) {
       const localSync = state && state.local_sync ? state.local_sync : null;
       const domains = localSync && Array.isArray(localSync.app_domains) ?
@@ -1352,6 +1383,7 @@
         ["Provider-authority devices", localSync ? profileSyncCount(localSync.trusted_provider_authority_device_count) + " / " + profileSyncCount(localSync.provider_authority_device_count) : "0 / 0"],
         ["App domains", localSync ? profileSyncCount(localSync.app_domain_count) : "0"],
         ["Enabled domains", profileSyncEnabledAppDomainStatus(state)],
+        ["Domain heads", profileSyncAppDomainHeadStatus(state)],
         ["Content domains", profileSyncContentAppDomainStatus(state)],
         ["Active providers", profileSyncActiveProviderStatus(state)],
         ["Authorized providers", profileSyncAuthorizedProviderStatus(state)],

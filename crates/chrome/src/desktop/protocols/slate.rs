@@ -1523,6 +1523,9 @@ fn profile_sync_local_readiness_json(
         "enabled_app_domain_count": readiness.enabled_app_domain_count,
         "enabled_sync_content_domain_count": readiness.enabled_sync_content_domain_count,
         "app_domains": profile_sync_app_domains_json(readiness.app_domains.as_slice()),
+        "app_domain_readiness": profile_sync_app_domain_readiness_json(
+            readiness.app_domain_readiness.as_slice()
+        ),
         "storage_provider_count": readiness.storage_provider_count,
         "enabled_storage_provider_count": readiness.enabled_storage_provider_count,
         "retention_capable_provider_count": readiness.retention_capable_provider_count,
@@ -1533,6 +1536,26 @@ fn profile_sync_local_readiness_json(
         ),
         "ready_for_manual_sync": readiness.ready_for_manual_sync,
         "blocked_reason": readiness.blocked_reason.as_deref(),
+    })
+}
+
+fn profile_sync_app_domain_readiness_json(
+    domains: &[slate_storage::AppSyncDomainReadinessRecord],
+) -> serde_json::Value {
+    serde_json::Value::Array(
+        domains
+            .iter()
+            .map(profile_sync_app_domain_readiness_record_json)
+            .collect(),
+    )
+}
+
+fn profile_sync_app_domain_readiness_record_json(
+    domain: &slate_storage::AppSyncDomainReadinessRecord,
+) -> serde_json::Value {
+    serde_json::json!({
+        "domain": domain.domain.as_str(),
+        "latest_revision": domain.latest_revision,
     })
 }
 
@@ -3027,6 +3050,8 @@ mod tests {
         assert!(settings_page.contains("Two-device trial"));
         assert!(settings_page.contains("Enabled domains"));
         assert!(settings_page.contains("profileSyncEnabledAppDomainStatus"));
+        assert!(settings_page.contains("Domain heads"));
+        assert!(settings_page.contains("profileSyncAppDomainHeadStatus"));
         assert!(settings_page.contains("Content domains"));
         assert!(settings_page.contains("profileSyncContentAppDomainStatus"));
         assert!(settings_page.contains("Active providers"));

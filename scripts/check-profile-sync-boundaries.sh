@@ -368,6 +368,10 @@ require_text \
     'profile-sync local readiness must expose enabled sync-content app domain counts.'
 require_text \
     crates/storage/src/lib.rs \
+    'pub app_domain_readiness: Vec<AppSyncDomainReadinessRecord>' \
+    'profile-sync local readiness must expose app-domain revision heads.'
+require_text \
+    crates/storage/src/lib.rs \
     'pub storage_providers: Vec<StorageProviderRecord>' \
     'profile-sync local readiness must carry storage provider records for settings preview status.'
 require_text \
@@ -566,6 +570,10 @@ require_text \
     'Slate settings profile-sync JSON must expose app sync domain records.'
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
+    'profile_sync_app_domain_readiness_json' \
+    'Slate settings profile-sync JSON must expose app-domain readiness records.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
     '"enabled_sync_content_domain_count": readiness.enabled_sync_content_domain_count' \
     'Slate settings profile-sync JSON must expose enabled sync-content app domain counts.'
 require_text \
@@ -604,6 +612,14 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'Enabled domains' \
     'Slate settings page must show enabled app sync domains.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Domain heads' \
+    'Slate settings page must show app-domain sync revision heads.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'profileSyncAppDomainHeadStatus' \
+    'Slate settings page must render app-domain sync revision heads.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Content domains' \
@@ -668,6 +684,7 @@ run_test slate-storage profile_sync_secret_activation_trusts_derived_local_signe
 run_test slate-storage profile_sync_local_readiness_reports_provider_gap
 run_test slate-storage profile_sync_local_readiness_reports_authorized_retention_provider
 run_test slate-storage profile_sync_local_readiness_counts_enabled_sync_content_domains
+run_test slate-storage profile_sync_local_readiness_reports_app_domain_revisions
 run_test slate-storage storage_provider_writes_metadata_sync_change_without_secrets_or_local_state
 run_test slate-storage tests::app_sync_domain_watcher_polls_and_acknowledges_batches
 run_test slate-storage typed_app_sync_domain_poll_decodes_payloads_and_records_cursor
