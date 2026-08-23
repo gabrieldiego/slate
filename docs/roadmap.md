@@ -485,7 +485,8 @@ Current baseline:
   delayed, stale, and offline holders, with regressions proving those states
   propagate through the scheduler-facing `settings_sync_health` surface. Local
   preview reports carry string-based issue summaries, and the settings page
-  exposes them as a compact sync-issue status without importing fixture models.
+  exposes them as a compact sync-issue status plus issue details without
+  importing fixture models.
 - Trusted device-head receives now ignore stale root rollback: if a resolved
   device head points at an older sequence than a locally applied head for the
   same trusted device, Slate leaves the newer settings and device-head roots in

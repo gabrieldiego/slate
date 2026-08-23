@@ -1087,8 +1087,26 @@
       return `${trial.receiver_applied_setting_count} applied; ${received}`;
     }
 
+    function profileSyncLatestIssueRun(state) {
+      const candidates = [];
+      if (state && state.last_current_sync) {
+        candidates.push(state.last_current_sync);
+      }
+      if (state && state.last_trial) {
+        candidates.push(state.last_trial);
+      }
+      if (candidates.length === 0) {
+        return null;
+      }
+      return candidates.reduce((latest, candidate) => {
+        const latestTime = Number.isFinite(latest.completed_at) ? latest.completed_at : 0;
+        const candidateTime = Number.isFinite(candidate.completed_at) ? candidate.completed_at : 0;
+        return candidateTime >= latestTime ? candidate : latest;
+      });
+    }
+
     function profileSyncIssueStatus(state) {
-      const run = state && (state.last_current_sync || state.last_trial);
+      const run = profileSyncLatestIssueRun(state);
       if (!run) {
         return "not checked";
       }
@@ -1099,6 +1117,28 @@
         return `${issueCount} root object ${issueCount === 1 ? "issue" : "issues"}`;
       }
       return run.degraded_after ? "degraded" : "none";
+    }
+
+    function profileSyncIssueDetails(state) {
+      const run = profileSyncLatestIssueRun(state);
+      const issues = run && Array.isArray(run.root_object_provider_issues) ?
+        run.root_object_provider_issues :
+        [];
+      if (issues.length === 0) {
+        return "";
+      }
+      const rendered = issues.slice(0, 3).map((issue) => {
+        const kind = profileSyncText(issue && issue.kind, "issue");
+        const component = profileSyncText(issue && issue.component, "root");
+        const rootId = profileSyncText(issue && issue.root_id, "unknown root");
+        const objectId = profileSyncText(issue && issue.object_id, "unknown object");
+        const providerId = profileSyncText(issue && issue.provider_id, "unknown provider");
+        return `${kind} ${component} ${rootId}/${objectId} on ${providerId}`;
+      });
+      if (issues.length > rendered.length) {
+        rendered.push(`${issues.length - rendered.length} more`);
+      }
+      return rendered.join("; ");
     }
 
     function renderProfileSyncDetails(state) {
@@ -1118,6 +1158,10 @@
         ["Two-device trial", profileSyncTwoDeviceTrialStatus(state)],
         ["Sync issues", profileSyncIssueStatus(state)]
       ];
+      const issueDetails = profileSyncIssueDetails(state);
+      if (issueDetails) {
+        rows.push(["Issue details", issueDetails]);
+      }
       rows.forEach(([label, value]) => {
         const row = document.createElement("div");
         const labelElement = document.createElement("span");

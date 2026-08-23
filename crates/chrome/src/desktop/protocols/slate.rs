@@ -2478,6 +2478,61 @@ mod tests {
     }
 
     #[test]
+    fn profile_sync_preview_run_json_carries_root_object_provider_issues() {
+        let run = super::ProfileSyncPreviewTrialState {
+            completed_at: 12,
+            provider_id: "provider-a".to_string(),
+            provider_endpoint_ref: "provider:provider-a".to_string(),
+            preview_setting_key: "preview.key".to_string(),
+            preview_setting_revision: 7,
+            ready_for_manual_sync: true,
+            pulled_membership_application_count: 0,
+            selected_retention_provider_count: 1,
+            materialized_retention_provider_count: 1,
+            retained_provider_count: 1,
+            published_step_count: 2,
+            published_object_count: 3,
+            retained_object_count: 2,
+            fixture_materialization_issue_count: 0,
+            retention_provider_selection_issue_count: 0,
+            stored_provider_metadata_issue_count: 0,
+            all_fixture_providers_materialized: true,
+            degraded_before: true,
+            degraded_after: true,
+            root_object_provider_issue_count: 1,
+            root_object_provider_issues: vec![
+                super::LocalSettingsSyncRootObjectProviderIssueSummary {
+                    component: "settings_root".to_string(),
+                    root_id: "settings/latest".to_string(),
+                    object_id: Some("bafyfixture123".to_string()),
+                    provider_id: "provider-a".to_string(),
+                    kind: "offline".to_string(),
+                },
+            ],
+        };
+        let json = run.to_json();
+
+        assert_eq!(json["root_object_provider_issue_count"], 1);
+        assert_eq!(
+            json["root_object_provider_issues"][0]["component"],
+            "settings_root"
+        );
+        assert_eq!(
+            json["root_object_provider_issues"][0]["root_id"],
+            "settings/latest"
+        );
+        assert_eq!(
+            json["root_object_provider_issues"][0]["object_id"],
+            "bafyfixture123"
+        );
+        assert_eq!(
+            json["root_object_provider_issues"][0]["provider_id"],
+            "provider-a"
+        );
+        assert_eq!(json["root_object_provider_issues"][0]["kind"], "offline");
+    }
+
+    #[test]
     fn slate_settings_state_json_includes_key_bindings() {
         let parsed: serde_json::Value =
             serde_json::from_str(&super::settings_state_json(0.92)).unwrap();
@@ -2743,6 +2798,9 @@ mod tests {
         assert!(settings_page.contains("Two-device trial"));
         assert!(settings_page.contains("Sync issues"));
         assert!(settings_page.contains("profileSyncIssueStatus"));
+        assert!(settings_page.contains("Issue details"));
+        assert!(settings_page.contains("profileSyncIssueDetails"));
+        assert!(settings_page.contains("profileSyncLatestIssueRun"));
         assert!(settings_page.contains("slate://settings/profile-sync/"));
         assert!(settings_page.contains("slate-sync-secret.json"));
         assert!(!settings_page.contains("replaceState"));

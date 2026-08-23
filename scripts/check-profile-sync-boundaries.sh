@@ -329,6 +329,10 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'Sync issues' \
     'Slate settings page must show profile-sync issue status.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Issue details' \
+    'Slate settings page must expose protocol-neutral profile-sync issue details.'
 
 run_test slate-apps sync_domains
 run_test slate-storage rail_app_sync_domains_match_seeded_storage_domains
