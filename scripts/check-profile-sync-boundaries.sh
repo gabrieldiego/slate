@@ -183,6 +183,14 @@ require_text \
     'pub enum ServiceRequest' \
     'broadwebd must keep the IPC-shaped service request envelope as a public DTO.'
 require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'pub const DEFAULT_SERVICE_FRAME_MAX_BYTES' \
+    'broadwebd must keep service-envelope IPC framing bounded by a named byte limit.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'pub struct ServiceFrameCodec' \
+    'broadwebd must expose a bounded service-envelope frame codec for future IPC clients.'
+require_text \
     crates/broadwebd/src/lib.rs \
     'daemon_dispatches_profile_sync_through_service_request_envelope' \
     'broadwebd must cover profile-sync dispatch through the IPC-shaped service request envelope.'
@@ -192,12 +200,20 @@ require_text \
     'broadwebd must cover service request/response envelope serialization for future IPC framing.'
 require_text \
     crates/broadwebd/src/lib.rs \
-    'serde_json::to_vec\(&request\)' \
-    'broadwebd serialization coverage must encode the service request envelope.'
+    'encode_request\(&request\)' \
+    'broadwebd serialization coverage must encode the service request envelope through the bounded frame codec.'
 require_text \
     crates/broadwebd/src/lib.rs \
-    'serde_json::from_slice\(request_bytes.as_slice\(\)\)' \
-    'broadwebd serialization coverage must decode the service request envelope.'
+    'decode_request\(request_bytes.as_slice\(\)\)' \
+    'broadwebd serialization coverage must decode the service request envelope through the bounded frame codec.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'service_frame_codec_rejects_oversized_encoded_request' \
+    'broadwebd bounded frame codec must reject oversized encoded requests.'
+require_text \
+    crates/broadwebd/src/lib.rs \
+    'service_frame_codec_rejects_oversized_decoded_request_before_json_parse' \
+    'broadwebd bounded frame codec must reject oversized incoming frames before JSON parsing.'
 require_text \
     crates/profile-sync/src/lib.rs \
     'daemon: &.*dyn BroadwebdClient' \
@@ -448,6 +464,10 @@ require_text \
     'round-trip through JSON' \
     'broadwebd architecture must document that service envelopes are serializable before IPC.'
 require_text \
+    docs/architecture/broadwebd.md \
+    'bounded JSON service-frame codec' \
+    'broadwebd architecture must document the bounded service-frame codec.'
+require_text \
     docs/roadmap.md \
     'public `BroadwebdClient` trait' \
     'Roadmap must record the current broadwebd client boundary.'
@@ -459,6 +479,10 @@ require_text \
     docs/roadmap.md \
     'round-trip through JSON' \
     'Roadmap must record service-envelope serialization for future IPC framing.'
+require_text \
+    docs/roadmap.md \
+    'bounded JSON service-frame codec' \
+    'Roadmap must record the bounded broadwebd service-frame codec.'
 require_text \
     docs/architecture/profile-sync.md \
     '`ProfileSyncObjectSource` trait over broadwebd'\''s `BroadwebdClient` boundary' \

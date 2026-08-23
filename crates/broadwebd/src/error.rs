@@ -7,6 +7,7 @@ pub enum BroadwebdError {
     InvalidUrl(String),
     MissingPlugin(String),
     Request(String),
+    FrameTooLarge { limit: usize, actual: usize },
     ResponseTooLarge { limit: usize, actual: usize },
     UnsupportedRequest(String),
 }
@@ -19,6 +20,12 @@ impl fmt::Display for BroadwebdError {
             Self::InvalidUrl(url) => write!(formatter, "invalid URL: {url}"),
             Self::MissingPlugin(plugin) => write!(formatter, "missing broadwebd plugin: {plugin}"),
             Self::Request(error) => formatter.write_str(error),
+            Self::FrameTooLarge { limit, actual } => {
+                write!(
+                    formatter,
+                    "service frame too large: {actual} bytes over {limit} byte limit"
+                )
+            }
             Self::ResponseTooLarge { limit, actual } => {
                 write!(
                     formatter,

@@ -281,6 +281,11 @@ Current baseline:
   broadwebd unit tests. This does not choose the final IPC transport yet, but it
   keeps the API boundary framed-message-ready instead of relying on
   process-local object references.
+- broadwebd now has a bounded JSON service-frame codec around those envelopes.
+  It rejects oversized incoming frames before JSON parsing and rejects oversized
+  encoded frames while writing, giving local fixtures and future IPC clients an
+  explicit memory boundary without opening sockets or choosing the final IPC
+  transport.
 - `slate-profile-sync` has started consuming that boundary directly: its
   source, publisher, runner, and scheduler bridge wrappers now hold
   `BroadwebdClient` trait objects instead of concrete daemon references.

@@ -390,6 +390,10 @@ The current `ServiceRequest` and `ServiceResponse` envelopes round-trip through
 JSON in unit tests, which keeps the in-process API framed-message-ready while
 the final local IPC transport and streaming protocol are still open design
 work.
+The current bounded JSON service-frame codec is deliberately transport-neutral:
+tests can exercise byte-framed request/response behavior without opening
+loopback ports, and future local IPC clients can reuse the same memory limit
+until streamed bodies replace large inline payload frames.
 
 ## Testing Contract
 

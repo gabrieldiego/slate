@@ -7,6 +7,7 @@ mod health;
 mod http;
 pub mod protocols;
 mod registry;
+mod service_frame;
 pub mod services;
 mod state;
 mod status;
@@ -121,6 +122,7 @@ pub use registry::{
     ApplicationServicePlugin, PluginInstallReport, PluginRegistry, ProtocolInstallReport,
     ProtocolService, TransportPlugin,
 };
+pub use service_frame::{DEFAULT_SERVICE_FRAME_MAX_BYTES, ServiceFrameCodec};
 pub use services::{
     http_fetch::HttpFetchService,
     profile_sync::{ProfileSyncRuntimeBackend, ProfileSyncRuntimeConfig, ProfileSyncService},
@@ -926,14 +928,15 @@ mod tests {
         ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
         ProfileSyncRootHealthRequest, ProfileSyncRootRequest, ProfileSyncRootUpdate,
         ProfileSyncRuntimeBackend, ProfileSyncRuntimeConfig, ProfileSyncService, ProtocolService,
-        ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, ServiceRequest, ServiceResponse,
-        StateRoot, TOR_ARTI_HTTP_PLUGIN, TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest,
-        TransportPlugin, ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
-        ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
-        ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
-        ipfs_kubo_profile_sync_pin_ls_has_recursive_pin, ipfs_kubo_profile_sync_pin_ls_url,
-        ipfs_kubo_profile_sync_pin_rm_url, ipfs_kubo_profile_sync_published_object_id,
-        ipfs_kubo_profile_sync_resolved_object_id, tor_http_target, tor_url_from_http_url,
+        ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, ServiceFrameCodec,
+        ServiceRequest, ServiceResponse, StateRoot, TOR_ARTI_HTTP_PLUGIN, TOR_PROTOCOL_SERVICE,
+        TorService, TransportHttpRequest, TransportPlugin, ipfs_gateway_http_url,
+        ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_added_object_id,
+        ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
+        ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_has_recursive_pin,
+        ipfs_kubo_profile_sync_pin_ls_url, ipfs_kubo_profile_sync_pin_rm_url,
+        ipfs_kubo_profile_sync_published_object_id, ipfs_kubo_profile_sync_resolved_object_id,
+        tor_http_target, tor_url_from_http_url,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -1180,12 +1183,16 @@ mod tests {
 
     #[test]
     fn service_request_response_envelopes_round_trip_for_ipc_framing() {
+        let codec = ServiceFrameCodec::default();
         let request = ServiceRequest::ProfileSync(ProfileSyncRequest::PutEncryptedObject(
             ProfileSyncPutObjectRequest::new("default", b"encrypted ipc object".to_vec()),
         ));
-        let request_bytes = serde_json::to_vec(&request).expect("encode service request envelope");
-        let decoded_request: ServiceRequest =
-            serde_json::from_slice(request_bytes.as_slice()).expect("decode service request");
+        let request_bytes = codec
+            .encode_request(&request)
+            .expect("encode service request envelope");
+        let decoded_request = codec
+            .decode_request(request_bytes.as_slice())
+            .expect("decode service request");
         assert_eq!(decoded_request, request);
 
         let http_response = ServiceResponse::HttpFetch(
@@ -1213,11 +1220,12 @@ mod tests {
                 Some("text/html".to_string()),
             )),
         );
-        let http_response_bytes =
-            serde_json::to_vec(&http_response).expect("encode HTTP service response");
-        let decoded_http_response: ServiceResponse =
-            serde_json::from_slice(http_response_bytes.as_slice())
-                .expect("decode HTTP service response");
+        let http_response_bytes = codec
+            .encode_response(&http_response)
+            .expect("encode HTTP service response");
+        let decoded_http_response = codec
+            .decode_response(http_response_bytes.as_slice())
+            .expect("decode HTTP service response");
         assert_eq!(decoded_http_response, http_response);
 
         let profile_sync_response = ServiceResponse::ProfileSync(ProfileSyncResponse::RootHealth {
@@ -1240,12 +1248,59 @@ mod tests {
                 message: "Ready".to_string(),
             },
         });
-        let profile_sync_response_bytes =
-            serde_json::to_vec(&profile_sync_response).expect("encode profile-sync response");
-        let decoded_profile_sync_response: ServiceResponse =
-            serde_json::from_slice(profile_sync_response_bytes.as_slice())
-                .expect("decode profile-sync response");
+        let profile_sync_response_bytes = codec
+            .encode_response(&profile_sync_response)
+            .expect("encode profile-sync response");
+        let decoded_profile_sync_response = codec
+            .decode_response(profile_sync_response_bytes.as_slice())
+            .expect("decode profile-sync response");
         assert_eq!(decoded_profile_sync_response, profile_sync_response);
+    }
+
+    #[test]
+    fn service_frame_codec_rejects_oversized_encoded_request() {
+        let codec = ServiceFrameCodec::new(32);
+        let request = ServiceRequest::ProfileSync(ProfileSyncRequest::PutEncryptedObject(
+            ProfileSyncPutObjectRequest::new("default", vec![7; 128]),
+        ));
+
+        let error = codec
+            .encode_request(&request)
+            .expect_err("oversized request frame should fail");
+        assert!(
+            matches!(error, BroadwebdError::FrameTooLarge { limit: 32, actual } if actual > 32),
+            "{error:?}"
+        );
+    }
+
+    #[test]
+    fn service_frame_codec_rejects_oversized_decoded_request_before_json_parse() {
+        let codec = ServiceFrameCodec::new(8);
+        let frame = vec![b' '; 9];
+
+        let error = codec
+            .decode_request(frame.as_slice())
+            .expect_err("oversized request frame should fail before parsing");
+        assert_eq!(
+            error,
+            BroadwebdError::FrameTooLarge {
+                limit: 8,
+                actual: 9
+            }
+        );
+    }
+
+    #[test]
+    fn service_frame_codec_rejects_malformed_request_frame() {
+        let codec = ServiceFrameCodec::new(1024);
+
+        let error = codec
+            .decode_request(b"{not-json")
+            .expect_err("malformed request frame should fail");
+        assert!(
+            matches!(error, BroadwebdError::Request(ref message) if message.contains("decode request service frame")),
+            "{error:?}"
+        );
     }
 
     #[test]

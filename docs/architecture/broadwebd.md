@@ -429,6 +429,11 @@ The current service request and response envelopes round-trip through JSON in
 unit tests. That does not define the final IPC transport, authentication,
 streaming, cancellation, or backpressure protocol yet, but it keeps the Rust
 boundary as serializable DTOs rather than process-local object references.
+`ServiceFrameCodec` adds the current bounded JSON service-frame codec for those
+envelopes. It rejects oversized incoming frames before parsing and rejects
+oversized encoded frames while writing, so local fixtures and future IPC clients
+have a concrete memory boundary even before the final OS-local transport is
+chosen.
 
 ## IPFS Initial Shape
 
