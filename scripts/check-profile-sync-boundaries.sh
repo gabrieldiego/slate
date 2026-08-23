@@ -409,6 +409,10 @@ require_text \
     'profile_sync_storage_providers_json' \
     'Slate settings profile-sync JSON must expose storage provider records.'
 require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    '"endpoint_ref": provider.endpoint_ref.as_deref\(\)' \
+    'Slate settings profile-sync JSON must expose provider endpoint refs as profile metadata.'
+require_text \
     resources/resource_protocol/slate-settings.html \
     'Sync issues' \
     'Slate settings page must show profile-sync issue status.'
@@ -420,6 +424,14 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'Active providers' \
     'Slate settings page must show active profile-sync storage providers.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Provider endpoints' \
+    'Slate settings page must show provider endpoint metadata for sync trials.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'profileSyncProviderEndpointStatus' \
+    'Slate settings page must render provider endpoint metadata without scheduler internals.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Issue details' \

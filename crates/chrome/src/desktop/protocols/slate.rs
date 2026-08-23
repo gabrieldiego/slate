@@ -1494,6 +1494,7 @@ fn profile_sync_storage_provider_json(
         "provider_id": provider.provider_id.as_str(),
         "provider_kind": provider.provider_kind.as_str(),
         "display_name": provider.display_name.as_str(),
+        "endpoint_ref": provider.endpoint_ref.as_deref(),
         "enabled": provider.enabled,
         "discovery": provider.discovery,
         "connectivity": provider.connectivity,
