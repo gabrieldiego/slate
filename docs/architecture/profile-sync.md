@@ -614,11 +614,12 @@ contract when they prove useful.
 
 The `slate-profile-sync` crate owns runtime-facing sync glue that depends on
 both broadwebd and storage. Its first adapters implement storage's
-`ProfileSyncObjectSource` trait for a `BroadwebDaemon` and provide a small
-publisher for putting encrypted objects, retaining objects, publishing mutable
-roots, and checking retention state. Storage stays protocol-neutral, broadwebd
-stays independent from storage's encrypted object semantics, and sync-only tests
-should target this crate when possible so they do not compile the renderer.
+`ProfileSyncObjectSource` trait over broadwebd's `BroadwebdClient` boundary and
+provide a small publisher for putting encrypted objects, retaining objects,
+publishing mutable roots, and checking retention state. Storage stays
+protocol-neutral, broadwebd stays independent from storage's encrypted object
+semantics, and sync-only tests should target this crate when possible so they do
+not compile the renderer.
 The publisher also has a retained dependency/root helper for publish flows that
 must upload snapshot or tail objects before publishing the manifest root.
 For settings tails, the bridge can convert local `SyncChangeRecord` values into

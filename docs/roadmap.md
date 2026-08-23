@@ -272,6 +272,9 @@ Current baseline:
   Slate callers and future IPC clients a stable boundary for HTTP fetches,
   profile-sync requests, health, status, and download listing without exposing
   protocol internals.
+- `slate-profile-sync` has started consuming that boundary directly: its
+  source, publisher, runner, and scheduler bridge wrappers now hold
+  `BroadwebdClient` trait objects instead of concrete daemon references.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the

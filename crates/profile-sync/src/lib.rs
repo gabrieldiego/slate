@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "local-preview-fixtures")]
 use slate_broadwebd::test_fixtures::LocalProfileSyncFixture;
 use slate_broadwebd::{
-    BroadwebDaemon, BroadwebdError, IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
+    BroadwebDaemon, BroadwebdClient, BroadwebdError,
+    IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
     ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
     ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
     ProfileSyncProviderHealth as BroadwebdProfileSyncProviderHealth,
@@ -467,22 +468,22 @@ impl Drop for LocalSettingsSyncPreviewStateRoot {
 
 #[derive(Clone, Copy)]
 pub struct BroadwebdProfileSyncObjectSource<'a> {
-    daemon: &'a BroadwebDaemon,
+    daemon: &'a dyn BroadwebdClient,
 }
 
 #[derive(Clone, Copy)]
 pub struct BroadwebdProfileSyncPublisher<'a> {
-    daemon: &'a BroadwebDaemon,
+    daemon: &'a dyn BroadwebdClient,
 }
 
 #[derive(Clone, Copy)]
 pub struct BroadwebdSettingsSyncRunner<'a> {
-    daemon: &'a BroadwebDaemon,
+    daemon: &'a dyn BroadwebdClient,
 }
 
 #[derive(Clone, Copy)]
 pub struct BroadwebdSettingsSyncScheduler<'a> {
-    daemon: &'a BroadwebDaemon,
+    daemon: &'a dyn BroadwebdClient,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -6059,7 +6060,7 @@ pub fn sync_membership_record_root_id(record_id: &str) -> String {
 }
 
 impl<'a> BroadwebdProfileSyncObjectSource<'a> {
-    pub fn new(daemon: &'a BroadwebDaemon) -> Self {
+    pub fn new(daemon: &'a dyn BroadwebdClient) -> Self {
         Self { daemon }
     }
 
@@ -6313,7 +6314,7 @@ impl<'a> BroadwebdProfileSyncObjectSource<'a> {
 }
 
 impl<'a> BroadwebdSettingsSyncRunner<'a> {
-    pub fn new(daemon: &'a BroadwebDaemon) -> Self {
+    pub fn new(daemon: &'a dyn BroadwebdClient) -> Self {
         Self { daemon }
     }
 
@@ -7212,7 +7213,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
 }
 
 impl<'a> BroadwebdSettingsSyncScheduler<'a> {
-    pub fn new(daemon: &'a BroadwebDaemon) -> Self {
+    pub fn new(daemon: &'a dyn BroadwebdClient) -> Self {
         Self { daemon }
     }
 
@@ -9828,7 +9829,7 @@ fn unix_time_seconds() -> i64 {
 }
 
 impl<'a> BroadwebdProfileSyncPublisher<'a> {
-    pub fn new(daemon: &'a BroadwebDaemon) -> Self {
+    pub fn new(daemon: &'a dyn BroadwebdClient) -> Self {
         Self { daemon }
     }
 
@@ -11391,7 +11392,8 @@ mod tests {
         settings_device_head_root_id, sign_encrypted_json_object, sync_membership_record_root_id,
     };
     use slate_broadwebd::{
-        BroadwebdError, ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
+        BroadwebdClient, BroadwebdError,
+        ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
         ProfileSyncProviderRoles as BroadwebdProfileSyncProviderRoles,
         ProfileSyncRequest as BroadwebdProfileSyncRequest,
         ProfileSyncResponse as BroadwebdProfileSyncResponse, ResourceBudget,
@@ -13136,6 +13138,41 @@ mod tests {
         assert!(!released.retained);
         assert!(released.available);
 
+        let _ = std::fs::remove_dir_all(state_root);
+    }
+
+    #[test]
+    fn broadwebd_profile_sync_bridges_accept_client_trait_objects() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("broadwebd-client-bridge");
+        let daemon = network
+            .daemon_for_device(&state_root, ResourceBudget::default(), "client-bridge")
+            .expect("start in-process client-bridge daemon");
+        let client: &dyn BroadwebdClient = &daemon;
+        let object_bytes = b"encrypted client trait object".to_vec();
+
+        let publisher = BroadwebdProfileSyncPublisher::new(client);
+        let object_id = publisher
+            .put_retained_root("default", "settings/latest", object_bytes.clone())
+            .expect("publish through broadwebd client trait object");
+        let source = BroadwebdProfileSyncObjectSource::new(client);
+        let resolved = source
+            .resolve_profile_sync_root("default", "settings/latest")
+            .expect("resolve through broadwebd client trait object");
+        assert_eq!(resolved.as_deref(), Some(object_id.as_str()));
+        let fetched = source
+            .get_profile_sync_object("default", object_id.as_str())
+            .expect("fetch through broadwebd client trait object");
+        assert_eq!(fetched.bytes, object_bytes);
+
+        let runner = BroadwebdSettingsSyncRunner::new(client);
+        let provider_health = runner
+            .profile_sync_provider_health("default")
+            .expect("read provider health through broadwebd client trait object");
+        assert_eq!(provider_health.known_providers, 1);
+        assert_eq!(provider_health.fresh_online_providers, 1);
+
+        let _scheduler = BroadwebdSettingsSyncScheduler::new(client);
         let _ = std::fs::remove_dir_all(state_root);
     }
 
