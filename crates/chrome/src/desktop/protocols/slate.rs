@@ -1515,6 +1515,8 @@ fn profile_sync_local_readiness_json(
         "local_device_trusted": readiness.local_device_trusted,
         "account_authority_trusted": readiness.account_authority_trusted,
         "trusted_device_count": readiness.trusted_device_count,
+        "provider_authority_device_count": readiness.provider_authority_device_count,
+        "trusted_provider_authority_device_count": readiness.trusted_provider_authority_device_count,
         "metadata_ready": readiness.metadata_ready,
         "active_key_id": readiness.active_key_id.as_deref(),
         "app_domain_count": readiness.app_domain_count,

@@ -1305,6 +1305,7 @@
         ["Key", profileSyncKeyStatus(state)],
         ["Provider", profileSyncProviderStatus(state)],
         ["Trusted devices", localSync ? profileSyncCount(localSync.trusted_device_count) : "0"],
+        ["Provider-authority devices", localSync ? profileSyncCount(localSync.trusted_provider_authority_device_count) + " / " + profileSyncCount(localSync.provider_authority_device_count) : "0 / 0"],
         ["App domains", localSync ? profileSyncCount(localSync.app_domain_count) : "0"],
         ["Enabled domains", profileSyncEnabledAppDomainStatus(state)],
         ["Active providers", profileSyncActiveProviderStatus(state)],

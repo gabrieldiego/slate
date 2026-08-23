@@ -367,6 +367,14 @@ require_text \
     'pub storage_providers: Vec<StorageProviderRecord>' \
     'profile-sync local readiness must carry storage provider records for settings preview status.'
 require_text \
+    crates/storage/src/lib.rs \
+    'pub provider_authority_device_count: usize' \
+    'profile-sync local readiness must expose provider-authority device counts.'
+require_text \
+    crates/storage/src/lib.rs \
+    'pub trusted_provider_authority_device_count: usize' \
+    'profile-sync local readiness must expose trusted provider-authority device counts.'
+require_text \
     crates/profile-sync/src/lib.rs \
     'root_object_provider_issues: Vec<LocalSettingsSyncRootObjectProviderIssueSummary>' \
     'profile-sync local preview reports must carry root-object provider issue summaries.'
@@ -554,6 +562,14 @@ require_text \
     'Slate settings profile-sync JSON must expose storage provider records.'
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
+    '"provider_authority_device_count": readiness.provider_authority_device_count' \
+    'Slate settings profile-sync JSON must expose provider-authority device counts.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    '"trusted_provider_authority_device_count": readiness.trusted_provider_authority_device_count' \
+    'Slate settings profile-sync JSON must expose trusted provider-authority device counts.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
     '"endpoint_ref": provider.endpoint_ref.as_deref\(\)' \
     'Slate settings profile-sync JSON must expose provider endpoint refs as profile metadata.'
 require_text \
@@ -576,6 +592,10 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'Active providers' \
     'Slate settings page must show active profile-sync storage providers.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Provider-authority devices' \
+    'Slate settings page must show trusted/total provider-authority device status.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Provider endpoints' \

@@ -2671,6 +2671,8 @@ pub struct ProfileSyncLocalReadinessReport {
     pub local_device_trusted: bool,
     pub account_authority_trusted: bool,
     pub trusted_device_count: usize,
+    pub provider_authority_device_count: usize,
+    pub trusted_provider_authority_device_count: usize,
     pub metadata_ready: bool,
     pub active_key_id: Option<String>,
     pub app_domain_count: usize,
@@ -6582,6 +6584,7 @@ impl SlateProfileDatabase {
             .filter(|device| device.provider_authority)
             .map(|device| device.device_id.as_str())
             .collect::<BTreeSet<_>>();
+        let provider_authority_device_count = provider_authority_device_ids.len();
         let public_keys = self.sync_device_public_keys(profile)?;
         let trusted_device_count = public_keys.iter().filter(|record| record.trusted).count();
         let local_device_trusted = public_keys
@@ -6599,6 +6602,7 @@ impl SlateProfileDatabase {
             })
             .map(|record| record.public_key.device_id)
             .collect::<BTreeSet<_>>();
+        let trusted_provider_authority_device_count = trusted_provider_authority_device_ids.len();
 
         let app_domains = self.app_sync_domains(profile)?;
         let enabled_app_domain_count = app_domains.iter().filter(|domain| domain.enabled).count();
@@ -6647,6 +6651,8 @@ impl SlateProfileDatabase {
             local_device_trusted,
             account_authority_trusted,
             trusted_device_count,
+            provider_authority_device_count,
+            trusted_provider_authority_device_count,
             metadata_ready,
             active_key_id,
             app_domain_count: app_domains.len(),
@@ -17445,6 +17451,8 @@ mod tests {
         assert!(!report.local_device_trusted);
         assert!(!report.account_authority_trusted);
         assert_eq!(report.trusted_device_count, 0);
+        assert_eq!(report.provider_authority_device_count, 0);
+        assert_eq!(report.trusted_provider_authority_device_count, 0);
         assert_eq!(
             report.active_key_id.as_deref(),
             Some(DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID)
@@ -17514,6 +17522,8 @@ mod tests {
         assert!(report.local_device_trusted);
         assert!(report.account_authority_trusted);
         assert_eq!(report.trusted_device_count, 3);
+        assert_eq!(report.provider_authority_device_count, 1);
+        assert_eq!(report.trusted_provider_authority_device_count, 1);
         assert_eq!(report.app_domain_count, report.app_domains.len());
         assert_eq!(
             report

@@ -1507,6 +1507,10 @@ Current baseline:
   excludes it before endpoint materialization, so synced provider listings
   cannot satisfy retention quorum unless the account membership log authorized
   that provider.
+- The Settings profile-sync preview now exposes provider-authority readiness as
+  trusted/total counts from `slate-settings.db`, so local trials can distinguish
+  a configured storage provider from one that the replicated membership log has
+  actually authorized for retention.
 - The same membership-log bridge now covers the provider-signer failure mode
   transactionally: if a log enrolls a provider and then uses that provider to
   sign an account membership change, the whole pulled log is rejected, the
