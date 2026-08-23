@@ -20637,6 +20637,245 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_settings_sync_health_reports_stale_latest_object_holders() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.profile_sync();
+        let source_state_root = test_state_root("cycle-stale-object-source");
+        let receiver_state_root = test_state_root("cycle-stale-object-receiver");
+        let receiver_db_root = test_state_root("cycle-stale-object-receiver-db");
+        let source_device_id = "runtime-stale-object-source";
+        let receiver_device_id = "runtime-stale-object-receiver";
+        let source_provider_id = "local-fixture-device-runtime-stale-object-source";
+        let source_daemon = network
+            .daemon_for_device(
+                &source_state_root,
+                ResourceBudget::default(),
+                source_device_id,
+            )
+            .expect("start in-process stale-object source daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                receiver_device_id,
+            )
+            .expect("start in-process stale-object receiver daemon");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            receiver_device_id,
+        )
+        .expect("open stale-object receiver settings database");
+        let profile = "staleobjecthealthprofile";
+        let settings_root_id = "settings/latest";
+        let object_id = BroadwebdProfileSyncPublisher::new(&source_daemon)
+            .put_retained_root(
+                profile,
+                settings_root_id,
+                b"encrypted stale object settings root".to_vec(),
+            )
+            .expect("source publishes stale-object settings root");
+
+        fixture
+            .expire_current_provider_freshness()
+            .expect("expire all fixture providers");
+        fixture
+            .mark_device_seen(receiver_device_id)
+            .expect("mark receiver fresh");
+        let stale_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 1)
+            .expect("receiver reads stale-object root health");
+        assert_eq!(stale_health.settings_root_health.visible_candidates, 1);
+        assert_eq!(
+            stale_health
+                .settings_root_health
+                .latest_object_id
+                .as_deref(),
+            Some(object_id.as_str())
+        );
+        assert!(!stale_health.settings_root_health.latest_object_available);
+        assert!(
+            stale_health
+                .settings_root_health
+                .latest_object_available_provider_ids
+                .is_empty()
+        );
+        assert_eq!(
+            stale_health
+                .settings_root_health
+                .latest_object_stale_provider_ids,
+            vec![source_provider_id.to_string()]
+        );
+        assert!(
+            stale_health
+                .settings_root_health
+                .latest_object_offline_provider_ids
+                .is_empty()
+        );
+        assert!(
+            stale_health
+                .settings_root_health
+                .delayed_object_provider_ids
+                .is_empty()
+        );
+        assert!(stale_health.settings_root_health.degraded);
+        assert!(
+            stale_health
+                .settings_root_health
+                .message
+                .contains("stale object-transfer")
+        );
+
+        fixture
+            .mark_device_seen(source_device_id)
+            .expect("mark source fresh again");
+        let recovered_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 1)
+            .expect("receiver reads recovered stale-object root health");
+        assert!(
+            recovered_health
+                .settings_root_health
+                .latest_object_available
+        );
+        assert_eq!(
+            recovered_health
+                .settings_root_health
+                .latest_object_available_provider_ids,
+            vec![source_provider_id.to_string()]
+        );
+        assert!(
+            recovered_health
+                .settings_root_health
+                .latest_object_stale_provider_ids
+                .is_empty()
+        );
+        assert!(
+            recovered_health
+                .settings_root_health
+                .latest_object_offline_provider_ids
+                .is_empty()
+        );
+
+        let _ = std::fs::remove_dir_all(source_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_health_reports_offline_latest_object_holders() {
+        let network = InProcessBroadwebNetwork::new();
+        let fixture = network.profile_sync();
+        let source_state_root = test_state_root("cycle-offline-object-source");
+        let receiver_state_root = test_state_root("cycle-offline-object-receiver");
+        let receiver_db_root = test_state_root("cycle-offline-object-receiver-db");
+        let source_device_id = "runtime-offline-object-source";
+        let receiver_device_id = "runtime-offline-object-receiver";
+        let source_provider_id = "local-fixture-device-runtime-offline-object-source";
+        let source_daemon = network
+            .daemon_for_device(
+                &source_state_root,
+                ResourceBudget::default(),
+                source_device_id,
+            )
+            .expect("start in-process offline-object source daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                receiver_device_id,
+            )
+            .expect("start in-process offline-object receiver daemon");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            receiver_device_id,
+        )
+        .expect("open offline-object receiver settings database");
+        let profile = "offlineobjecthealthprofile";
+        let settings_root_id = "settings/latest";
+        let object_id = BroadwebdProfileSyncPublisher::new(&source_daemon)
+            .put_retained_root(
+                profile,
+                settings_root_id,
+                b"encrypted offline object settings root".to_vec(),
+            )
+            .expect("source publishes offline-object settings root");
+
+        fixture
+            .set_device_online(source_device_id, false)
+            .expect("mark source offline");
+        let offline_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 1)
+            .expect("receiver reads offline-object root health");
+        assert_eq!(offline_health.settings_root_health.visible_candidates, 1);
+        assert_eq!(
+            offline_health
+                .settings_root_health
+                .latest_object_id
+                .as_deref(),
+            Some(object_id.as_str())
+        );
+        assert!(!offline_health.settings_root_health.latest_object_available);
+        assert!(
+            offline_health
+                .settings_root_health
+                .latest_object_available_provider_ids
+                .is_empty()
+        );
+        assert!(
+            offline_health
+                .settings_root_health
+                .latest_object_stale_provider_ids
+                .is_empty()
+        );
+        assert_eq!(
+            offline_health
+                .settings_root_health
+                .latest_object_offline_provider_ids,
+            vec![source_provider_id.to_string()]
+        );
+        assert!(
+            offline_health
+                .settings_root_health
+                .delayed_object_provider_ids
+                .is_empty()
+        );
+        assert!(offline_health.settings_root_health.degraded);
+        assert!(
+            offline_health
+                .settings_root_health
+                .message
+                .contains("offline object-transfer")
+        );
+
+        fixture
+            .set_device_online(source_device_id, true)
+            .expect("mark source online again");
+        let recovered_health = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+            .settings_sync_health(&receiver_database, profile, settings_root_id, 1)
+            .expect("receiver reads recovered offline-object root health");
+        assert!(
+            recovered_health
+                .settings_root_health
+                .latest_object_available
+        );
+        assert_eq!(
+            recovered_health
+                .settings_root_health
+                .latest_object_available_provider_ids,
+            vec![source_provider_id.to_string()]
+        );
+        assert!(
+            recovered_health
+                .settings_root_health
+                .latest_object_offline_provider_ids
+                .is_empty()
+        );
+
+        let _ = std::fs::remove_dir_all(source_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_sync_health_reports_custom_provider_delays() {
         let network = InProcessBroadwebNetwork::new();
         let fixture = network.profile_sync();
