@@ -1728,6 +1728,11 @@ Current baseline:
   whether the latest local fixture run is healthy, still degraded, or recovered
   from a degraded pre-run state, while issue details remain the protocol-neutral
   retained-object, provider-selection, and endpoint problems.
+- The Profile Sync Preview health and issue summary now also includes the
+  two-device local trial. The publisher-side provider materialization and
+  retention issues feed the same protocol-neutral issue rows, while receiver
+  before/after health determines whether the PC-to-PC enrollment simulation is
+  healthy, degraded, or recovered.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`

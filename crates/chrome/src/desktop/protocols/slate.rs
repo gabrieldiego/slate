@@ -1005,6 +1005,23 @@ struct ProfileSyncPreviewTwoDeviceTrialState {
     receiver_received_value: Option<String>,
     receiver_membership_record_count: usize,
     receiver_trusted_device_count: usize,
+    retention_issue_count: usize,
+    retention_issues: Vec<LocalSettingsSyncRetentionIssueSummary>,
+    fixture_materialization_issue_count: usize,
+    retention_provider_selection_issue_count: usize,
+    retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
+    stored_provider_metadata_issue_count: usize,
+    stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
+    all_fixture_providers_materialized: bool,
+    selected_endpoint_ready_provider_count: usize,
+    selected_endpoint_pending_protocol_provider_count: usize,
+    selected_endpoint_missing_provider_count: usize,
+    selected_endpoint_fail_closed_provider_count: usize,
+    selected_endpoint_requires_protocol_materializer: bool,
+    degraded_before: bool,
+    degraded_after: bool,
+    root_object_provider_issue_count: usize,
+    root_object_provider_issues: Vec<LocalSettingsSyncRootObjectProviderIssueSummary>,
 }
 
 impl ProfileSyncPreviewTwoDeviceTrialState {
@@ -1033,6 +1050,28 @@ impl ProfileSyncPreviewTwoDeviceTrialState {
             receiver_received_value: report.receiver_received_value.clone(),
             receiver_membership_record_count: report.receiver_membership_record_count,
             receiver_trusted_device_count: report.receiver_trusted_device_count,
+            retention_issue_count: report.retention_issue_count,
+            retention_issues: report.retention_issues.clone(),
+            fixture_materialization_issue_count: report.fixture_materialization_issue_count,
+            retention_provider_selection_issue_count: report
+                .retention_provider_selection_issue_count,
+            retention_provider_selection_issues: report.retention_provider_selection_issues.clone(),
+            stored_provider_metadata_issue_count: report.stored_provider_metadata_issue_count,
+            stored_provider_metadata_issues: report.stored_provider_metadata_issues.clone(),
+            all_fixture_providers_materialized: report.all_fixture_providers_materialized,
+            selected_endpoint_ready_provider_count: report.selected_endpoint_ready_provider_count,
+            selected_endpoint_pending_protocol_provider_count: report
+                .selected_endpoint_pending_protocol_provider_count,
+            selected_endpoint_missing_provider_count: report
+                .selected_endpoint_missing_provider_count,
+            selected_endpoint_fail_closed_provider_count: report
+                .selected_endpoint_fail_closed_provider_count,
+            selected_endpoint_requires_protocol_materializer: report
+                .selected_endpoint_requires_protocol_materializer,
+            degraded_before: report.degraded_before,
+            degraded_after: report.degraded_after,
+            root_object_provider_issue_count: report.root_object_provider_issue_count,
+            root_object_provider_issues: report.root_object_provider_issues.clone(),
         }
     }
 
@@ -1057,6 +1096,23 @@ impl ProfileSyncPreviewTwoDeviceTrialState {
             "receiver_received_value": self.receiver_received_value.as_deref(),
             "receiver_membership_record_count": self.receiver_membership_record_count,
             "receiver_trusted_device_count": self.receiver_trusted_device_count,
+            "retention_issue_count": self.retention_issue_count,
+            "retention_issues": profile_sync_retention_issues_json(self.retention_issues.as_slice()),
+            "fixture_materialization_issue_count": self.fixture_materialization_issue_count,
+            "retention_provider_selection_issue_count": self.retention_provider_selection_issue_count,
+            "retention_provider_selection_issues": profile_sync_provider_issues_json(self.retention_provider_selection_issues.as_slice()),
+            "stored_provider_metadata_issue_count": self.stored_provider_metadata_issue_count,
+            "stored_provider_metadata_issues": profile_sync_provider_issues_json(self.stored_provider_metadata_issues.as_slice()),
+            "all_fixture_providers_materialized": self.all_fixture_providers_materialized,
+            "selected_endpoint_ready_provider_count": self.selected_endpoint_ready_provider_count,
+            "selected_endpoint_pending_protocol_provider_count": self.selected_endpoint_pending_protocol_provider_count,
+            "selected_endpoint_missing_provider_count": self.selected_endpoint_missing_provider_count,
+            "selected_endpoint_fail_closed_provider_count": self.selected_endpoint_fail_closed_provider_count,
+            "selected_endpoint_requires_protocol_materializer": self.selected_endpoint_requires_protocol_materializer,
+            "degraded_before": self.degraded_before,
+            "degraded_after": self.degraded_after,
+            "root_object_provider_issue_count": self.root_object_provider_issue_count,
+            "root_object_provider_issues": profile_sync_root_object_provider_issues_json(self.root_object_provider_issues.as_slice()),
         })
     }
 }
@@ -2651,6 +2707,7 @@ mod tests {
         assert!(settings_page.contains("Issue details"));
         assert!(settings_page.contains("profileSyncIssueDetails"));
         assert!(settings_page.contains("profileSyncLatestIssueRun"));
+        assert!(settings_page.contains("candidates.push(state.last_two_device_trial)"));
         assert!(settings_page.contains("retention_provider_selection_issues"));
         assert!(settings_page.contains("stored_provider_metadata_issues"));
         assert!(settings_page.contains("profileSyncIssueLabel"));

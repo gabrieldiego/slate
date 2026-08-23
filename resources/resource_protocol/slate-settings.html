@@ -1136,6 +1136,9 @@
       if (state && state.last_trial) {
         candidates.push(state.last_trial);
       }
+      if (state && state.last_two_device_trial) {
+        candidates.push(state.last_two_device_trial);
+      }
       if (candidates.length === 0) {
         return null;
       }

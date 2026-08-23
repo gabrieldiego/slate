@@ -348,6 +348,23 @@ pub struct LocalSettingsSyncTwoDevicePreviewCycleReport {
     pub receiver_received_value: Option<String>,
     pub receiver_membership_record_count: usize,
     pub receiver_trusted_device_count: usize,
+    pub retention_issue_count: usize,
+    pub retention_issues: Vec<LocalSettingsSyncRetentionIssueSummary>,
+    pub fixture_materialization_issue_count: usize,
+    pub retention_provider_selection_issue_count: usize,
+    pub retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
+    pub stored_provider_metadata_issue_count: usize,
+    pub stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
+    pub all_fixture_providers_materialized: bool,
+    pub selected_endpoint_ready_provider_count: usize,
+    pub selected_endpoint_pending_protocol_provider_count: usize,
+    pub selected_endpoint_missing_provider_count: usize,
+    pub selected_endpoint_fail_closed_provider_count: usize,
+    pub selected_endpoint_requires_protocol_materializer: bool,
+    pub degraded_before: bool,
+    pub degraded_after: bool,
+    pub root_object_provider_issue_count: usize,
+    pub root_object_provider_issues: Vec<LocalSettingsSyncRootObjectProviderIssueSummary>,
 }
 
 #[cfg(feature = "local-preview-fixtures")]
@@ -9766,13 +9783,35 @@ pub fn run_local_settings_sync_two_device_preview_cycle(
             4,
             &provider_daemons,
         )?;
+    let retention_issues =
+        local_settings_sync_retention_issue_summaries(publisher_run.run.cycle.retention_issues());
+    let retention_provider_selection_issues =
+        local_settings_sync_retention_provider_selection_issue_summaries(
+            publisher_run.retention_provider_selection_issues(),
+        );
+    let stored_provider_metadata_issues =
+        local_settings_sync_stored_provider_metadata_issue_summaries(
+            publisher_run.stored_provider_metadata_issues(),
+        );
+    let endpoint_plan = publisher_run
+        .run
+        .stored_provider_plan
+        .selected_endpoint_materialization_plan();
+    let protocol_plan = endpoint_plan.protocol_materialization_plan();
 
     let receiver_signer = sync_secret.derive_profile_sync_device_signer(
         profile,
         LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID,
         DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
     )?;
-    let receiver_run = BroadwebdSettingsSyncRunner::new(&receiver_daemon)
+    let receiver_runner = BroadwebdSettingsSyncRunner::new(&receiver_daemon);
+    let receiver_before_health = receiver_runner.settings_sync_health(
+        &receiver_database,
+        profile,
+        LOCAL_SETTINGS_SYNC_PREVIEW_ROOT_ID,
+        policy.minimum_online_retaining_providers,
+    )?;
+    let receiver_run = receiver_runner
         .run_settings_sync_cycle_with_membership_log_and_sync_secret(
             &receiver_database,
             profile,
@@ -9785,6 +9824,14 @@ pub fn run_local_settings_sync_two_device_preview_cycle(
             8,
         )
         .map_err(ProfileSyncCycleWithHealthError::from)?;
+    let receiver_after_health = receiver_runner.settings_sync_health(
+        &receiver_database,
+        profile,
+        LOCAL_SETTINGS_SYNC_PREVIEW_ROOT_ID,
+        policy.minimum_online_retaining_providers,
+    )?;
+    let root_object_provider_issues =
+        local_settings_sync_root_object_provider_issue_summaries(&receiver_after_health);
     let receiver_value = receiver_database
         .get_sync_setting_text(
             profile,
@@ -9822,6 +9869,24 @@ pub fn run_local_settings_sync_two_device_preview_cycle(
         receiver_membership_record_count: receiver_database
             .sync_account_membership_record_count(profile)?,
         receiver_trusted_device_count: receiver_readiness.trusted_device_count,
+        retention_issue_count: retention_issues.len(),
+        retention_issues,
+        fixture_materialization_issue_count: publisher_run.fixture_materialization_issue_count(),
+        retention_provider_selection_issue_count: retention_provider_selection_issues.len(),
+        retention_provider_selection_issues,
+        stored_provider_metadata_issue_count: stored_provider_metadata_issues.len(),
+        stored_provider_metadata_issues,
+        all_fixture_providers_materialized: publisher_run.all_fixture_providers_materialized(),
+        selected_endpoint_ready_provider_count: endpoint_plan.fixture_ready_request_count(),
+        selected_endpoint_pending_protocol_provider_count: protocol_plan.protocol_request_count(),
+        selected_endpoint_missing_provider_count: protocol_plan.missing_endpoint_provider_count(),
+        selected_endpoint_fail_closed_provider_count: protocol_plan.fail_closed_provider_count(),
+        selected_endpoint_requires_protocol_materializer: protocol_plan
+            .requires_protocol_materializer(),
+        degraded_before: receiver_before_health.degraded(),
+        degraded_after: receiver_after_health.degraded(),
+        root_object_provider_issue_count: root_object_provider_issues.len(),
+        root_object_provider_issues,
     })
 }
 
@@ -15815,6 +15880,23 @@ mod tests {
         );
         assert!(report.receiver_membership_record_count >= 4);
         assert!(report.receiver_trusted_device_count >= 4);
+        assert_eq!(report.retention_issue_count, 0);
+        assert!(report.retention_issues.is_empty());
+        assert_eq!(report.fixture_materialization_issue_count, 0);
+        assert_eq!(report.retention_provider_selection_issue_count, 0);
+        assert!(report.retention_provider_selection_issues.is_empty());
+        assert_eq!(report.stored_provider_metadata_issue_count, 0);
+        assert!(report.stored_provider_metadata_issues.is_empty());
+        assert!(report.all_fixture_providers_materialized);
+        assert_eq!(report.selected_endpoint_ready_provider_count, 1);
+        assert_eq!(report.selected_endpoint_pending_protocol_provider_count, 0);
+        assert_eq!(report.selected_endpoint_missing_provider_count, 0);
+        assert_eq!(report.selected_endpoint_fail_closed_provider_count, 0);
+        assert!(!report.selected_endpoint_requires_protocol_materializer);
+        assert!(report.degraded_before);
+        assert!(!report.degraded_after);
+        assert_eq!(report.root_object_provider_issue_count, 0);
+        assert!(report.root_object_provider_issues.is_empty());
 
         assert!(
             database

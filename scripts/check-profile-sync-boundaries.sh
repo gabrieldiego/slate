@@ -690,6 +690,10 @@ require_text \
     'Slate settings page must distinguish healthy, recovered, and degraded profile-sync health.'
 require_text \
     resources/resource_protocol/slate-settings.html \
+    'candidates.push\(state.last_two_device_trial\)' \
+    'Slate settings page must include the two-device local trial in profile-sync health and issue summaries.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
     'retention_issues' \
     'Slate settings page must include retained-object issues in sync issue details.'
 require_text \
