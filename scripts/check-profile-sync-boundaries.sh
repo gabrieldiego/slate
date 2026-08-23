@@ -508,6 +508,10 @@ require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
     'to_json_with_handoff_export' \
     'Slate settings profile-sync JSON must expose secret-bearing enrollment files only on explicit handoff creation responses.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'PROFILE_SYNC_HANDOFF_IMPORT_MAX_BYTES' \
+    'Slate settings profile-sync import route must bound secret-bearing enrollment file payload size before parsing.'
 reject_protocol_model_leak \
     crates/chrome/src/desktop/protocols/slate.rs \
     '"export_text":|"device_request_export_text":|"enrollment_export_text":|"export_filename": "slate-sync-secret.json"' \
@@ -536,6 +540,10 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'handoff/import' \
     'Slate settings page must call the handoff import route.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES' \
+    'Slate settings page must bound enrollment file reads before importing through the protocol URL.'
 require_text \
     crates/chrome/src/desktop/settings_watcher.rs \
     'AppSyncDomainWatcher::new' \

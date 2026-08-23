@@ -457,6 +457,7 @@
     const MIN_ZOOM = 75;
     const MAX_ZOOM = 115;
     const DEFAULT_ZOOM = 90;
+    const PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES = 64 * 1024;
     const slider = document.getElementById("chrome-zoom");
     const fill = document.getElementById("chrome-zoom-fill");
     const thumb = document.getElementById("chrome-zoom-thumb");
@@ -1407,32 +1408,64 @@
     }
 
     function importProfileSyncHandoffBundle() {
-      readSelectedProfileSyncFile(profileSyncHandoffFile, "enrollment file").then((fileText) => {
+      readSelectedProfileSyncFile(
+        profileSyncHandoffFile,
+        "enrollment file",
+        PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES
+      ).then((fileText) => {
         if (fileText) {
           profileSyncHandoff.value = fileText.trim();
         }
+        const handoffText = profileSyncBoundedFileText(
+          profileSyncHandoff.value.trim(),
+          "enrollment file",
+          PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES
+        );
         return fetchProfileSyncState("handoff/import", {
-          handoff: profileSyncHandoff.value.trim()
+          handoff: handoffText
         });
       }).catch((error) => {
         setProfileSyncState({ last_error: String(error) });
       });
     }
 
-    function readSelectedProfileSyncFile(input, label) {
+    function readSelectedProfileSyncFile(input, label, maxBytes) {
       const file = input.files && input.files[0];
       if (!file) {
         return Promise.resolve(null);
       }
+      if (
+        Number.isFinite(maxBytes) &&
+        Number.isFinite(file.size) &&
+        file.size > maxBytes
+      ) {
+        return Promise.reject(new Error(`${label} is too large; maximum is ${maxBytes} bytes`));
+      }
       if (file.text) {
-        return file.text();
+        return file.text().then((text) =>
+          profileSyncBoundedFileText(text, label, maxBytes)
+        );
       }
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.addEventListener("load", () => resolve(String(reader.result || "")));
+        reader.addEventListener("load", () => {
+          try {
+            resolve(profileSyncBoundedFileText(reader.result || "", label, maxBytes));
+          } catch (error) {
+            reject(error);
+          }
+        });
         reader.addEventListener("error", () => reject(reader.error || new Error(`Could not read ${label}`)));
         reader.readAsText(file);
       });
+    }
+
+    function profileSyncBoundedFileText(text, label, maxBytes) {
+      const value = String(text || "");
+      if (Number.isFinite(maxBytes) && value.length > maxBytes) {
+        throw new Error(`${label} is too large; maximum is ${maxBytes} bytes`);
+      }
+      return value;
     }
 
     function downloadProfileSyncHandoffBundle() {
@@ -1445,6 +1478,12 @@
             downloadProfileSyncHandoffBundle();
           }
         });
+        return;
+      }
+      try {
+        profileSyncBoundedFileText(text, "enrollment file", PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES);
+      } catch (error) {
+        setProfileSyncState({ last_error: String(error) });
         return;
       }
       const blob = new Blob([text], { type: "application/json" });
@@ -1486,7 +1525,11 @@
     profileSyncHandoffImportButton.addEventListener("click", importProfileSyncHandoffBundle);
     profileSyncHandoffDownloadButton.addEventListener("click", downloadProfileSyncHandoffBundle);
     profileSyncHandoffFile.addEventListener("change", () => {
-      readSelectedProfileSyncFile(profileSyncHandoffFile, "enrollment file")
+      readSelectedProfileSyncFile(
+        profileSyncHandoffFile,
+        "enrollment file",
+        PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES
+      )
         .then((fileText) => {
           if (fileText) {
             profileSyncHandoff.value = fileText.trim();

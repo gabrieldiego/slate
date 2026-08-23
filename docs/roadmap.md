@@ -1685,6 +1685,11 @@ Current baseline:
   semantics are designed deliberately. This remains a sensitive local preview
   flow and still uses the existing query-string internal action transport until
   POST/body-capable Slate protocol imports are added.
+- The enrollment-file handoff path now has an explicit bounded-import guard
+  while it remains on that query-string transport. The Settings page rejects
+  oversized selected or pasted enrollment files before building the internal
+  action URL, and the `slate://settings` handoff import route rejects oversized
+  payloads before parsing secret-bearing JSON.
 - The Settings Profile Sync Preview JSON now follows the same narrower surface:
   normal state responses no longer include raw key-file exports, device-request
   files, or non-secret enrollment-bundle JSON. The secret-bearing

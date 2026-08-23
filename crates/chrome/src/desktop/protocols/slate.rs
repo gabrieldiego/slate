@@ -53,6 +53,7 @@ pub(crate) const CHROME_ELEMENT_ZOOM_SETTING_MAX: f32 = 1.15;
 const CHROME_ELEMENT_ZOOM_PERCENT_DEFAULT: u32 = 90;
 const CHROME_ELEMENT_ZOOM_PERCENT_MIN: u32 = 75;
 const CHROME_ELEMENT_ZOOM_PERCENT_MAX: u32 = 115;
+const PROFILE_SYNC_HANDOFF_IMPORT_MAX_BYTES: usize = 64 * 1024;
 const CHROME_ELEMENT_ZOOM_SETTING_KEY: &str = "chrome.zoom";
 
 static CHROME_ELEMENT_ZOOM_PERCENT: AtomicU32 = AtomicU32::new(CHROME_ELEMENT_ZOOM_PERCENT_DEFAULT);
@@ -407,11 +408,21 @@ impl SlateProtocolHandler {
         request: &Request,
         url: &Url,
     ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
-        let Some(bundle_text) = profile_sync_handoff_bundle_text_from_url(url) else {
-            let mut state = self.profile_sync_preview.lock().unwrap();
-            state.last_error = Some("missing profile sync enrollment file contents".to_string());
-            let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-            return json_response(request, 400, state.to_json(readiness.as_ref()));
+        let bundle_text = match profile_sync_handoff_bundle_text_from_url(url) {
+            Ok(Some(bundle_text)) => bundle_text,
+            Ok(None) => {
+                let mut state = self.profile_sync_preview.lock().unwrap();
+                state.last_error =
+                    Some("missing profile sync enrollment file contents".to_string());
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                return json_response(request, 400, state.to_json(readiness.as_ref()));
+            }
+            Err(error) => {
+                let mut state = self.profile_sync_preview.lock().unwrap();
+                state.last_error = Some(error);
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                return json_response(request, 413, state.to_json(readiness.as_ref()));
+            }
         };
         let bundle = match ProfileSyncSecretHandoffBundle::from_bytes(bundle_text.as_bytes()) {
             Ok(bundle) => bundle,
@@ -1877,15 +1888,28 @@ fn profile_sync_handoff_target_device_id_from_url(url: &Url) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-fn profile_sync_handoff_bundle_text_from_url(url: &Url) -> Option<String> {
+fn profile_sync_handoff_bundle_text_from_url(url: &Url) -> Result<Option<String>, String> {
     if !is_slate_settings_profile_sync_handoff_import_url(url) {
-        return None;
+        return Ok(None);
     }
 
-    url.query_pairs()
+    let bundle_text = url
+        .query_pairs()
         .find(|(name, _)| name == "handoff")
         .map(|(_, value)| value.into_owned())
-        .filter(|value| !value.trim().is_empty())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    let Some(bundle_text) = bundle_text else {
+        return Ok(None);
+    };
+    if bundle_text.len() > PROFILE_SYNC_HANDOFF_IMPORT_MAX_BYTES {
+        return Err(format!(
+            "profile sync enrollment file is too large; maximum is {PROFILE_SYNC_HANDOFF_IMPORT_MAX_BYTES} bytes"
+        ));
+    }
+
+    Ok(Some(bundle_text))
 }
 
 fn profile_sync_handoff_filename(target_device_id: &str) -> String {
@@ -1903,10 +1927,10 @@ fn unix_time_seconds() -> i64 {
 mod tests {
     use super::{
         CHROME_ELEMENT_ZOOM_SETTING_MAX, CHROME_ELEMENT_ZOOM_SETTING_MIN,
-        chrome_element_zoom_setting_from_url, download_request_from_url, is_slate_blank_url,
-        is_slate_calendar_url, is_slate_chat_url, is_slate_contacts_url,
-        is_slate_download_request_url, is_slate_downloads_state_url, is_slate_downloads_url,
-        is_slate_files_url, is_slate_home_url, is_slate_settings_apply_url,
+        PROFILE_SYNC_HANDOFF_IMPORT_MAX_BYTES, chrome_element_zoom_setting_from_url,
+        download_request_from_url, is_slate_blank_url, is_slate_calendar_url, is_slate_chat_url,
+        is_slate_contacts_url, is_slate_download_request_url, is_slate_downloads_state_url,
+        is_slate_downloads_url, is_slate_files_url, is_slate_home_url, is_slate_settings_apply_url,
         is_slate_settings_preview_url, is_slate_settings_profile_sync_check_url,
         is_slate_settings_profile_sync_create_url,
         is_slate_settings_profile_sync_handoff_create_url,
@@ -2228,7 +2252,9 @@ mod tests {
             Some("device-b")
         );
         assert_eq!(
-            profile_sync_handoff_bundle_text_from_url(&handoff_import).as_deref(),
+            profile_sync_handoff_bundle_text_from_url(&handoff_import)
+                .unwrap()
+                .as_deref(),
             Some("{}")
         );
         assert_eq!(
@@ -2238,8 +2264,19 @@ mod tests {
             None
         );
         assert_eq!(
-            profile_sync_handoff_bundle_text_from_url(&Url::parse("slate://settings").unwrap()),
+            profile_sync_handoff_bundle_text_from_url(&Url::parse("slate://settings").unwrap())
+                .unwrap(),
             None
+        );
+        let oversized_handoff = Url::parse(&format!(
+            "slate://settings/profile-sync/handoff/import?handoff={}",
+            "a".repeat(PROFILE_SYNC_HANDOFF_IMPORT_MAX_BYTES + 1)
+        ))
+        .unwrap();
+        assert!(
+            profile_sync_handoff_bundle_text_from_url(&oversized_handoff)
+                .unwrap_err()
+                .contains("too large")
         );
     }
 
@@ -2675,6 +2712,8 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-handoff\""));
         assert!(settings_page.contains("id=\"profile-sync-handoff-download\""));
         assert!(settings_page.contains("id=\"profile-sync-handoff-import\""));
+        assert!(settings_page.contains("PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES"));
+        assert!(settings_page.contains("profileSyncBoundedFileText"));
         assert!(settings_page.contains("Download enrollment file"));
         assert!(settings_page.contains("Import enrollment file"));
         assert!(settings_page.contains("Enrollment file"));
