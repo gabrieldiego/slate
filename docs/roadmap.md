@@ -1689,7 +1689,10 @@ Current baseline:
   while it remains on that query-string transport. The Settings page rejects
   oversized selected or pasted enrollment files before building the internal
   action URL, and the `slate://settings` handoff import route rejects oversized
-  payloads before parsing secret-bearing JSON.
+  payloads before parsing secret-bearing JSON. The same storage-owned size
+  limit is enforced by the `ProfileSyncSecretHandoffBundle` parser and encoder
+  so future non-UI callers do not deserialize or generate unbounded
+  secret-bearing handoff files.
 - The Settings Profile Sync Preview JSON now follows the same narrower surface:
   normal state responses no longer include raw key-file exports, device-request
   files, or non-secret enrollment-bundle JSON. The secret-bearing

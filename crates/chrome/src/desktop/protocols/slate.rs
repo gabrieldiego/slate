@@ -29,7 +29,8 @@ use slate_profile_sync::{
     run_local_settings_sync_preview_cycle, run_local_settings_sync_two_device_preview_cycle,
 };
 use slate_storage::{
-    DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID, ProfileSyncLocalReadinessReport,
+    DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+    PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_MAX_BYTES, ProfileSyncLocalReadinessReport,
     ProfileSyncLocalSecretActivationRecord, ProfileSyncSecretHandoffApplication,
     ProfileSyncSecretHandoffBundle, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SlateSyncSecret,
     SlateSyncSecretExport, StorageError, SyncObjectError, SyncSettingTextEvent,
@@ -53,7 +54,6 @@ pub(crate) const CHROME_ELEMENT_ZOOM_SETTING_MAX: f32 = 1.15;
 const CHROME_ELEMENT_ZOOM_PERCENT_DEFAULT: u32 = 90;
 const CHROME_ELEMENT_ZOOM_PERCENT_MIN: u32 = 75;
 const CHROME_ELEMENT_ZOOM_PERCENT_MAX: u32 = 115;
-const PROFILE_SYNC_HANDOFF_IMPORT_MAX_BYTES: usize = 64 * 1024;
 const CHROME_ELEMENT_ZOOM_SETTING_KEY: &str = "chrome.zoom";
 
 static CHROME_ELEMENT_ZOOM_PERCENT: AtomicU32 = AtomicU32::new(CHROME_ELEMENT_ZOOM_PERCENT_DEFAULT);
@@ -1903,9 +1903,9 @@ fn profile_sync_handoff_bundle_text_from_url(url: &Url) -> Result<Option<String>
     let Some(bundle_text) = bundle_text else {
         return Ok(None);
     };
-    if bundle_text.len() > PROFILE_SYNC_HANDOFF_IMPORT_MAX_BYTES {
+    if bundle_text.len() > PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_MAX_BYTES {
         return Err(format!(
-            "profile sync enrollment file is too large; maximum is {PROFILE_SYNC_HANDOFF_IMPORT_MAX_BYTES} bytes"
+            "profile sync enrollment file is too large; maximum is {PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_MAX_BYTES} bytes"
         ));
     }
 
@@ -1927,10 +1927,10 @@ fn unix_time_seconds() -> i64 {
 mod tests {
     use super::{
         CHROME_ELEMENT_ZOOM_SETTING_MAX, CHROME_ELEMENT_ZOOM_SETTING_MIN,
-        PROFILE_SYNC_HANDOFF_IMPORT_MAX_BYTES, chrome_element_zoom_setting_from_url,
-        download_request_from_url, is_slate_blank_url, is_slate_calendar_url, is_slate_chat_url,
-        is_slate_contacts_url, is_slate_download_request_url, is_slate_downloads_state_url,
-        is_slate_downloads_url, is_slate_files_url, is_slate_home_url, is_slate_settings_apply_url,
+        chrome_element_zoom_setting_from_url, download_request_from_url, is_slate_blank_url,
+        is_slate_calendar_url, is_slate_chat_url, is_slate_contacts_url,
+        is_slate_download_request_url, is_slate_downloads_state_url, is_slate_downloads_url,
+        is_slate_files_url, is_slate_home_url, is_slate_settings_apply_url,
         is_slate_settings_preview_url, is_slate_settings_profile_sync_check_url,
         is_slate_settings_profile_sync_create_url,
         is_slate_settings_profile_sync_handoff_create_url,
@@ -1946,6 +1946,7 @@ mod tests {
     };
     use slate_broadwebd::FetchPurpose;
     use slate_broadwebd::TemporaryDownloadRecord;
+    use slate_storage::PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_MAX_BYTES;
     use slate_storage::{
         DEFAULT_PROFILE_ID, IncomingSyncSettingText, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS,
         SlateProfileDatabase,
@@ -2270,7 +2271,7 @@ mod tests {
         );
         let oversized_handoff = Url::parse(&format!(
             "slate://settings/profile-sync/handoff/import?handoff={}",
-            "a".repeat(PROFILE_SYNC_HANDOFF_IMPORT_MAX_BYTES + 1)
+            "a".repeat(PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_MAX_BYTES + 1)
         ))
         .unwrap();
         assert!(

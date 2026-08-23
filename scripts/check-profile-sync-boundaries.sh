@@ -510,8 +510,16 @@ require_text \
     'Slate settings profile-sync JSON must expose secret-bearing enrollment files only on explicit handoff creation responses.'
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
-    'PROFILE_SYNC_HANDOFF_IMPORT_MAX_BYTES' \
-    'Slate settings profile-sync import route must bound secret-bearing enrollment file payload size before parsing.'
+    'PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_MAX_BYTES' \
+    'Slate settings profile-sync import route must use the storage-owned secret handoff bundle size limit.'
+require_text \
+    crates/storage/src/lib.rs \
+    'PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_MAX_BYTES' \
+    'Storage must expose a profile-sync secret handoff bundle size limit for all enrollment-file callers.'
+require_text \
+    crates/storage/src/lib.rs \
+    'validate_profile_sync_secret_handoff_bundle_size\(bytes.len\(\)\)' \
+    'Storage must reject oversized secret handoff bundles before JSON parsing.'
 reject_protocol_model_leak \
     crates/chrome/src/desktop/protocols/slate.rs \
     '"export_text":|"device_request_export_text":|"enrollment_export_text":|"export_filename": "slate-sync-secret.json"' \

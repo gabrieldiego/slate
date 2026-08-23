@@ -49,6 +49,7 @@ pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE: &str = "revoke-devi
 pub const PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY: &str = "rotate-device-key";
 pub const DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH: i64 = 1;
 pub const DEFAULT_PROFILE_SYNC_ENROLLMENT_BUNDLE_MAX_RECORDS: usize = 128;
+pub const PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_MAX_BYTES: usize = 64 * 1024;
 pub const DEFAULT_PROFILE_SYNC_MIN_TAIL_CHANGE_COUNT: u32 = 32;
 pub const DEFAULT_PROFILE_SYNC_CHANGE_RETENTION_SECONDS: i64 = 14 * 24 * 60 * 60;
 pub const DEFAULT_PROFILE_SYNC_INACTIVE_DEVICE_GRACE_SECONDS: i64 = 30 * 24 * 60 * 60;
@@ -863,10 +864,13 @@ impl ProfileSyncSecretHandoffBundle {
 
     pub fn to_bytes(&self) -> Result<Vec<u8>, StorageError> {
         validate_profile_sync_secret_handoff_bundle(self)?;
-        serde_json::to_vec(self).map_err(StorageError::EncodeSyncPayload)
+        let bytes = serde_json::to_vec(self).map_err(StorageError::EncodeSyncPayload)?;
+        validate_profile_sync_secret_handoff_bundle_size(bytes.len())?;
+        Ok(bytes)
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, StorageError> {
+        validate_profile_sync_secret_handoff_bundle_size(bytes.len())?;
         let bundle: Self =
             serde_json::from_slice(bytes).map_err(StorageError::DecodeSyncPayload)?;
         validate_profile_sync_secret_handoff_bundle(&bundle)?;
@@ -10019,6 +10023,17 @@ fn validate_profile_sync_secret_handoff_bundle(
     validate_profile_sync_enrollment_bundle(&bundle.enrollment_bundle)
 }
 
+fn validate_profile_sync_secret_handoff_bundle_size(size_bytes: usize) -> Result<(), StorageError> {
+    if size_bytes > PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_MAX_BYTES {
+        return Err(StorageError::InvalidProfileSyncSecretHandoffBundle(
+            format!(
+                "handoff bundle is {size_bytes} bytes, exceeding max {PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_MAX_BYTES}"
+            ),
+        ));
+    }
+    Ok(())
+}
+
 fn profile_sync_secret_handoff_sync_object_error(error: SyncObjectError) -> StorageError {
     StorageError::InvalidProfileSyncSecretHandoffBundle(error.to_string())
 }
@@ -16241,6 +16256,15 @@ mod tests {
                 .unwrap(),
             2
         );
+
+        let oversized = vec![b' '; PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_MAX_BYTES + 1];
+        let oversized_error =
+            ProfileSyncSecretHandoffBundle::from_bytes(oversized.as_slice()).unwrap_err();
+        assert!(matches!(
+            oversized_error,
+            StorageError::InvalidProfileSyncSecretHandoffBundle(reason)
+                if reason.contains("exceeding max")
+        ));
     }
 
     #[test]
