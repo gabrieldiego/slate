@@ -1691,6 +1691,10 @@ Current baseline:
   local device, key state, provider readiness, trusted-device count, app-domain
   count, enrollment-file target, and last local/two-device trial result without
   adding any protocol endpoints.
+- The same preview now separates enabled app domains from enabled content-sync
+  domains. This makes the current local trial boundary visible: Settings,
+  Bookmarks, and Downloads metadata may be enabled while file/content payload
+  domains remain disabled until their privacy and retention policies are ready.
 - The Profile Sync Preview now also has a local-only "Sync current settings"
   action. It reuses the session key file and stored preview provider metadata
   to publish/receive the current pending `slate-settings.db` changes through

@@ -364,6 +364,10 @@ require_text \
     'profile-sync local readiness must carry app sync domain records for settings preview status.'
 require_text \
     crates/storage/src/lib.rs \
+    'pub enabled_sync_content_domain_count: usize' \
+    'profile-sync local readiness must expose enabled sync-content app domain counts.'
+require_text \
+    crates/storage/src/lib.rs \
     'pub storage_providers: Vec<StorageProviderRecord>' \
     'profile-sync local readiness must carry storage provider records for settings preview status.'
 require_text \
@@ -558,6 +562,10 @@ require_text \
     'Slate settings profile-sync JSON must expose app sync domain records.'
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
+    '"enabled_sync_content_domain_count": readiness.enabled_sync_content_domain_count' \
+    'Slate settings profile-sync JSON must expose enabled sync-content app domain counts.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
     'profile_sync_storage_providers_json' \
     'Slate settings profile-sync JSON must expose storage provider records.'
 require_text \
@@ -588,6 +596,14 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'Enabled domains' \
     'Slate settings page must show enabled app sync domains.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Content domains' \
+    'Slate settings page must show enabled sync-content app domains.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'profileSyncContentAppDomainStatus' \
+    'Slate settings page must render sync-content app domain status.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Active providers' \
@@ -635,6 +651,7 @@ run_test slate-storage profile_sync_local_activation_records_non_secret_metadata
 run_test slate-storage profile_sync_secret_activation_trusts_derived_local_signer_without_storing_secret
 run_test slate-storage profile_sync_local_readiness_reports_provider_gap
 run_test slate-storage profile_sync_local_readiness_reports_authorized_retention_provider
+run_test slate-storage profile_sync_local_readiness_counts_enabled_sync_content_domains
 run_test slate-storage storage_provider_writes_metadata_sync_change_without_secrets_or_local_state
 run_test slate-storage tests::app_sync_domain_watcher_polls_and_acknowledges_batches
 run_test slate-storage typed_app_sync_domain_poll_decodes_payloads_and_records_cursor

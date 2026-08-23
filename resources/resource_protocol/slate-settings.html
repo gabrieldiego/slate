@@ -1086,6 +1086,24 @@
       return visibleDomains.join(", ");
     }
 
+    function profileSyncContentAppDomainStatus(state) {
+      const localSync = state && state.local_sync ? state.local_sync : null;
+      const domains = localSync && Array.isArray(localSync.app_domains) ?
+        localSync.app_domains :
+        [];
+      const contentDomains = domains
+        .filter((domain) => domain && domain.enabled && domain.sync_content)
+        .map((domain) => profileSyncText(domain.domain, "unknown").replace(/_/g, " "));
+      if (contentDomains.length === 0) {
+        return "none";
+      }
+      const visibleDomains = contentDomains.slice(0, 3);
+      if (contentDomains.length > visibleDomains.length) {
+        visibleDomains.push(`${contentDomains.length - visibleDomains.length} more`);
+      }
+      return visibleDomains.join(", ");
+    }
+
     function profileSyncActiveProviderStatus(state) {
       const localSync = state && state.local_sync ? state.local_sync : null;
       const providers = localSync && Array.isArray(localSync.storage_providers) ?
@@ -1308,6 +1326,7 @@
         ["Provider-authority devices", localSync ? profileSyncCount(localSync.trusted_provider_authority_device_count) + " / " + profileSyncCount(localSync.provider_authority_device_count) : "0 / 0"],
         ["App domains", localSync ? profileSyncCount(localSync.app_domain_count) : "0"],
         ["Enabled domains", profileSyncEnabledAppDomainStatus(state)],
+        ["Content domains", profileSyncContentAppDomainStatus(state)],
         ["Active providers", profileSyncActiveProviderStatus(state)],
         ["Provider endpoints", profileSyncProviderEndpointStatus(state)],
         ["Enrollment file", profileSyncText(state && state.handoff_target_device_id, "none")],

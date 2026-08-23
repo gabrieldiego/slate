@@ -2677,6 +2677,7 @@ pub struct ProfileSyncLocalReadinessReport {
     pub active_key_id: Option<String>,
     pub app_domain_count: usize,
     pub enabled_app_domain_count: usize,
+    pub enabled_sync_content_domain_count: usize,
     pub app_domains: Vec<AppSyncDomainRecord>,
     pub storage_provider_count: usize,
     pub enabled_storage_provider_count: usize,
@@ -6606,6 +6607,10 @@ impl SlateProfileDatabase {
 
         let app_domains = self.app_sync_domains(profile)?;
         let enabled_app_domain_count = app_domains.iter().filter(|domain| domain.enabled).count();
+        let enabled_sync_content_domain_count = app_domains
+            .iter()
+            .filter(|domain| domain.enabled && domain.sync_content)
+            .count();
         let storage_providers = self.storage_providers(profile, u32::MAX)?;
         let enabled_storage_provider_count = storage_providers
             .iter()
@@ -6657,6 +6662,7 @@ impl SlateProfileDatabase {
             active_key_id,
             app_domain_count: app_domains.len(),
             enabled_app_domain_count,
+            enabled_sync_content_domain_count,
             app_domains,
             storage_provider_count: storage_providers.len(),
             enabled_storage_provider_count,
@@ -17459,6 +17465,7 @@ mod tests {
         );
         assert!(report.local_device_registered);
         assert_eq!(report.app_domain_count, report.app_domains.len());
+        assert_eq!(report.enabled_sync_content_domain_count, 0);
         assert!(report.enabled_app_domain_count > 0);
         assert!(
             report
@@ -17533,6 +17540,7 @@ mod tests {
                 .count(),
             report.enabled_app_domain_count
         );
+        assert_eq!(report.enabled_sync_content_domain_count, 0);
         assert_eq!(report.storage_provider_count, 1);
         assert_eq!(
             report.storage_provider_count,
@@ -17550,6 +17558,38 @@ mod tests {
         assert_eq!(report.authorized_retention_provider_count, 1);
         assert!(report.ready_for_manual_sync);
         assert_eq!(report.blocked_reason, None);
+    }
+
+    #[test]
+    fn profile_sync_local_readiness_counts_enabled_sync_content_domains() {
+        let database_path =
+            test_dir("profile-sync-local-readiness-content").join(DEFAULT_DATABASE_FILE_NAME);
+        let database =
+            SlateProfileDatabase::open_resolved_with_device_id(database_path, "device-preview")
+                .unwrap();
+
+        database
+            .activate_local_profile_sync_metadata(DEFAULT_PROFILE_ID)
+            .unwrap();
+        database
+            .register_app_sync_domain(&AppSyncDomainRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                domain: SYNC_DOMAIN_FILES.to_string(),
+                schema_version: 1,
+                enabled: true,
+                privacy_classification: "content".to_string(),
+                sync_content: true,
+            })
+            .unwrap();
+
+        let report = database
+            .profile_sync_local_readiness(DEFAULT_PROFILE_ID)
+            .unwrap();
+
+        assert_eq!(report.enabled_sync_content_domain_count, 1);
+        assert!(report.app_domains.iter().any(|domain| {
+            domain.domain == SYNC_DOMAIN_FILES && domain.enabled && domain.sync_content
+        }));
     }
 
     #[test]

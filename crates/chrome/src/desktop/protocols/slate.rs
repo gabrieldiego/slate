@@ -1521,6 +1521,7 @@ fn profile_sync_local_readiness_json(
         "active_key_id": readiness.active_key_id.as_deref(),
         "app_domain_count": readiness.app_domain_count,
         "enabled_app_domain_count": readiness.enabled_app_domain_count,
+        "enabled_sync_content_domain_count": readiness.enabled_sync_content_domain_count,
         "app_domains": profile_sync_app_domains_json(readiness.app_domains.as_slice()),
         "storage_provider_count": readiness.storage_provider_count,
         "enabled_storage_provider_count": readiness.enabled_storage_provider_count,
@@ -3025,6 +3026,8 @@ mod tests {
         assert!(settings_page.contains("Two-device trial"));
         assert!(settings_page.contains("Enabled domains"));
         assert!(settings_page.contains("profileSyncEnabledAppDomainStatus"));
+        assert!(settings_page.contains("Content domains"));
+        assert!(settings_page.contains("profileSyncContentAppDomainStatus"));
         assert!(settings_page.contains("Active providers"));
         assert!(settings_page.contains("profileSyncActiveProviderStatus"));
         assert!(settings_page.contains("Sync issues"));
