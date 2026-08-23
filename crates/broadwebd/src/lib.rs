@@ -84,7 +84,7 @@ fn is_in_process_profile_sync_fixture_endpoint_token(token: &str) -> bool {
 
 pub use budget::ResourceBudget;
 pub use daemon::{
-    BroadwebDaemon, default_session_state_root, default_session_status_reporter,
+    BroadwebDaemon, BroadwebdClient, default_session_state_root, default_session_status_reporter,
     default_session_status_snapshot,
 };
 pub use error::BroadwebdError;
@@ -915,25 +915,25 @@ mod tests {
         InternalKuboRpcTransportShim,
     };
     use super::{
-        BroadwebDaemon, BroadwebStatusKind, BroadwebStatusReporter, BroadwebdError,
-        DEFAULT_IPFS_KUBO_RPC_API, DIRECT_HTTP_PLUGIN, FetchDisposition, FetchPurpose,
-        HttpFetchRequest, HttpFetchResponse, IPFS_GATEWAY_PLUGIN, IPFS_KUBO_RPC_PLUGIN, IpfsConfig,
-        IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport, IpfsKuboProfileSyncOperation,
-        IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcExecutor, IpfsKuboRpcEndpoint, IpfsService,
-        IpfsTransportKind, PROFILE_SYNC_PLUGIN, PluginHealth, PluginKind, PluginMetadata,
-        PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest,
-        ProfileSyncProviderRoles, ProfileSyncPutObjectRequest, ProfileSyncRequest,
-        ProfileSyncResponse, ProfileSyncRootHealthRequest, ProfileSyncRootRequest,
-        ProfileSyncRootUpdate, ProfileSyncRuntimeBackend, ProfileSyncRuntimeConfig,
-        ProfileSyncService, ProtocolService, ResourceBudget, ResourceProfile,
-        SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN, TOR_PROTOCOL_SERVICE,
-        TorService, TransportHttpRequest, TransportPlugin, ipfs_gateway_http_url,
-        ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_added_object_id,
-        ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
-        ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_has_recursive_pin,
-        ipfs_kubo_profile_sync_pin_ls_url, ipfs_kubo_profile_sync_pin_rm_url,
-        ipfs_kubo_profile_sync_published_object_id, ipfs_kubo_profile_sync_resolved_object_id,
-        tor_http_target, tor_url_from_http_url,
+        BroadwebDaemon, BroadwebStatusKind, BroadwebStatusReporter, BroadwebdClient,
+        BroadwebdError, DEFAULT_IPFS_KUBO_RPC_API, DIRECT_HTTP_PLUGIN, FetchDisposition,
+        FetchPurpose, HttpFetchRequest, HttpFetchResponse, IPFS_GATEWAY_PLUGIN,
+        IPFS_KUBO_RPC_PLUGIN, IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope,
+        IpfsGatewayTransport, IpfsKuboProfileSyncOperation, IpfsKuboProfileSyncRpc,
+        IpfsKuboProfileSyncRpcExecutor, IpfsKuboRpcEndpoint, IpfsService, IpfsTransportKind,
+        PROFILE_SYNC_PLUGIN, PluginHealth, PluginKind, PluginMetadata, PluginRegistry,
+        ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderRoles,
+        ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
+        ProfileSyncRootHealthRequest, ProfileSyncRootRequest, ProfileSyncRootUpdate,
+        ProfileSyncRuntimeBackend, ProfileSyncRuntimeConfig, ProfileSyncService, ProtocolService,
+        ResourceBudget, ResourceProfile, SLATE_IPFS_TRANSPORT_ENV, StateRoot, TOR_ARTI_HTTP_PLUGIN,
+        TOR_PROTOCOL_SERVICE, TorService, TransportHttpRequest, TransportPlugin,
+        ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
+        ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
+        ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
+        ipfs_kubo_profile_sync_pin_ls_has_recursive_pin, ipfs_kubo_profile_sync_pin_ls_url,
+        ipfs_kubo_profile_sync_pin_rm_url, ipfs_kubo_profile_sync_published_object_id,
+        ipfs_kubo_profile_sync_resolved_object_id, tor_http_target, tor_url_from_http_url,
     };
     use std::fs;
     use std::path::PathBuf;
@@ -1088,6 +1088,53 @@ mod tests {
             status.metadata.id == PROFILE_SYNC_PLUGIN
                 && matches!(status.health, PluginHealth::Ready)
         }));
+
+        let _ = fs::remove_dir_all(daemon.state_root().path());
+    }
+
+    #[test]
+    fn daemon_dispatches_through_ipc_neutral_client_trait() {
+        let daemon = BroadwebDaemon::start(test_state_root("ipc-neutral-client")).expect("daemon");
+        let client: &dyn BroadwebdClient = &daemon;
+        let health = client.health();
+        assert!(health.plugins.iter().any(|status| {
+            status.metadata.id == PROFILE_SYNC_PLUGIN
+                && matches!(status.health, PluginHealth::Ready)
+        }));
+        let _ = client.status_snapshot();
+
+        let put = client
+            .profile_sync(ProfileSyncRequest::PutEncryptedObject(
+                ProfileSyncPutObjectRequest::new("default", b"encrypted profile object".to_vec()),
+            ))
+            .expect("put through broadwebd client trait");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response through broadwebd client trait");
+        };
+        let fetched = client
+            .profile_sync(ProfileSyncRequest::GetEncryptedObject(
+                ProfileSyncObjectRequest::new("default", object_id.clone()),
+            ))
+            .expect("fetch through broadwebd client trait");
+        assert_eq!(
+            fetched,
+            ProfileSyncResponse::GetEncryptedObject {
+                object_id,
+                bytes: b"encrypted profile object".to_vec()
+            }
+        );
+        assert!(
+            client
+                .temporary_downloads("default")
+                .expect("list temporary downloads through broadwebd client trait")
+                .is_empty()
+        );
+        assert!(
+            client
+                .downloads("default")
+                .expect("list downloads through broadwebd client trait")
+                .is_empty()
+        );
 
         let _ = fs::remove_dir_all(daemon.state_root().path());
     }

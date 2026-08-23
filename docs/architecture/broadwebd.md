@@ -415,6 +415,11 @@ the approved profile id, selected transport id, and selected transport privacy
 boundary. Slate can then surface local-node, public-gateway, proxy, or direct
 network behavior without guessing from URLs.
 
+The current in-process implementation exposes that shape through the
+`BroadwebdClient` trait. `BroadwebDaemon` implements the trait directly today;
+future IPC clients should implement the same request/response boundary instead
+of exposing daemon internals or protocol-specific backends to Slate callers.
+
 ## IPFS Initial Shape
 
 IPFS should be the first broadweb protocol to use the daemon because `ipfs://`

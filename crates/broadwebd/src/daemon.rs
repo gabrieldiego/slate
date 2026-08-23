@@ -17,6 +17,26 @@ pub struct BroadwebDaemon {
     lifecycle: DaemonLifecycle,
 }
 
+pub trait BroadwebdClient {
+    fn health(&self) -> DaemonHealth;
+
+    fn status_snapshot(&self) -> BroadwebStatusSnapshot;
+
+    fn fetch_http(&self, request: HttpFetchRequest) -> Result<HttpFetchResponse, BroadwebdError>;
+
+    fn profile_sync(
+        &self,
+        request: ProfileSyncRequest,
+    ) -> Result<ProfileSyncResponse, BroadwebdError>;
+
+    fn temporary_downloads(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError>;
+
+    fn downloads(&self, profile: &str) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError>;
+}
+
 impl BroadwebDaemon {
     pub fn start(state_root: impl Into<PathBuf>) -> Result<Self, BroadwebdError> {
         Self::start_with_registry(
@@ -198,6 +218,38 @@ impl BroadwebDaemon {
             response.content_type.clone(),
         );
         Ok(response.with_download(download))
+    }
+}
+
+impl BroadwebdClient for BroadwebDaemon {
+    fn health(&self) -> DaemonHealth {
+        BroadwebDaemon::health(self)
+    }
+
+    fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+        BroadwebDaemon::status_snapshot(self)
+    }
+
+    fn fetch_http(&self, request: HttpFetchRequest) -> Result<HttpFetchResponse, BroadwebdError> {
+        BroadwebDaemon::fetch_http(self, request)
+    }
+
+    fn profile_sync(
+        &self,
+        request: ProfileSyncRequest,
+    ) -> Result<ProfileSyncResponse, BroadwebdError> {
+        BroadwebDaemon::profile_sync(self, request)
+    }
+
+    fn temporary_downloads(
+        &self,
+        profile: &str,
+    ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+        BroadwebDaemon::temporary_downloads(self, profile)
+    }
+
+    fn downloads(&self, profile: &str) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+        BroadwebDaemon::downloads(self, profile)
     }
 }
 

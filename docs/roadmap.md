@@ -267,6 +267,11 @@ Current baseline:
   mutable root publish/resolve, provider discovery, per-object transfer
   budgets, and two local `slate-settings.db` files syncing one setting through
   fixture bytes.
+- broadwebd now exposes a public `BroadwebdClient` trait over the same
+  in-process request/response boundary used by `BroadwebDaemon`. This gives
+  Slate callers and future IPC clients a stable boundary for HTTP fetches,
+  profile-sync requests, health, status, and download listing without exposing
+  protocol internals.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the

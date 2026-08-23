@@ -166,6 +166,14 @@ reject_protocol_model_leak \
     crates/broadwebd/src/lib.rs \
     'pub use services::profile_sync::LocalProfileSyncFixture|profile_sync::\{LocalProfileSyncFixture|LocalProfileSyncFixture, ProfileSyncRuntime' \
     'LocalProfileSyncFixture must not be exported from broadwebd root API; use test_fixtures instead.'
+require_text \
+    crates/broadwebd/src/daemon.rs \
+    'pub trait BroadwebdClient' \
+    'broadwebd must keep an IPC-neutral client trait around the in-process daemon boundary.'
+require_text \
+    crates/broadwebd/src/daemon.rs \
+    'impl BroadwebdClient for BroadwebDaemon' \
+    'BroadwebDaemon must implement the IPC-neutral broadwebd client boundary.'
 
 protocol_model_terms='slate-fixture|InProcessBroadwebNetwork|Internal[A-Za-z0-9_]*Fixture|ProfileSyncModel|socketless-fixture|in-process-fixture|simulated|Simulation|fixture model|internal model'
 
@@ -364,6 +372,14 @@ require_text \
     'Kubo fixture shims are exported' \
     'Roadmap must record that socketless models stay outside the normal protocol API.'
 require_text \
+    docs/architecture/broadwebd.md \
+    '`BroadwebdClient` trait' \
+    'broadwebd architecture must document the current IPC-neutral in-process client trait.'
+require_text \
+    docs/roadmap.md \
+    'public `BroadwebdClient` trait' \
+    'Roadmap must record the current broadwebd client boundary.'
+require_text \
     docs/roadmap.md \
     'Socketless broadweb models must stay behind transport shims' \
     'Roadmap must record that protocol models only replace socket IO, not protocol implementation logic.'
@@ -525,6 +541,7 @@ run_test_with_features slate-broadwebd test-fixtures http_fetch_uses_in_process_
 run_test_with_features slate-broadwebd test-fixtures registry_can_opt_into_kubo_profile_sync_without_fixture_transport
 run_test_with_features slate-broadwebd test-fixtures registry_can_apply_kubo_profile_sync_runtime_config
 run_test_with_features slate-broadwebd test-fixtures registry_rejects_external_kubo_profile_sync_endpoint
+run_test slate-broadwebd daemon_dispatches_through_ipc_neutral_client_trait
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_get_uses_transport_bytes_not_local_upload_metadata
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_round_trips_state_without_canned_responses
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_release_updates_retention_health
