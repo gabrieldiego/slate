@@ -1511,6 +1511,10 @@ Current baseline:
   trusted/total counts from `slate-settings.db`, so local trials can distinguish
   a configured storage provider from one that the replicated membership log has
   actually authorized for retention.
+- The preview also exposes the concrete authorized retention provider ids from
+  local readiness JSON and renders matching provider names separately from
+  merely active/configured storage providers. This keeps local trials honest
+  about which providers can satisfy retention quorum under the membership log.
 - The same membership-log bridge now covers the provider-signer failure mode
   transactionally: if a log enrolls a provider and then uses that provider to
   sign an account membership change, the whole pulled log is rejected, the

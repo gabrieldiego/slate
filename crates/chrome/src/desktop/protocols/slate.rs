@@ -1527,6 +1527,7 @@ fn profile_sync_local_readiness_json(
         "enabled_storage_provider_count": readiness.enabled_storage_provider_count,
         "retention_capable_provider_count": readiness.retention_capable_provider_count,
         "authorized_retention_provider_count": readiness.authorized_retention_provider_count,
+        "authorized_retention_provider_ids": readiness.authorized_retention_provider_ids.as_slice(),
         "storage_providers": profile_sync_storage_providers_json(
             readiness.storage_providers.as_slice()
         ),
@@ -3030,6 +3031,8 @@ mod tests {
         assert!(settings_page.contains("profileSyncContentAppDomainStatus"));
         assert!(settings_page.contains("Active providers"));
         assert!(settings_page.contains("profileSyncActiveProviderStatus"));
+        assert!(settings_page.contains("Authorized providers"));
+        assert!(settings_page.contains("profileSyncAuthorizedProviderStatus"));
         assert!(settings_page.contains("Sync issues"));
         assert!(settings_page.contains("profileSyncIssueStatus"));
         assert!(settings_page.contains("Issue details"));

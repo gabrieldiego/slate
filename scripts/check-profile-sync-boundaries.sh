@@ -372,6 +372,10 @@ require_text \
     'profile-sync local readiness must carry storage provider records for settings preview status.'
 require_text \
     crates/storage/src/lib.rs \
+    'pub authorized_retention_provider_ids: Vec<String>' \
+    'profile-sync local readiness must expose authorized retention provider ids.'
+require_text \
+    crates/storage/src/lib.rs \
     'pub provider_authority_device_count: usize' \
     'profile-sync local readiness must expose provider-authority device counts.'
 require_text \
@@ -566,6 +570,10 @@ require_text \
     'Slate settings profile-sync JSON must expose enabled sync-content app domain counts.'
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
+    '"authorized_retention_provider_ids": readiness.authorized_retention_provider_ids.as_slice\(\)' \
+    'Slate settings profile-sync JSON must expose authorized retention provider ids.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
     'profile_sync_storage_providers_json' \
     'Slate settings profile-sync JSON must expose storage provider records.'
 require_text \
@@ -608,6 +616,14 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'Active providers' \
     'Slate settings page must show active profile-sync storage providers.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Authorized providers' \
+    'Slate settings page must show account-authorized profile-sync storage providers.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'profileSyncAuthorizedProviderStatus' \
+    'Slate settings page must render authorized provider status.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Provider-authority devices' \

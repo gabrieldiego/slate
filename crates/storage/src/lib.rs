@@ -2683,6 +2683,7 @@ pub struct ProfileSyncLocalReadinessReport {
     pub enabled_storage_provider_count: usize,
     pub retention_capable_provider_count: usize,
     pub authorized_retention_provider_count: usize,
+    pub authorized_retention_provider_ids: Vec<String>,
     pub storage_providers: Vec<StorageProviderRecord>,
     pub ready_for_manual_sync: bool,
     pub blocked_reason: Option<String>,
@@ -6622,7 +6623,7 @@ impl SlateProfileDatabase {
                 provider.enabled && provider.availability && provider.object_transfer
             })
             .count();
-        let authorized_retention_provider_count = storage_providers
+        let authorized_retention_provider_ids = storage_providers
             .iter()
             .filter(|provider| {
                 provider.enabled
@@ -6630,7 +6631,9 @@ impl SlateProfileDatabase {
                     && provider.object_transfer
                     && trusted_provider_authority_device_ids.contains(provider.provider_id.as_str())
             })
-            .count();
+            .map(|provider| provider.provider_id.clone())
+            .collect::<Vec<_>>();
+        let authorized_retention_provider_count = authorized_retention_provider_ids.len();
 
         let metadata_ready =
             active_key_id.is_some() && local_device_registered && enabled_app_domain_count > 0;
@@ -6668,6 +6671,7 @@ impl SlateProfileDatabase {
             enabled_storage_provider_count,
             retention_capable_provider_count,
             authorized_retention_provider_count,
+            authorized_retention_provider_ids,
             storage_providers,
             ready_for_manual_sync,
             blocked_reason,
@@ -17482,6 +17486,7 @@ mod tests {
         assert_eq!(report.storage_provider_count, 0);
         assert!(report.storage_providers.is_empty());
         assert_eq!(report.authorized_retention_provider_count, 0);
+        assert!(report.authorized_retention_provider_ids.is_empty());
         assert!(!report.ready_for_manual_sync);
         assert_eq!(
             report.blocked_reason.as_deref(),
@@ -17556,6 +17561,10 @@ mod tests {
         assert_eq!(report.enabled_storage_provider_count, 1);
         assert_eq!(report.retention_capable_provider_count, 1);
         assert_eq!(report.authorized_retention_provider_count, 1);
+        assert_eq!(
+            report.authorized_retention_provider_ids,
+            vec![provider.provider_id.clone()]
+        );
         assert!(report.ready_for_manual_sync);
         assert_eq!(report.blocked_reason, None);
     }
