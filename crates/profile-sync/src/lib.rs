@@ -3310,6 +3310,7 @@ pub struct SettingsSyncProtocolProviderMaterializationReport {
     pub endpoint_mismatch_provider_ids: Vec<String>,
     pub duplicate_provider_ids: Vec<String>,
     pub unsupported_provider_ids: Vec<String>,
+    pub capacity_exceeded_provider_ids: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3318,6 +3319,7 @@ pub enum SettingsSyncProtocolProviderMaterializationIssueKind {
     EndpointMismatch,
     Duplicate,
     Unsupported,
+    CapacityExceeded,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3354,11 +3356,16 @@ impl SettingsSyncProtocolProviderMaterializationReport {
         self.unsupported_provider_ids.len()
     }
 
+    pub fn capacity_exceeded_provider_count(&self) -> usize {
+        self.capacity_exceeded_provider_ids.len()
+    }
+
     pub fn blocked_provider_count(&self) -> usize {
         self.missing_provider_count()
             + self.endpoint_mismatch_provider_count()
             + self.duplicate_provider_count()
             + self.unsupported_provider_count()
+            + self.capacity_exceeded_provider_count()
     }
 
     pub fn materialization_issues(&self) -> Vec<SettingsSyncProtocolProviderMaterializationIssue> {
@@ -3382,6 +3389,11 @@ impl SettingsSyncProtocolProviderMaterializationReport {
             &mut issues,
             SettingsSyncProtocolProviderMaterializationIssueKind::Unsupported,
             self.unsupported_provider_ids.as_slice(),
+        );
+        append_protocol_provider_materialization_issues(
+            &mut issues,
+            SettingsSyncProtocolProviderMaterializationIssueKind::CapacityExceeded,
+            self.capacity_exceeded_provider_ids.as_slice(),
         );
         issues
     }
@@ -3419,6 +3431,7 @@ pub struct SettingsSyncProtocolProviderMaterialization<'a> {
     pub endpoint_mismatch_provider_ids: Vec<String>,
     pub duplicate_provider_ids: Vec<String>,
     pub unsupported_provider_ids: Vec<String>,
+    pub capacity_exceeded_provider_ids: Vec<String>,
 }
 
 impl<'a> SettingsSyncProtocolProviderMaterialization<'a> {
@@ -3442,11 +3455,16 @@ impl<'a> SettingsSyncProtocolProviderMaterialization<'a> {
         self.unsupported_provider_ids.len()
     }
 
+    pub fn capacity_exceeded_provider_count(&self) -> usize {
+        self.capacity_exceeded_provider_ids.len()
+    }
+
     pub fn blocked_provider_count(&self) -> usize {
         self.missing_provider_count()
             + self.endpoint_mismatch_provider_count()
             + self.duplicate_provider_count()
             + self.unsupported_provider_count()
+            + self.capacity_exceeded_provider_count()
     }
 
     pub fn all_providers_materialized(&self) -> bool {
@@ -3471,6 +3489,7 @@ impl<'a> SettingsSyncProtocolProviderMaterialization<'a> {
             endpoint_mismatch_provider_ids: self.endpoint_mismatch_provider_ids.clone(),
             duplicate_provider_ids: self.duplicate_provider_ids.clone(),
             unsupported_provider_ids: self.unsupported_provider_ids.clone(),
+            capacity_exceeded_provider_ids: self.capacity_exceeded_provider_ids.clone(),
         }
     }
 }
@@ -3480,6 +3499,7 @@ pub struct SettingsSyncProtocolProviderMaterializerPolicy {
     pub supports_multiaddr: bool,
     pub supported_deferred_protocols: Vec<String>,
     pub boundary: SettingsSyncProtocolProviderMaterializerBoundary,
+    pub max_materialized_providers: Option<usize>,
 }
 
 impl SettingsSyncProtocolProviderMaterializerPolicy {
@@ -3495,6 +3515,7 @@ impl SettingsSyncProtocolProviderMaterializerPolicy {
             supports_multiaddr,
             supported_deferred_protocols,
             boundary: SettingsSyncProtocolProviderMaterializerBoundary::RuntimeAdapter,
+            max_materialized_providers: None,
         }
     }
 
@@ -3507,6 +3528,7 @@ impl SettingsSyncProtocolProviderMaterializerPolicy {
             supported_deferred_protocols,
             boundary:
                 SettingsSyncProtocolProviderMaterializerBoundary::LocalDeterministicSimulation,
+            max_materialized_providers: None,
         }
     }
 
@@ -3522,6 +3544,15 @@ impl SettingsSyncProtocolProviderMaterializerPolicy {
 
     pub fn boundary(&self) -> SettingsSyncProtocolProviderMaterializerBoundary {
         self.boundary
+    }
+
+    pub fn with_max_materialized_providers(mut self, maximum: usize) -> Self {
+        self.max_materialized_providers = Some(maximum);
+        self
+    }
+
+    pub fn max_materialized_providers(&self) -> Option<usize> {
+        self.max_materialized_providers
     }
 
     pub fn uses_local_simulation_boundary(&self) -> bool {
@@ -3611,6 +3642,14 @@ impl<'a> SettingsSyncSocketlessProtocolProviderMaterializer<'a> {
             if provider.endpoint_ref != target.endpoint_ref {
                 materialization
                     .endpoint_mismatch_provider_ids
+                    .push(target.provider_id);
+                continue;
+            }
+            if let Some(max_materialized_providers) = self.policy.max_materialized_providers
+                && materialization.materialized_providers.len() >= max_materialized_providers
+            {
+                materialization
+                    .capacity_exceeded_provider_ids
                     .push(target.provider_id);
                 continue;
             }
@@ -11781,6 +11820,7 @@ mod tests {
         );
         assert!(runtime_policy.uses_runtime_adapter_boundary());
         assert!(!runtime_policy.uses_local_simulation_boundary());
+        assert_eq!(runtime_policy.max_materialized_providers(), None);
         assert!(
             runtime_policy
                 .supports_deferred_protocol(super::PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL)
@@ -11795,6 +11835,13 @@ mod tests {
         assert!(simulation_policy.uses_local_simulation_boundary());
         assert!(!simulation_policy.uses_runtime_adapter_boundary());
         assert!(simulation_policy.supports_multiaddr);
+        assert_eq!(simulation_policy.max_materialized_providers(), None);
+        let bounded_simulation_policy =
+            simulation_policy.clone().with_max_materialized_providers(1);
+        assert_eq!(
+            bounded_simulation_policy.max_materialized_providers(),
+            Some(1)
+        );
         assert!(
             simulation_policy
                 .supports_deferred_protocol(super::PROFILE_SYNC_DEFERRED_PROVIDER_PROTOCOL)
@@ -11977,6 +12024,7 @@ mod tests {
         assert_eq!(materialization.endpoint_mismatch_provider_count(), 1);
         assert_eq!(materialization.duplicate_provider_count(), 1);
         assert_eq!(materialization.unsupported_provider_count(), 1);
+        assert_eq!(materialization.capacity_exceeded_provider_count(), 0);
         assert_eq!(materialization.blocked_provider_count(), 4);
         assert!(!materialization.all_providers_materialized());
         assert_eq!(
@@ -11990,6 +12038,7 @@ mod tests {
                 endpoint_mismatch_provider_ids: vec![mismatch_provider_id.to_string()],
                 duplicate_provider_ids: vec![duplicate_provider_id.to_string()],
                 unsupported_provider_ids: vec![unsupported_provider_id.to_string()],
+                capacity_exceeded_provider_ids: Vec::new(),
             }
         );
         let materialization_report = materialization.report();
@@ -11998,6 +12047,7 @@ mod tests {
         assert_eq!(materialization_report.endpoint_mismatch_provider_count(), 1);
         assert_eq!(materialization_report.duplicate_provider_count(), 1);
         assert_eq!(materialization_report.unsupported_provider_count(), 1);
+        assert_eq!(materialization_report.capacity_exceeded_provider_count(), 0);
         assert_eq!(materialization_report.blocked_provider_count(), 4);
         assert_eq!(materialization_report.materialization_issue_count(), 4);
         assert!(materialization_report.has_materialization_issue());
@@ -12043,6 +12093,103 @@ mod tests {
         let _ = std::fs::remove_dir_all(iroh_state_root);
         let _ = std::fs::remove_dir_all(mismatch_state_root);
         let _ = std::fs::remove_dir_all(duplicate_state_root);
+    }
+
+    #[test]
+    fn protocol_provider_materializer_enforces_materialized_provider_limit() {
+        let network = InProcessBroadwebNetwork::new();
+        let first_state_root = test_state_root("protocol-materializer-limit-first");
+        let second_state_root = test_state_root("protocol-materializer-limit-second");
+        let first_provider_id = "protocol-limit-first-provider";
+        let second_provider_id = "protocol-limit-second-provider";
+        let first_endpoint = "iroh-node:limit-node-a";
+        let second_endpoint = "iroh-node:limit-node-b";
+        let first_daemon = network
+            .daemon_for_availability_provider(
+                &first_state_root,
+                ResourceBudget::default(),
+                first_provider_id,
+            )
+            .expect("start first limited materializer daemon");
+        let second_daemon = network
+            .daemon_for_availability_provider(
+                &second_state_root,
+                ResourceBudget::default(),
+                second_provider_id,
+            )
+            .expect("start second limited materializer daemon");
+        let plan = super::SettingsSyncSelectedProtocolMaterializationPlan {
+            deferred_protocol_requests: vec![
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: first_provider_id.to_string(),
+                    protocol: "iroh-node".to_string(),
+                    target: "limit-node-a".to_string(),
+                },
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: second_provider_id.to_string(),
+                    protocol: "iroh-node".to_string(),
+                    target: "limit-node-b".to_string(),
+                },
+            ],
+            ..super::SettingsSyncSelectedProtocolMaterializationPlan::default()
+        };
+        let policy =
+            super::SettingsSyncProtocolProviderMaterializerPolicy::local_deterministic_simulation()
+                .with_max_materialized_providers(1);
+        assert_eq!(policy.max_materialized_providers(), Some(1));
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            policy,
+            vec![
+                super::SettingsSyncProtocolProviderDaemon::new(
+                    first_provider_id,
+                    first_endpoint,
+                    &first_daemon,
+                ),
+                super::SettingsSyncProtocolProviderDaemon::new(
+                    second_provider_id,
+                    second_endpoint,
+                    &second_daemon,
+                ),
+            ],
+        );
+
+        let materialization = materializer.materialize_protocol_providers(&plan);
+        assert_eq!(materialization.materialized_provider_count(), 1);
+        assert_eq!(materialization.capacity_exceeded_provider_count(), 1);
+        assert_eq!(materialization.blocked_provider_count(), 1);
+        assert!(!materialization.all_providers_materialized());
+        assert_eq!(
+            materialization.capacity_exceeded_provider_ids,
+            vec![second_provider_id.to_string()]
+        );
+        assert_eq!(
+            materialization.report(),
+            super::SettingsSyncProtocolProviderMaterializationReport {
+                materialized_provider_ids: vec![first_provider_id.to_string()],
+                missing_provider_ids: Vec::new(),
+                endpoint_mismatch_provider_ids: Vec::new(),
+                duplicate_provider_ids: Vec::new(),
+                unsupported_provider_ids: Vec::new(),
+                capacity_exceeded_provider_ids: vec![second_provider_id.to_string()],
+            }
+        );
+        assert_eq!(
+            materialization.report().materialization_issues(),
+            vec![super::SettingsSyncProtocolProviderMaterializationIssue {
+                provider_id: second_provider_id.to_string(),
+                kind: super::SettingsSyncProtocolProviderMaterializationIssueKind::CapacityExceeded,
+            }]
+        );
+        let retention_provider_handles = materialization.retention_provider_handles();
+        assert_eq!(retention_provider_handles.len(), 1);
+        assert_eq!(retention_provider_handles[0].provider_id, first_provider_id);
+        assert_eq!(
+            retention_provider_handles[0].endpoint_ref,
+            Some(first_endpoint)
+        );
+
+        let _ = std::fs::remove_dir_all(first_state_root);
+        let _ = std::fs::remove_dir_all(second_state_root);
     }
 
     #[test]
@@ -12845,6 +12992,7 @@ mod tests {
                 endpoint_mismatch_provider_ids: Vec::new(),
                 duplicate_provider_ids: Vec::new(),
                 unsupported_provider_ids: vec![deferred_provider_id.to_string()],
+                capacity_exceeded_provider_ids: Vec::new(),
             }
         );
         assert_eq!(protocol_preview.protocol_materialized_provider_count(), 0);
@@ -13750,6 +13898,7 @@ mod tests {
                             endpoint_mismatch_provider_ids: Vec::new(),
                             duplicate_provider_ids: Vec::new(),
                             unsupported_provider_ids: Vec::new(),
+                            capacity_exceeded_provider_ids: Vec::new(),
                         },
                     handle_materialization:
                         super::SettingsSyncStoredRetentionProviderHandleMaterialization {
@@ -13773,6 +13922,7 @@ mod tests {
                 endpoint_mismatch_provider_ids: Vec::new(),
                 duplicate_provider_ids: Vec::new(),
                 unsupported_provider_ids: Vec::new(),
+                capacity_exceeded_provider_ids: Vec::new(),
             }
         );
         assert!(materialization_preview.all_selected_providers_materialized());
@@ -13829,6 +13979,7 @@ mod tests {
                 endpoint_mismatch_provider_ids: Vec::new(),
                 duplicate_provider_ids: Vec::new(),
                 unsupported_provider_ids: Vec::new(),
+                capacity_exceeded_provider_ids: Vec::new(),
             }
         );
         assert_eq!(
@@ -13839,6 +13990,7 @@ mod tests {
                 endpoint_mismatch_provider_ids: Vec::new(),
                 duplicate_provider_ids: Vec::new(),
                 unsupported_provider_ids: Vec::new(),
+                capacity_exceeded_provider_ids: Vec::new(),
             }
         );
         assert_eq!(run.protocol_materialized_provider_count(), 1);
@@ -23413,6 +23565,7 @@ mod tests {
                 endpoint_mismatch_provider_ids: Vec::new(),
                 duplicate_provider_ids: Vec::new(),
                 unsupported_provider_ids: Vec::new(),
+                capacity_exceeded_provider_ids: Vec::new(),
             }
         );
         assert_eq!(run.protocol_materialized_provider_count(), 1);
@@ -25341,6 +25494,7 @@ mod tests {
                 endpoint_mismatch_provider_ids: Vec::new(),
                 duplicate_provider_ids: Vec::new(),
                 unsupported_provider_ids: Vec::new(),
+                capacity_exceeded_provider_ids: Vec::new(),
             }
         );
         assert!(
@@ -25406,6 +25560,7 @@ mod tests {
                 endpoint_mismatch_provider_ids: Vec::new(),
                 duplicate_provider_ids: Vec::new(),
                 unsupported_provider_ids: Vec::new(),
+                capacity_exceeded_provider_ids: Vec::new(),
             }
         );
         assert_eq!(
@@ -25416,6 +25571,7 @@ mod tests {
                 endpoint_mismatch_provider_ids: Vec::new(),
                 duplicate_provider_ids: Vec::new(),
                 unsupported_provider_ids: Vec::new(),
+                capacity_exceeded_provider_ids: Vec::new(),
             }
         );
         assert_eq!(run.protocol_materialized_provider_count(), 1);

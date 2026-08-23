@@ -868,6 +868,11 @@ Current baseline:
   fixture or future adapter, verifies provider id and endpoint-ref matches, and
   reports missing, mismatched, duplicate, or unsupported providers before those
   handles can feed the stored-provider scheduler path.
+- Socketless protocol materializer policies can now cap the number of providers
+  materialized in one pass. Otherwise-valid providers beyond that cap are
+  reported as capacity-exceeded providers instead of being silently accepted,
+  which gives local simulations and future constrained runtime adapters a
+  deterministic resource limit without changing scheduler selection semantics.
 - Stored-provider scheduler runs can now use that protocol materializer
   boundary directly. A selected stored provider with a multiaddr endpoint can
   be materialized into a normal retention-provider handle, pass the existing

@@ -320,6 +320,14 @@ require_text \
     'profile-sync local protocol simulations must be explicit materializer policies.'
 require_text \
     crates/profile-sync/src/lib.rs \
+    'with_max_materialized_providers' \
+    'profile-sync protocol materializers must expose explicit provider materialization caps for constrained runs.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'protocol_provider_materializer_enforces_materialized_provider_limit' \
+    'profile-sync protocol materializer capacity limits must have focused regression coverage.'
+require_text \
+    crates/profile-sync/src/lib.rs \
     'SettingsSyncRootObjectProviderIssue' \
     'profile-sync health reports must expose structured root-object provider issues.'
 require_text \
@@ -383,6 +391,10 @@ require_text \
     docs/roadmap.md \
     'Iroh-shaped materialized-provider path now also' \
     'Roadmap must record bounded Iroh-shaped materialized-provider fixture state.'
+require_text \
+    docs/roadmap.md \
+    'capacity-exceeded providers' \
+    'Roadmap must record bounded protocol materializer provider capacity.'
 
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
@@ -537,6 +549,7 @@ run_test slate-profile-sync broadwebd_settings_sync_health_reports_unavailable_r
 run_test slate-profile-sync broadwebd_settings_sync_health_reports_stale_latest_object_holders
 run_test slate-profile-sync broadwebd_settings_sync_health_reports_offline_latest_object_holders
 run_test slate-profile-sync iroh_node
+run_test slate-profile-sync protocol_provider_materializer_enforces_materialized_provider_limit
 run_test slate-profile-sync broadwebd_settings_compaction_retains_objects_before_strict_root_policy_check
 run_test slate-profile-sync broadwebd_settings_sync_scheduler_compacts_with_selected_retention_provider_handles
 run_test slate-profile-sync broadwebd_settings_sync_scheduler_compacts_with_stored_retention_provider_handles
