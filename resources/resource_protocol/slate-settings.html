@@ -1462,6 +1462,9 @@
     profileSyncRunCurrentButton.addEventListener("click", runProfileSyncCurrentSync);
     profileSyncRunLocalButton.addEventListener("click", runProfileSyncLocalTrial);
     profileSyncRunLocalTwoDeviceButton.addEventListener("click", runProfileSyncLocalTwoDeviceTrial);
+    profileSyncHandoffDevice.addEventListener("input", () => {
+      profileSyncHandoff.value = "";
+    });
     profileSyncHandoffImportButton.addEventListener("click", importProfileSyncHandoffBundle);
     profileSyncHandoffDownloadButton.addEventListener("click", downloadProfileSyncHandoffBundle);
     profileSyncHandoffFile.addEventListener("change", () => {

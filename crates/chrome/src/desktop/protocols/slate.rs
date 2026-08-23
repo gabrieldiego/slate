@@ -609,7 +609,11 @@ impl SlateProtocolHandler {
             Ok(bundle) => {
                 state.mark_secret_handoff_bundle(&bundle);
                 let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                json_response(request, 200, state.to_json(readiness.as_ref()))
+                json_response(
+                    request,
+                    200,
+                    state.to_json_with_handoff_export(readiness.as_ref()),
+                )
             }
             Err(error) => {
                 state.last_error = Some(error.to_string());
@@ -1422,41 +1426,21 @@ impl ProfileSyncPreviewState {
     }
 
     fn to_json(&self, readiness: Option<&ProfileSyncLocalReadinessReport>) -> String {
-        let active_export_text = self
-            .active_export
-            .as_ref()
-            .and_then(|export| export.to_bytes().ok())
-            .and_then(|bytes| String::from_utf8(bytes).ok());
-        let device_request_text = self
-            .active_device_request
-            .as_ref()
-            .and_then(|request| request.to_bytes().ok())
-            .and_then(|bytes| String::from_utf8(bytes).ok());
-        let device_request_device_id = self
-            .active_device_request
-            .as_ref()
-            .map(|request| request.device_id.as_str());
-        let device_request_filename = self
-            .active_device_request
-            .as_ref()
-            .map(|request| profile_sync_device_request_filename(request.device_id.as_str()));
-        let enrollment_export_text = self
-            .active_enrollment_bundle
-            .as_ref()
-            .and_then(|bundle| bundle.to_bytes().ok())
-            .and_then(|bytes| String::from_utf8(bytes).ok());
-        let enrollment_target_device_id = self
-            .active_enrollment_bundle
-            .as_ref()
-            .map(|bundle| bundle.target_device_id.as_str());
-        let enrollment_signed_record_count = self
-            .active_enrollment_bundle
-            .as_ref()
-            .map(|bundle| bundle.signed_membership_records.len());
-        let enrollment_filename = self
-            .active_enrollment_bundle
-            .as_ref()
-            .map(|bundle| profile_sync_enrollment_filename(bundle.target_device_id.as_str()));
+        self.to_json_with_exports(readiness, false)
+    }
+
+    fn to_json_with_handoff_export(
+        &self,
+        readiness: Option<&ProfileSyncLocalReadinessReport>,
+    ) -> String {
+        self.to_json_with_exports(readiness, true)
+    }
+
+    fn to_json_with_exports(
+        &self,
+        readiness: Option<&ProfileSyncLocalReadinessReport>,
+        include_handoff_export: bool,
+    ) -> String {
         let handoff_export_text = self
             .active_handoff_bundle
             .as_ref()
@@ -1470,7 +1454,7 @@ impl ProfileSyncPreviewState {
             .active_handoff_bundle
             .as_ref()
             .map(|bundle| profile_sync_handoff_filename(bundle.target_device_id.as_str()));
-        serde_json::json!({
+        let mut state_json = serde_json::json!({
             "profile": DEFAULT_PROFILE_ID,
             "status": if self.active_export.is_some() {
                 "ready"
@@ -1487,21 +1471,20 @@ impl ProfileSyncPreviewState {
             "last_current_sync": self.last_current_sync.as_ref().map(ProfileSyncPreviewCurrentSyncState::to_json),
             "last_trial": self.last_trial.as_ref().map(ProfileSyncPreviewTrialState::to_json),
             "last_two_device_trial": self.last_two_device_trial.as_ref().map(ProfileSyncPreviewTwoDeviceTrialState::to_json),
-            "export_filename": "slate-sync-secret.json",
-            "export_text": active_export_text,
-            "device_request_export_filename": device_request_filename.as_deref(),
-            "device_request_export_text": device_request_text,
-            "device_request_device_id": device_request_device_id,
-            "enrollment_export_filename": enrollment_filename.as_deref(),
-            "enrollment_export_text": enrollment_export_text,
-            "enrollment_target_device_id": enrollment_target_device_id,
-            "enrollment_signed_record_count": enrollment_signed_record_count,
             "handoff_export_filename": handoff_filename.as_deref(),
-            "handoff_export_text": handoff_export_text,
             "handoff_target_device_id": handoff_target_device_id,
             "last_error": self.last_error.as_deref(),
-        })
-        .to_string()
+        });
+        if include_handoff_export
+            && let Some(handoff_export_text) = handoff_export_text
+            && let Some(object) = state_json.as_object_mut()
+        {
+            object.insert(
+                "handoff_export_text".to_string(),
+                serde_json::Value::String(handoff_export_text),
+            );
+        }
+        state_json.to_string()
     }
 }
 
@@ -2128,10 +2111,6 @@ fn profile_sync_device_request_text_from_url(url: &Url) -> Option<String> {
         .filter(|value| !value.trim().is_empty())
 }
 
-fn profile_sync_device_request_filename(device_id: &str) -> String {
-    format!("slate-profile-device-request-{device_id}.json")
-}
-
 fn profile_sync_enrollment_target_device_id_from_url(url: &Url) -> Option<String> {
     if !is_slate_settings_profile_sync_enrollment_create_url(url) {
         return None;
@@ -2174,10 +2153,6 @@ fn profile_sync_handoff_bundle_text_from_url(url: &Url) -> Option<String> {
         .find(|(name, _)| name == "handoff")
         .map(|(_, value)| value.into_owned())
         .filter(|value| !value.trim().is_empty())
-}
-
-fn profile_sync_enrollment_filename(target_device_id: &str) -> String {
-    format!("slate-profile-enrollment-{target_device_id}.json")
 }
 
 fn profile_sync_handoff_filename(target_device_id: &str) -> String {
@@ -2596,7 +2571,7 @@ mod tests {
     }
 
     #[test]
-    fn profile_sync_preview_state_exports_and_imports_profile_key() {
+    fn profile_sync_preview_state_exports_only_explicit_handoff_file() {
         let mut source = super::ProfileSyncPreviewState::default();
         let sync_secret = source.create_secret(DEFAULT_PROFILE_ID, 123).unwrap();
         let enrollment_bundle = SlateProfileDatabase::profile_sync_enrollment_bundle_from_secret(
@@ -2617,39 +2592,46 @@ mod tests {
         source.mark_enrollment_bundle(&enrollment_bundle);
         source.mark_secret_handoff_bundle(&handoff_bundle);
         let source_json: serde_json::Value = serde_json::from_str(&source.to_json(None)).unwrap();
-        let export_text = source_json["export_text"].as_str().unwrap();
-        let device_request_text = source_json["device_request_export_text"].as_str().unwrap();
-        let enrollment_export_text = source_json["enrollment_export_text"].as_str().unwrap();
-        let handoff_export_text = source_json["handoff_export_text"].as_str().unwrap();
+        let source_object = source_json.as_object().unwrap();
 
         assert_eq!(source_json["profile"], DEFAULT_PROFILE_ID);
         assert_eq!(source_json["status"], "ready");
         assert_eq!(source_json["has_secret"], true);
-        assert!(export_text.contains(DEFAULT_PROFILE_ID));
-        assert!(device_request_text.contains("device-b"));
-        assert!(!device_request_text.contains("secret"));
-        assert_eq!(
-            source_json["device_request_export_filename"],
-            "slate-profile-device-request-device-b.json"
-        );
-        assert_eq!(source_json["device_request_device_id"], "device-b");
-        assert!(enrollment_export_text.contains("device-b"));
-        assert_eq!(
-            source_json["enrollment_export_filename"],
-            "slate-profile-enrollment-device-b.json"
-        );
-        assert_eq!(source_json["enrollment_signed_record_count"], 2);
-        assert!(handoff_export_text.contains("device-b"));
-        assert!(handoff_export_text.contains("sync_secret_export"));
+        assert!(!source_object.contains_key("export_filename"));
+        assert!(!source_object.contains_key("export_text"));
+        assert!(!source_object.contains_key("device_request_export_filename"));
+        assert!(!source_object.contains_key("device_request_export_text"));
+        assert!(!source_object.contains_key("device_request_device_id"));
+        assert!(!source_object.contains_key("enrollment_export_filename"));
+        assert!(!source_object.contains_key("enrollment_export_text"));
+        assert!(!source_object.contains_key("enrollment_target_device_id"));
+        assert!(!source_object.contains_key("enrollment_signed_record_count"));
+        assert!(!source_object.contains_key("handoff_export_text"));
         assert_eq!(
             source_json["handoff_export_filename"],
             "slate-profile-enrollment-device-b.json"
         );
         assert_eq!(source_json["handoff_target_device_id"], "device-b");
 
+        let handoff_json: serde_json::Value =
+            serde_json::from_str(&source.to_json_with_handoff_export(None)).unwrap();
+        let handoff_object = handoff_json.as_object().unwrap();
+        let handoff_export_text = handoff_json["handoff_export_text"].as_str().unwrap();
+        assert!(handoff_export_text.contains("device-b"));
+        assert!(handoff_export_text.contains("sync_secret_export"));
+        assert!(!handoff_object.contains_key("export_text"));
+        assert!(!handoff_object.contains_key("device_request_export_text"));
+        assert!(!handoff_object.contains_key("enrollment_export_text"));
+
+        let export_text = source
+            .active_export
+            .as_ref()
+            .and_then(|export| export.to_bytes().ok())
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .unwrap();
         let mut destination = super::ProfileSyncPreviewState::default();
         destination
-            .import_secret(DEFAULT_PROFILE_ID, export_text)
+            .import_secret(DEFAULT_PROFILE_ID, export_text.as_str())
             .unwrap();
         let destination_json: serde_json::Value =
             serde_json::from_str(&destination.to_json(None)).unwrap();
@@ -2657,7 +2639,9 @@ mod tests {
         assert_eq!(destination_json["status"], "ready");
         assert_eq!(destination_json["last_error"], serde_json::Value::Null);
 
-        let error = destination.import_secret("work", export_text).unwrap_err();
+        let error = destination
+            .import_secret("work", export_text.as_str())
+            .unwrap_err();
         assert!(error.to_string().contains("unexpected sync object profile"));
     }
 
@@ -3031,6 +3015,7 @@ mod tests {
         assert!(settings_page.contains("Download enrollment file"));
         assert!(settings_page.contains("Import enrollment file"));
         assert!(settings_page.contains("Enrollment file"));
+        assert!(settings_page.contains("profileSyncHandoffDevice.addEventListener(\"input\""));
         assert!(!settings_page.contains("id=\"profile-sync-secret\""));
         assert!(!settings_page.contains("id=\"profile-sync-secret-file\""));
         assert!(!settings_page.contains("id=\"profile-sync-download\""));

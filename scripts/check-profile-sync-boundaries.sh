@@ -496,6 +496,14 @@ require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
     'handoff_export_text' \
     'Slate settings profile-sync JSON must include handoff export text for local file trials.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'to_json_with_handoff_export' \
+    'Slate settings profile-sync JSON must expose secret-bearing enrollment files only on explicit handoff creation responses.'
+reject_protocol_model_leak \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    '"export_text":|"device_request_export_text":|"enrollment_export_text":|"export_filename": "slate-sync-secret.json"' \
+    'Slate settings profile-sync public JSON must not expose raw key-file, device-request, or internal enrollment-bundle artifacts.'
 reject_protocol_model_leak \
     resources/resource_protocol/slate-settings.html \
     'id="profile-sync-handoff-create"' \

@@ -1685,6 +1685,12 @@ Current baseline:
   designed deliberately. This remains a sensitive local preview flow and still
   uses the existing query-string internal action transport until POST/body-capable
   Slate protocol imports are added.
+- The Settings Profile Sync Preview JSON now follows the same narrower surface:
+  normal state responses no longer include raw key-file exports, device-request
+  files, or non-secret enrollment-bundle JSON. The secret-bearing
+  `handoff_export_text` field is returned only by the explicit handoff-create
+  action that backs the enrollment-file download, and editing the target device
+  clears any pending generated file text in the page.
 - The socketless two-device Profile Sync Preview now uses the same request
   shape: the receiver emits a `ProfileSyncDeviceEnrollmentRequest`, the
   publisher derives the enrollment bundle from that request, and the normal
