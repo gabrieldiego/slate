@@ -275,6 +275,14 @@ require_text \
     crates/profile-sync/src/lib.rs \
     'root_object_provider_issues: Vec<LocalSettingsSyncRootObjectProviderIssueSummary>' \
     'profile-sync local preview reports must carry root-object provider issue summaries.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>' \
+    'profile-sync local preview reports must carry retention provider selection issue summaries.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>' \
+    'profile-sync local preview reports must carry stored provider metadata issue summaries.'
 reject_protocol_model_leak \
     crates/profile-sync/src/lib.rs \
     'socketless_fixture_models' \
@@ -325,6 +333,14 @@ require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
     'root_object_provider_issues' \
     'Slate settings profile-sync JSON must expose root-object provider issue summaries.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'retention_provider_selection_issues' \
+    'Slate settings profile-sync JSON must expose retention provider selection issue summaries.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'stored_provider_metadata_issues' \
+    'Slate settings profile-sync JSON must expose stored provider metadata issue summaries.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Sync issues' \

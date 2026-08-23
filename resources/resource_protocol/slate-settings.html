@@ -1110,35 +1110,63 @@
       if (!run) {
         return "not checked";
       }
-      const issueCount = Number.isFinite(run.root_object_provider_issue_count) ?
+      const rootIssueCount = Number.isFinite(run.root_object_provider_issue_count) ?
         run.root_object_provider_issue_count :
         0;
+      const providerIssueCount =
+        (Number.isFinite(run.retention_provider_selection_issue_count) ?
+          run.retention_provider_selection_issue_count :
+          0) +
+        (Number.isFinite(run.stored_provider_metadata_issue_count) ?
+          run.stored_provider_metadata_issue_count :
+          0);
+      const issueCount = rootIssueCount + providerIssueCount;
       if (issueCount > 0) {
-        return `${issueCount} root object ${issueCount === 1 ? "issue" : "issues"}`;
+        return `${issueCount} sync ${issueCount === 1 ? "issue" : "issues"}`;
       }
       return run.degraded_after ? "degraded" : "none";
     }
 
+    function profileSyncIssueLabel(value, fallback) {
+      return profileSyncText(value, fallback).replace(/_/g, " ");
+    }
+
     function profileSyncIssueDetails(state) {
       const run = profileSyncLatestIssueRun(state);
-      const issues = run && Array.isArray(run.root_object_provider_issues) ?
+      const rootIssues = run && Array.isArray(run.root_object_provider_issues) ?
         run.root_object_provider_issues :
         [];
-      if (issues.length === 0) {
-        return "";
-      }
-      const rendered = issues.slice(0, 3).map((issue) => {
-        const kind = profileSyncText(issue && issue.kind, "issue");
-        const component = profileSyncText(issue && issue.component, "root");
+      const providerIssues = run ? []
+        .concat(Array.isArray(run.retention_provider_selection_issues) ?
+          run.retention_provider_selection_issues :
+          [])
+        .concat(Array.isArray(run.stored_provider_metadata_issues) ?
+          run.stored_provider_metadata_issues :
+          []) :
+        [];
+      const rendered = [];
+      rootIssues.forEach((issue) => {
+        const kind = profileSyncIssueLabel(issue && issue.kind, "issue");
+        const component = profileSyncIssueLabel(issue && issue.component, "root");
         const rootId = profileSyncText(issue && issue.root_id, "unknown root");
         const objectId = profileSyncText(issue && issue.object_id, "unknown object");
         const providerId = profileSyncText(issue && issue.provider_id, "unknown provider");
-        return `${kind} ${component} ${rootId}/${objectId} on ${providerId}`;
+        rendered.push(`${kind} ${component} ${rootId}/${objectId} on ${providerId}`);
       });
-      if (issues.length > rendered.length) {
-        rendered.push(`${issues.length - rendered.length} more`);
+      providerIssues.forEach((issue) => {
+        const category = profileSyncIssueLabel(issue && issue.category, "provider");
+        const kind = profileSyncIssueLabel(issue && issue.kind, "issue");
+        const providerId = profileSyncText(issue && issue.provider_id, "unknown provider");
+        rendered.push(`${category} ${kind} on ${providerId}`);
+      });
+      if (rendered.length === 0) {
+        return "";
       }
-      return rendered.join("; ");
+      const visibleIssues = rendered.slice(0, 3);
+      if (rendered.length > visibleIssues.length) {
+        visibleIssues.push(`${rendered.length - visibleIssues.length} more`);
+      }
+      return visibleIssues.join("; ");
     }
 
     function renderProfileSyncDetails(state) {

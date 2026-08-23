@@ -23,9 +23,10 @@ use slate_broadwebd::{
 };
 use slate_profile_sync::{
     LocalSettingsSyncCurrentCycleReport, LocalSettingsSyncPreviewCycleReport,
-    LocalSettingsSyncPreviewError, LocalSettingsSyncRootObjectProviderIssueSummary,
-    LocalSettingsSyncTwoDevicePreviewCycleReport, run_local_settings_sync_current_cycle,
-    run_local_settings_sync_preview_cycle, run_local_settings_sync_two_device_preview_cycle,
+    LocalSettingsSyncPreviewError, LocalSettingsSyncProviderIssueSummary,
+    LocalSettingsSyncRootObjectProviderIssueSummary, LocalSettingsSyncTwoDevicePreviewCycleReport,
+    run_local_settings_sync_current_cycle, run_local_settings_sync_preview_cycle,
+    run_local_settings_sync_two_device_preview_cycle,
 };
 use slate_storage::{
     DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
@@ -945,7 +946,9 @@ struct ProfileSyncPreviewCurrentSyncState {
     retained_object_count: usize,
     fixture_materialization_issue_count: usize,
     retention_provider_selection_issue_count: usize,
+    retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     stored_provider_metadata_issue_count: usize,
+    stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     all_fixture_providers_materialized: bool,
     degraded_before: bool,
     degraded_after: bool,
@@ -970,7 +973,9 @@ impl ProfileSyncPreviewCurrentSyncState {
             fixture_materialization_issue_count: report.fixture_materialization_issue_count,
             retention_provider_selection_issue_count: report
                 .retention_provider_selection_issue_count,
+            retention_provider_selection_issues: report.retention_provider_selection_issues.clone(),
             stored_provider_metadata_issue_count: report.stored_provider_metadata_issue_count,
+            stored_provider_metadata_issues: report.stored_provider_metadata_issues.clone(),
             all_fixture_providers_materialized: report.all_fixture_providers_materialized,
             degraded_before: report.degraded_before,
             degraded_after: report.degraded_after,
@@ -994,7 +999,9 @@ impl ProfileSyncPreviewCurrentSyncState {
             "retained_object_count": self.retained_object_count,
             "fixture_materialization_issue_count": self.fixture_materialization_issue_count,
             "retention_provider_selection_issue_count": self.retention_provider_selection_issue_count,
+            "retention_provider_selection_issues": profile_sync_provider_issues_json(self.retention_provider_selection_issues.as_slice()),
             "stored_provider_metadata_issue_count": self.stored_provider_metadata_issue_count,
+            "stored_provider_metadata_issues": profile_sync_provider_issues_json(self.stored_provider_metadata_issues.as_slice()),
             "all_fixture_providers_materialized": self.all_fixture_providers_materialized,
             "degraded_before": self.degraded_before,
             "degraded_after": self.degraded_after,
@@ -1021,7 +1028,9 @@ struct ProfileSyncPreviewTrialState {
     retained_object_count: usize,
     fixture_materialization_issue_count: usize,
     retention_provider_selection_issue_count: usize,
+    retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     stored_provider_metadata_issue_count: usize,
+    stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     all_fixture_providers_materialized: bool,
     degraded_before: bool,
     degraded_after: bool,
@@ -1048,7 +1057,9 @@ impl ProfileSyncPreviewTrialState {
             fixture_materialization_issue_count: report.fixture_materialization_issue_count,
             retention_provider_selection_issue_count: report
                 .retention_provider_selection_issue_count,
+            retention_provider_selection_issues: report.retention_provider_selection_issues.clone(),
             stored_provider_metadata_issue_count: report.stored_provider_metadata_issue_count,
+            stored_provider_metadata_issues: report.stored_provider_metadata_issues.clone(),
             all_fixture_providers_materialized: report.all_fixture_providers_materialized,
             degraded_before: report.degraded_before,
             degraded_after: report.degraded_after,
@@ -1074,7 +1085,9 @@ impl ProfileSyncPreviewTrialState {
             "retained_object_count": self.retained_object_count,
             "fixture_materialization_issue_count": self.fixture_materialization_issue_count,
             "retention_provider_selection_issue_count": self.retention_provider_selection_issue_count,
+            "retention_provider_selection_issues": profile_sync_provider_issues_json(self.retention_provider_selection_issues.as_slice()),
             "stored_provider_metadata_issue_count": self.stored_provider_metadata_issue_count,
+            "stored_provider_metadata_issues": profile_sync_provider_issues_json(self.stored_provider_metadata_issues.as_slice()),
             "all_fixture_providers_materialized": self.all_fixture_providers_materialized,
             "degraded_before": self.degraded_before,
             "degraded_after": self.degraded_after,
@@ -1102,6 +1115,27 @@ fn profile_sync_root_object_provider_issue_json(
         "component": issue.component.as_str(),
         "root_id": issue.root_id.as_str(),
         "object_id": issue.object_id.as_deref(),
+        "provider_id": issue.provider_id.as_str(),
+        "kind": issue.kind.as_str(),
+    })
+}
+
+fn profile_sync_provider_issues_json(
+    issues: &[LocalSettingsSyncProviderIssueSummary],
+) -> serde_json::Value {
+    serde_json::Value::Array(
+        issues
+            .iter()
+            .map(profile_sync_provider_issue_json)
+            .collect(),
+    )
+}
+
+fn profile_sync_provider_issue_json(
+    issue: &LocalSettingsSyncProviderIssueSummary,
+) -> serde_json::Value {
+    serde_json::json!({
+        "category": issue.category.as_str(),
         "provider_id": issue.provider_id.as_str(),
         "kind": issue.kind.as_str(),
     })
@@ -2494,8 +2528,20 @@ mod tests {
             published_object_count: 3,
             retained_object_count: 2,
             fixture_materialization_issue_count: 0,
-            retention_provider_selection_issue_count: 0,
-            stored_provider_metadata_issue_count: 0,
+            retention_provider_selection_issue_count: 1,
+            retention_provider_selection_issues: vec![
+                super::LocalSettingsSyncProviderIssueSummary {
+                    category: "retention_provider_selection".to_string(),
+                    provider_id: "provider-b".to_string(),
+                    kind: "undiscovered".to_string(),
+                },
+            ],
+            stored_provider_metadata_issue_count: 1,
+            stored_provider_metadata_issues: vec![super::LocalSettingsSyncProviderIssueSummary {
+                category: "stored_provider_metadata".to_string(),
+                provider_id: "provider-c".to_string(),
+                kind: "unauthorized".to_string(),
+            }],
             all_fixture_providers_materialized: true,
             degraded_before: true,
             degraded_after: true,
@@ -2530,6 +2576,32 @@ mod tests {
             "provider-a"
         );
         assert_eq!(json["root_object_provider_issues"][0]["kind"], "offline");
+        assert_eq!(json["retention_provider_selection_issue_count"], 1);
+        assert_eq!(
+            json["retention_provider_selection_issues"][0]["category"],
+            "retention_provider_selection"
+        );
+        assert_eq!(
+            json["retention_provider_selection_issues"][0]["provider_id"],
+            "provider-b"
+        );
+        assert_eq!(
+            json["retention_provider_selection_issues"][0]["kind"],
+            "undiscovered"
+        );
+        assert_eq!(json["stored_provider_metadata_issue_count"], 1);
+        assert_eq!(
+            json["stored_provider_metadata_issues"][0]["category"],
+            "stored_provider_metadata"
+        );
+        assert_eq!(
+            json["stored_provider_metadata_issues"][0]["provider_id"],
+            "provider-c"
+        );
+        assert_eq!(
+            json["stored_provider_metadata_issues"][0]["kind"],
+            "unauthorized"
+        );
     }
 
     #[test]
@@ -2801,6 +2873,9 @@ mod tests {
         assert!(settings_page.contains("Issue details"));
         assert!(settings_page.contains("profileSyncIssueDetails"));
         assert!(settings_page.contains("profileSyncLatestIssueRun"));
+        assert!(settings_page.contains("retention_provider_selection_issues"));
+        assert!(settings_page.contains("stored_provider_metadata_issues"));
+        assert!(settings_page.contains("profileSyncIssueLabel"));
         assert!(settings_page.contains("slate://settings/profile-sync/"));
         assert!(settings_page.contains("slate-sync-secret.json"));
         assert!(!settings_page.contains("replaceState"));

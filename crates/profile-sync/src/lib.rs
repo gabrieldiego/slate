@@ -89,6 +89,14 @@ pub struct LocalSettingsSyncRootObjectProviderIssueSummary {
 }
 
 #[cfg(feature = "local-preview-fixtures")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalSettingsSyncProviderIssueSummary {
+    pub category: String,
+    pub provider_id: String,
+    pub kind: String,
+}
+
+#[cfg(feature = "local-preview-fixtures")]
 impl LocalSettingsSyncRootObjectProviderIssueSummary {
     fn from_issue(issue: SettingsSyncRootObjectProviderIssue) -> Self {
         Self {
@@ -102,6 +110,30 @@ impl LocalSettingsSyncRootObjectProviderIssueSummary {
 }
 
 #[cfg(feature = "local-preview-fixtures")]
+impl LocalSettingsSyncProviderIssueSummary {
+    fn from_retention_provider_selection_issue(
+        issue: SettingsSyncRetentionProviderSelectionIssue,
+    ) -> Self {
+        Self {
+            category: "retention_provider_selection".to_string(),
+            provider_id: issue.provider_id,
+            kind: settings_sync_retention_provider_selection_issue_kind_name(issue.kind)
+                .to_string(),
+        }
+    }
+
+    fn from_stored_provider_metadata_issue(
+        issue: SettingsSyncStoredRetentionProviderMetadataIssue,
+    ) -> Self {
+        Self {
+            category: "stored_provider_metadata".to_string(),
+            provider_id: issue.provider_id,
+            kind: settings_sync_stored_provider_metadata_issue_kind_name(issue.kind).to_string(),
+        }
+    }
+}
+
+#[cfg(feature = "local-preview-fixtures")]
 fn local_settings_sync_root_object_provider_issue_summaries(
     health: &SettingsSyncHealthReport,
 ) -> Vec<LocalSettingsSyncRootObjectProviderIssueSummary> {
@@ -109,6 +141,26 @@ fn local_settings_sync_root_object_provider_issue_summaries(
         .root_object_provider_issues()
         .into_iter()
         .map(LocalSettingsSyncRootObjectProviderIssueSummary::from_issue)
+        .collect()
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+fn local_settings_sync_retention_provider_selection_issue_summaries(
+    issues: Vec<SettingsSyncRetentionProviderSelectionIssue>,
+) -> Vec<LocalSettingsSyncProviderIssueSummary> {
+    issues
+        .into_iter()
+        .map(LocalSettingsSyncProviderIssueSummary::from_retention_provider_selection_issue)
+        .collect()
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+fn local_settings_sync_stored_provider_metadata_issue_summaries(
+    issues: Vec<SettingsSyncStoredRetentionProviderMetadataIssue>,
+) -> Vec<LocalSettingsSyncProviderIssueSummary> {
+    issues
+        .into_iter()
+        .map(LocalSettingsSyncProviderIssueSummary::from_stored_provider_metadata_issue)
         .collect()
 }
 
@@ -135,6 +187,32 @@ fn settings_sync_root_object_provider_issue_kind_name(
 }
 
 #[cfg(feature = "local-preview-fixtures")]
+fn settings_sync_retention_provider_selection_issue_kind_name(
+    kind: SettingsSyncRetentionProviderSelectionIssueKind,
+) -> &'static str {
+    match kind {
+        SettingsSyncRetentionProviderSelectionIssueKind::Stale => "stale",
+        SettingsSyncRetentionProviderSelectionIssueKind::Offline => "offline",
+        SettingsSyncRetentionProviderSelectionIssueKind::Ineligible => "ineligible",
+        SettingsSyncRetentionProviderSelectionIssueKind::Undiscovered => "undiscovered",
+        SettingsSyncRetentionProviderSelectionIssueKind::Duplicate => "duplicate",
+    }
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+fn settings_sync_stored_provider_metadata_issue_kind_name(
+    kind: SettingsSyncStoredRetentionProviderMetadataIssueKind,
+) -> &'static str {
+    match kind {
+        SettingsSyncStoredRetentionProviderMetadataIssueKind::Disabled => "disabled",
+        SettingsSyncStoredRetentionProviderMetadataIssueKind::StoredRoleIneligible => {
+            "stored_role_ineligible"
+        }
+        SettingsSyncStoredRetentionProviderMetadataIssueKind::Unauthorized => "unauthorized",
+    }
+}
+
+#[cfg(feature = "local-preview-fixtures")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalSettingsSyncPreviewCycleReport {
     pub profile: String,
@@ -154,7 +232,9 @@ pub struct LocalSettingsSyncPreviewCycleReport {
     pub retained_object_count: usize,
     pub fixture_materialization_issue_count: usize,
     pub retention_provider_selection_issue_count: usize,
+    pub retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     pub stored_provider_metadata_issue_count: usize,
+    pub stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     pub all_fixture_providers_materialized: bool,
     pub degraded_before: bool,
     pub degraded_after: bool,
@@ -180,7 +260,9 @@ pub struct LocalSettingsSyncCurrentCycleReport {
     pub retained_object_count: usize,
     pub fixture_materialization_issue_count: usize,
     pub retention_provider_selection_issue_count: usize,
+    pub retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     pub stored_provider_metadata_issue_count: usize,
+    pub stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     pub all_fixture_providers_materialized: bool,
     pub degraded_before: bool,
     pub degraded_after: bool,
@@ -9191,7 +9273,9 @@ struct LocalSettingsSyncFixtureCycleSummary {
     retained_object_count: usize,
     fixture_materialization_issue_count: usize,
     retention_provider_selection_issue_count: usize,
+    retention_provider_selection_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     stored_provider_metadata_issue_count: usize,
+    stored_provider_metadata_issues: Vec<LocalSettingsSyncProviderIssueSummary>,
     all_fixture_providers_materialized: bool,
     degraded_before: bool,
     degraded_after: bool,
@@ -9290,6 +9374,14 @@ fn run_local_settings_sync_fixture_cycle(
     let published_object_count = run.run.cycle.cycle.published_object_ids().len();
     let root_object_provider_issues =
         local_settings_sync_root_object_provider_issue_summaries(&after_health);
+    let retention_provider_selection_issues =
+        local_settings_sync_retention_provider_selection_issue_summaries(
+            run.retention_provider_selection_issues(),
+        );
+    let stored_provider_metadata_issues =
+        local_settings_sync_stored_provider_metadata_issue_summaries(
+            run.stored_provider_metadata_issues(),
+        );
 
     Ok(LocalSettingsSyncFixtureCycleSummary {
         profile: profile.to_string(),
@@ -9306,8 +9398,10 @@ fn run_local_settings_sync_fixture_cycle(
         published_object_count,
         retained_object_count: run.run.cycle.retained_object_ids.len(),
         fixture_materialization_issue_count: run.fixture_materialization_issue_count(),
-        retention_provider_selection_issue_count: run.retention_provider_selection_issue_count(),
-        stored_provider_metadata_issue_count: run.stored_provider_metadata_issue_count(),
+        retention_provider_selection_issue_count: retention_provider_selection_issues.len(),
+        retention_provider_selection_issues,
+        stored_provider_metadata_issue_count: stored_provider_metadata_issues.len(),
+        stored_provider_metadata_issues,
         all_fixture_providers_materialized: run.all_fixture_providers_materialized(),
         degraded_before: run.run.preflight.preflight.before_health.degraded(),
         degraded_after: after_health.degraded(),
@@ -9348,7 +9442,9 @@ pub fn run_local_settings_sync_current_cycle(
         retained_object_count: summary.retained_object_count,
         fixture_materialization_issue_count: summary.fixture_materialization_issue_count,
         retention_provider_selection_issue_count: summary.retention_provider_selection_issue_count,
+        retention_provider_selection_issues: summary.retention_provider_selection_issues,
         stored_provider_metadata_issue_count: summary.stored_provider_metadata_issue_count,
+        stored_provider_metadata_issues: summary.stored_provider_metadata_issues,
         all_fixture_providers_materialized: summary.all_fixture_providers_materialized,
         degraded_before: summary.degraded_before,
         degraded_after: summary.degraded_after,
@@ -9405,7 +9501,9 @@ pub fn run_local_settings_sync_preview_cycle(
         retained_object_count: summary.retained_object_count,
         fixture_materialization_issue_count: summary.fixture_materialization_issue_count,
         retention_provider_selection_issue_count: summary.retention_provider_selection_issue_count,
+        retention_provider_selection_issues: summary.retention_provider_selection_issues,
         stored_provider_metadata_issue_count: summary.stored_provider_metadata_issue_count,
+        stored_provider_metadata_issues: summary.stored_provider_metadata_issues,
         all_fixture_providers_materialized: summary.all_fixture_providers_materialized,
         degraded_before: summary.degraded_before,
         degraded_after: summary.degraded_after,
@@ -14796,6 +14894,32 @@ mod tests {
 
     #[cfg(feature = "local-preview-fixtures")]
     #[test]
+    fn local_settings_sync_provider_issue_summary_names_states() {
+        let selection =
+            super::LocalSettingsSyncProviderIssueSummary::from_retention_provider_selection_issue(
+                super::SettingsSyncRetentionProviderSelectionIssue {
+                    provider_id: "provider-a".to_string(),
+                    kind: super::SettingsSyncRetentionProviderSelectionIssueKind::Undiscovered,
+                },
+            );
+        let metadata =
+            super::LocalSettingsSyncProviderIssueSummary::from_stored_provider_metadata_issue(
+                super::SettingsSyncStoredRetentionProviderMetadataIssue {
+                    provider_id: "provider-b".to_string(),
+                    kind: super::SettingsSyncStoredRetentionProviderMetadataIssueKind::Unauthorized,
+                },
+            );
+
+        assert_eq!(selection.category, "retention_provider_selection");
+        assert_eq!(selection.provider_id, "provider-a");
+        assert_eq!(selection.kind, "undiscovered");
+        assert_eq!(metadata.category, "stored_provider_metadata");
+        assert_eq!(metadata.provider_id, "provider-b");
+        assert_eq!(metadata.kind, "unauthorized");
+    }
+
+    #[cfg(feature = "local-preview-fixtures")]
+    #[test]
     fn local_settings_sync_current_cycle_publishes_existing_settings_without_preview_write() {
         let state_root = test_state_root("local-settings-sync-current-state");
         let db_root = test_state_root("local-settings-sync-current-db");
@@ -14833,7 +14957,9 @@ mod tests {
         assert_eq!(report.retained_object_count, report.published_object_count);
         assert_eq!(report.fixture_materialization_issue_count, 0);
         assert_eq!(report.retention_provider_selection_issue_count, 0);
+        assert!(report.retention_provider_selection_issues.is_empty());
         assert_eq!(report.stored_provider_metadata_issue_count, 0);
+        assert!(report.stored_provider_metadata_issues.is_empty());
         assert!(report.all_fixture_providers_materialized);
         assert!(report.degraded_before);
         assert!(!report.degraded_after);
@@ -14899,7 +15025,9 @@ mod tests {
         assert_eq!(report.retained_object_count, report.published_object_count);
         assert_eq!(report.fixture_materialization_issue_count, 0);
         assert_eq!(report.retention_provider_selection_issue_count, 0);
+        assert!(report.retention_provider_selection_issues.is_empty());
         assert_eq!(report.stored_provider_metadata_issue_count, 0);
+        assert!(report.stored_provider_metadata_issues.is_empty());
         assert!(report.all_fixture_providers_materialized);
         assert!(report.degraded_before);
         assert!(!report.degraded_after);
