@@ -20869,6 +20869,121 @@ mod tests {
     }
 
     #[test]
+    fn broadwebd_settings_sync_cycle_runs_through_framed_clients() {
+        let network = InProcessBroadwebNetwork::new();
+        let source_state_root = test_state_root("framed-cycle-source");
+        let receiver_state_root = test_state_root("framed-cycle-receiver");
+        let source_db_root = test_state_root("framed-cycle-source-db");
+        let receiver_db_root = test_state_root("framed-cycle-receiver-db");
+        let source_daemon = network
+            .daemon_for_device(
+                &source_state_root,
+                ResourceBudget::default(),
+                "runtime-framed-cycle-source",
+            )
+            .expect("start framed-cycle source daemon");
+        let receiver_daemon = network
+            .daemon_for_device(
+                &receiver_state_root,
+                ResourceBudget::default(),
+                "runtime-framed-cycle-receiver",
+            )
+            .expect("start framed-cycle receiver daemon");
+        let source_client = ServiceFrameBroadwebdClient::new(&source_daemon);
+        let receiver_client = ServiceFrameBroadwebdClient::new(&receiver_daemon);
+        let source_database = SlateProfileDatabase::open_resolved_with_device_id(
+            source_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-framed-cycle-source",
+        )
+        .expect("open framed-cycle source settings database");
+        let receiver_database = SlateProfileDatabase::open_resolved_with_device_id(
+            receiver_db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-framed-cycle-receiver",
+        )
+        .expect("open framed-cycle receiver settings database");
+        let profile = "framedcycleprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([101; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let source_signer = ProfileSyncDeviceSigner::generate("runtime-framed-cycle-source")
+            .expect("generate framed-cycle source signer");
+        let receiver_signer = ProfileSyncDeviceSigner::generate("runtime-framed-cycle-receiver")
+            .expect("generate framed-cycle receiver signer");
+        register_test_content_key_epoch(&source_database, profile);
+        register_test_content_key_epoch(&receiver_database, profile);
+        source_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: source_signer.public_key().expect("source self public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("source trusts itself for retained dependencies");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: receiver_signer
+                    .public_key()
+                    .expect("receiver self public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts itself for retained dependencies");
+        receiver_database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: source_signer.public_key().expect("source public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("receiver trusts source");
+
+        source_database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("source writes framed-cycle local setting");
+        let source_cycle = BroadwebdSettingsSyncRunner::new(&source_client)
+            .run_settings_sync_cycle(
+                &source_database,
+                profile,
+                settings_root_id,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &source_signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("source publishes settings through framed client");
+        assert_eq!(source_cycle.published_step_count(), 1);
+        assert_eq!(source_cycle.applied_count(), 0);
+
+        let receiver_cycle = BroadwebdSettingsSyncRunner::new(&receiver_client)
+            .run_settings_sync_cycle(
+                &receiver_database,
+                profile,
+                settings_root_id,
+                &content_key,
+                TEST_CONTENT_KEY_ID,
+                &receiver_signer,
+                ProfileSyncRetentionPolicy::default(),
+                4,
+                4,
+            )
+            .expect("receiver applies settings through framed client");
+        assert_eq!(receiver_cycle.published_step_count(), 0);
+        assert_eq!(receiver_cycle.applied_count(), 1);
+        assert_eq!(
+            receiver_database
+                .get_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme")
+                .expect("read framed receiver synced theme")
+                .expect("framed receiver synced theme")
+                .value,
+            "teal"
+        );
+
+        let _ = std::fs::remove_dir_all(source_state_root);
+        let _ = std::fs::remove_dir_all(receiver_state_root);
+        let _ = std::fs::remove_dir_all(source_db_root);
+        let _ = std::fs::remove_dir_all(receiver_db_root);
+    }
+
+    #[test]
     fn broadwebd_settings_sync_cycle_can_apply_shared_root_candidates() {
         let network = InProcessBroadwebNetwork::new();
         let first_state_root = test_state_root("cycle-candidate-first");

@@ -302,6 +302,10 @@ Current baseline:
   scheduler-construction bridge checks through broadwebd's socketless framed
   client. That pushes the byte-framed boundary up to the runtime glue without
   opening loopback ports or choosing the final IPC transport.
+- A two-device settings sync cycle now publishes and applies a setting through
+  framed broadwebd clients over the local fixture network. This proves a real
+  runtime settings sync path works across the socketless byte boundary, not only
+  the lower-level bridge wrappers.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the
