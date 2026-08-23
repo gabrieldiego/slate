@@ -491,7 +491,11 @@ Current baseline:
   fixture models. Local readiness now also carries app sync domain records from
   `slate-settings.db`, and the settings preview shows the enabled domains so
   Settings, Bookmarks, Downloads, and future rail-app domains can be checked
-  before running broader sync trials.
+  before running broader sync trials. The same readiness surface now carries
+  storage provider records and the preview shows active retention-capable
+  providers from `slate-settings.db`; those records remain profile state while
+  protocol adapters continue to behave as real-web clients with only their
+  socket or daemon transport swapped by local deterministic shims in tests.
 - Trusted device-head receives now ignore stale root rollback: if a resolved
   device head points at an older sequence than a locally applied head for the
   same trusted device, Slate leaves the newer settings and device-head roots in

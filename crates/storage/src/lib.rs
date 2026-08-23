@@ -2680,6 +2680,7 @@ pub struct ProfileSyncLocalReadinessReport {
     pub enabled_storage_provider_count: usize,
     pub retention_capable_provider_count: usize,
     pub authorized_retention_provider_count: usize,
+    pub storage_providers: Vec<StorageProviderRecord>,
     pub ready_for_manual_sync: bool,
     pub blocked_reason: Option<String>,
 }
@@ -6655,6 +6656,7 @@ impl SlateProfileDatabase {
             enabled_storage_provider_count,
             retention_capable_provider_count,
             authorized_retention_provider_count,
+            storage_providers,
             ready_for_manual_sync,
             blocked_reason,
         })
@@ -17463,6 +17465,7 @@ mod tests {
                 .any(|domain| domain.domain == SYNC_DOMAIN_BOOKMARKS && domain.enabled)
         );
         assert_eq!(report.storage_provider_count, 0);
+        assert!(report.storage_providers.is_empty());
         assert_eq!(report.authorized_retention_provider_count, 0);
         assert!(!report.ready_for_manual_sync);
         assert_eq!(
@@ -17521,6 +17524,17 @@ mod tests {
             report.enabled_app_domain_count
         );
         assert_eq!(report.storage_provider_count, 1);
+        assert_eq!(
+            report.storage_provider_count,
+            report.storage_providers.len()
+        );
+        assert_eq!(
+            report.storage_providers[0].provider_id,
+            provider.provider_id
+        );
+        assert!(report.storage_providers[0].enabled);
+        assert!(report.storage_providers[0].availability);
+        assert!(report.storage_providers[0].object_transfer);
         assert_eq!(report.enabled_storage_provider_count, 1);
         assert_eq!(report.retention_capable_provider_count, 1);
         assert_eq!(report.authorized_retention_provider_count, 1);

@@ -1452,6 +1452,9 @@ fn profile_sync_local_readiness_json(
         "enabled_storage_provider_count": readiness.enabled_storage_provider_count,
         "retention_capable_provider_count": readiness.retention_capable_provider_count,
         "authorized_retention_provider_count": readiness.authorized_retention_provider_count,
+        "storage_providers": profile_sync_storage_providers_json(
+            readiness.storage_providers.as_slice()
+        ),
         "ready_for_manual_sync": readiness.ready_for_manual_sync,
         "blocked_reason": readiness.blocked_reason.as_deref(),
     })
@@ -1470,6 +1473,36 @@ fn profile_sync_app_domain_json(domain: &slate_storage::AppSyncDomainRecord) -> 
         "enabled": domain.enabled,
         "privacy_classification": domain.privacy_classification.as_str(),
         "sync_content": domain.sync_content,
+    })
+}
+
+fn profile_sync_storage_providers_json(
+    providers: &[slate_storage::StorageProviderRecord],
+) -> serde_json::Value {
+    serde_json::Value::Array(
+        providers
+            .iter()
+            .map(profile_sync_storage_provider_json)
+            .collect(),
+    )
+}
+
+fn profile_sync_storage_provider_json(
+    provider: &slate_storage::StorageProviderRecord,
+) -> serde_json::Value {
+    serde_json::json!({
+        "provider_id": provider.provider_id.as_str(),
+        "provider_kind": provider.provider_kind.as_str(),
+        "display_name": provider.display_name.as_str(),
+        "enabled": provider.enabled,
+        "discovery": provider.discovery,
+        "connectivity": provider.connectivity,
+        "object_transfer": provider.object_transfer,
+        "availability": provider.availability,
+        "mutable_roots": provider.mutable_roots,
+        "quota_bytes": provider.quota_bytes,
+        "max_retained_objects": provider.max_retained_objects,
+        "pinning_policy": provider.pinning_policy.as_deref(),
     })
 }
 
@@ -2887,6 +2920,8 @@ mod tests {
         assert!(settings_page.contains("Two-device trial"));
         assert!(settings_page.contains("Enabled domains"));
         assert!(settings_page.contains("profileSyncEnabledAppDomainStatus"));
+        assert!(settings_page.contains("Active providers"));
+        assert!(settings_page.contains("profileSyncActiveProviderStatus"));
         assert!(settings_page.contains("Sync issues"));
         assert!(settings_page.contains("profileSyncIssueStatus"));
         assert!(settings_page.contains("Issue details"));

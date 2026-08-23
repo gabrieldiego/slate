@@ -1080,6 +1080,34 @@
       return visibleDomains.join(", ");
     }
 
+    function profileSyncActiveProviderStatus(state) {
+      const localSync = state && state.local_sync ? state.local_sync : null;
+      const providers = localSync && Array.isArray(localSync.storage_providers) ?
+        localSync.storage_providers :
+        [];
+      const activeProviders = providers
+        .filter((provider) => provider &&
+          provider.enabled &&
+          provider.availability &&
+          provider.object_transfer)
+        .map((provider) => {
+          const label = profileSyncText(
+            provider.display_name,
+            profileSyncText(provider.provider_id, "provider")
+          );
+          const kind = profileSyncText(provider.provider_kind, "provider");
+          return `${label} (${kind})`;
+        });
+      if (activeProviders.length === 0) {
+        return "none";
+      }
+      const visibleProviders = activeProviders.slice(0, 3);
+      if (activeProviders.length > visibleProviders.length) {
+        visibleProviders.push(`${activeProviders.length - visibleProviders.length} more`);
+      }
+      return visibleProviders.join(", ");
+    }
+
     function profileSyncLocalTrialStatus(state) {
       if (!state || !state.last_trial) {
         return "not run";
@@ -1197,6 +1225,7 @@
         ["Trusted devices", localSync ? profileSyncCount(localSync.trusted_device_count) : "0"],
         ["App domains", localSync ? profileSyncCount(localSync.app_domain_count) : "0"],
         ["Enabled domains", profileSyncEnabledAppDomainStatus(state)],
+        ["Active providers", profileSyncActiveProviderStatus(state)],
         ["Device request", profileSyncText(state && state.device_request_device_id, "none")],
         ["Enrollment", profileSyncText(state && state.enrollment_target_device_id, "none")],
         ["Handoff", profileSyncText(state && state.handoff_target_device_id, "none")],
