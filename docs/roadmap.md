@@ -1679,12 +1679,12 @@ Current baseline:
   `slate-profile-enrollment-<device>.json` file, and a target device can import
   a selected or pasted enrollment file to apply membership and activate the
   session key-derived local metadata in one step. The lower-level key-file,
-  device-request, and non-secret enrollment-bundle protocol routes remain
-  diagnostic implementation helpers, but their controls have been removed from
-  the rendered Settings page until QR-code or unbound onboarding semantics are
-  designed deliberately. This remains a sensitive local preview flow and still
-  uses the existing query-string internal action transport until POST/body-capable
-  Slate protocol imports are added.
+  device-request, and non-secret enrollment-bundle storage primitives remain for
+  deterministic fixture logic, but their `slate://settings` protocol routes and
+  rendered controls have been removed until QR-code or unbound onboarding
+  semantics are designed deliberately. This remains a sensitive local preview
+  flow and still uses the existing query-string internal action transport until
+  POST/body-capable Slate protocol imports are added.
 - The Settings Profile Sync Preview JSON now follows the same narrower surface:
   normal state responses no longer include raw key-file exports, device-request
   files, or non-secret enrollment-bundle JSON. The secret-bearing

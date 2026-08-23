@@ -29,12 +29,10 @@ use slate_profile_sync::{
     run_local_settings_sync_preview_cycle, run_local_settings_sync_two_device_preview_cycle,
 };
 use slate_storage::{
-    DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
-    ProfileSyncDeviceEnrollmentRequest, ProfileSyncEnrollmentBundle,
-    ProfileSyncLocalReadinessReport, ProfileSyncLocalSecretActivationRecord,
-    ProfileSyncSecretHandoffApplication, ProfileSyncSecretHandoffBundle, SYNC_DOMAIN_SETTINGS,
-    SlateProfileDatabase, SlateSyncSecret, SlateSyncSecretExport, StorageError, SyncObjectError,
-    SyncSettingTextEvent,
+    DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID, ProfileSyncLocalReadinessReport,
+    ProfileSyncLocalSecretActivationRecord, ProfileSyncSecretHandoffApplication,
+    ProfileSyncSecretHandoffBundle, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase, SlateSyncSecret,
+    SlateSyncSecretExport, StorageError, SyncObjectError, SyncSettingTextEvent,
 };
 use url::Url;
 
@@ -101,13 +99,8 @@ impl ProtocolHandler for SlateProtocolHandler {
             "settings/apply",
             "settings/profile-sync/state",
             "settings/profile-sync/create",
-            "settings/profile-sync/import",
             "settings/profile-sync/check",
             "settings/profile-sync/local-provider",
-            "settings/profile-sync/device-request/create",
-            "settings/profile-sync/device-request/import",
-            "settings/profile-sync/enrollment/create",
-            "settings/profile-sync/enrollment/import",
             "settings/profile-sync/handoff/create",
             "settings/profile-sync/handoff/import",
             "settings/profile-sync/run-current",
@@ -142,32 +135,12 @@ impl ProtocolHandler for SlateProtocolHandler {
             return self.create_profile_sync_preview_secret_response(request);
         }
 
-        if is_slate_settings_profile_sync_import_url(url.as_url()) {
-            return self.import_profile_sync_preview_secret_response(request, url.as_url());
-        }
-
         if is_slate_settings_profile_sync_check_url(url.as_url()) {
             return self.check_profile_sync_preview_response(request);
         }
 
         if is_slate_settings_profile_sync_local_provider_url(url.as_url()) {
             return self.activate_profile_sync_preview_provider_response(request);
-        }
-
-        if is_slate_settings_profile_sync_device_request_create_url(url.as_url()) {
-            return self.create_profile_sync_device_request_response(request);
-        }
-
-        if is_slate_settings_profile_sync_device_request_import_url(url.as_url()) {
-            return self.import_profile_sync_device_request_response(request, url.as_url());
-        }
-
-        if is_slate_settings_profile_sync_enrollment_create_url(url.as_url()) {
-            return self.create_profile_sync_enrollment_bundle_response(request, url.as_url());
-        }
-
-        if is_slate_settings_profile_sync_enrollment_import_url(url.as_url()) {
-            return self.import_profile_sync_enrollment_bundle_response(request, url.as_url());
         }
 
         if is_slate_settings_profile_sync_handoff_create_url(url.as_url()) {
@@ -309,44 +282,6 @@ impl SlateProtocolHandler {
         }
     }
 
-    fn import_profile_sync_preview_secret_response(
-        &self,
-        request: &Request,
-        url: &Url,
-    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
-        let export_text = profile_sync_secret_export_text_from_url(url);
-        let mut state = self.profile_sync_preview.lock().unwrap();
-        match export_text {
-            Some(export_text) => {
-                match state.import_secret(DEFAULT_PROFILE_ID, export_text.as_str()) {
-                    Ok(sync_secret) => {
-                        match self.activate_profile_sync_preview_from_secret(&sync_secret) {
-                            Ok(Some(activation)) => {
-                                state.mark_secret_activation_ready(&activation);
-                                let readiness =
-                                    self.profile_sync_local_readiness_report().ok().flatten();
-                                json_response(request, 200, state.to_json(readiness.as_ref()))
-                            }
-                            Ok(None) => json_response(request, 200, state.to_json(None)),
-                            Err(error) => {
-                                state.last_error = Some(error.to_string());
-                                json_response(request, 500, state.to_json(None))
-                            }
-                        }
-                    }
-                    Err(error) => {
-                        state.last_error = Some(error.to_string());
-                        json_response(request, 400, state.to_json(None))
-                    }
-                }
-            }
-            None => {
-                state.last_error = Some("missing profile sync secret contents".to_string());
-                json_response(request, 400, state.to_json(None))
-            }
-        }
-    }
-
     fn check_profile_sync_preview_response(
         &self,
         request: &Request,
@@ -403,162 +338,6 @@ impl SlateProtocolHandler {
             Err(error) => {
                 state.last_error = Some(error.to_string());
                 json_response(request, 500, state.to_json(None))
-            }
-        }
-    }
-
-    fn create_profile_sync_device_request_response(
-        &self,
-        request: &Request,
-    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
-        let device_request = {
-            let mut state = self.profile_sync_preview.lock().unwrap();
-            self.refresh_profile_sync_preview_metadata(&mut state);
-            let Some(local_device_id) = state.local_device_id.as_deref() else {
-                state.last_error =
-                    Some("local profile sync device id is not available".to_string());
-                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                return json_response(request, 400, state.to_json(readiness.as_ref()));
-            };
-            ProfileSyncDeviceEnrollmentRequest::new(
-                DEFAULT_PROFILE_ID,
-                local_device_id,
-                unix_time_seconds(),
-            )
-        };
-        let mut state = self.profile_sync_preview.lock().unwrap();
-        match device_request {
-            Ok(device_request) => {
-                state.mark_device_request(&device_request);
-                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                json_response(request, 200, state.to_json(readiness.as_ref()))
-            }
-            Err(error) => {
-                state.last_error = Some(error.to_string());
-                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                json_response(request, 400, state.to_json(readiness.as_ref()))
-            }
-        }
-    }
-
-    fn import_profile_sync_device_request_response(
-        &self,
-        request: &Request,
-        url: &Url,
-    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
-        let Some(request_text) = profile_sync_device_request_text_from_url(url) else {
-            let mut state = self.profile_sync_preview.lock().unwrap();
-            state.last_error =
-                Some("missing profile sync device enrollment request contents".to_string());
-            let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-            return json_response(request, 400, state.to_json(readiness.as_ref()));
-        };
-        let device_request = ProfileSyncDeviceEnrollmentRequest::from_bytes_for_profile(
-            request_text.as_bytes(),
-            DEFAULT_PROFILE_ID,
-        );
-        let mut state = self.profile_sync_preview.lock().unwrap();
-        match device_request {
-            Ok(device_request) => {
-                state.mark_device_request(&device_request);
-                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                json_response(request, 200, state.to_json(readiness.as_ref()))
-            }
-            Err(error) => {
-                state.last_error = Some(error.to_string());
-                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                json_response(request, 400, state.to_json(readiness.as_ref()))
-            }
-        }
-    }
-
-    fn create_profile_sync_enrollment_bundle_response(
-        &self,
-        request: &Request,
-        url: &Url,
-    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
-        let target_device_id = profile_sync_enrollment_target_device_id_from_url(url);
-        let sync_secret = {
-            let mut state = self.profile_sync_preview.lock().unwrap();
-            self.refresh_profile_sync_preview_metadata(&mut state);
-            match (
-                target_device_id.as_deref(),
-                state.active_sync_secret(DEFAULT_PROFILE_ID),
-            ) {
-                (None, _) => {
-                    state.last_error = Some(
-                        "enter a target device id before creating an enrollment file".to_string(),
-                    );
-                    let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                    return json_response(request, 400, state.to_json(readiness.as_ref()));
-                }
-                (_, Ok(Some(sync_secret))) => sync_secret,
-                (_, Ok(None)) => {
-                    state.last_error = Some(
-                        "create a local profile before creating an enrollment file".to_string(),
-                    );
-                    let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                    return json_response(request, 400, state.to_json(readiness.as_ref()));
-                }
-                (_, Err(error)) => {
-                    state.last_error = Some(error.to_string());
-                    return json_response(request, 400, state.to_json(None));
-                }
-            }
-        };
-        let target_device_id = target_device_id.expect("validated target device id");
-        let bundle = SlateProfileDatabase::profile_sync_enrollment_bundle_from_secret(
-            DEFAULT_PROFILE_ID,
-            &sync_secret,
-            target_device_id.as_str(),
-        );
-        let mut state = self.profile_sync_preview.lock().unwrap();
-        match bundle {
-            Ok(bundle) => {
-                state.mark_enrollment_bundle(&bundle);
-                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                json_response(request, 200, state.to_json(readiness.as_ref()))
-            }
-            Err(error) => {
-                state.last_error = Some(error.to_string());
-                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                json_response(request, 400, state.to_json(readiness.as_ref()))
-            }
-        }
-    }
-
-    fn import_profile_sync_enrollment_bundle_response(
-        &self,
-        request: &Request,
-        url: &Url,
-    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
-        let Some(bundle_text) = profile_sync_enrollment_bundle_text_from_url(url) else {
-            let mut state = self.profile_sync_preview.lock().unwrap();
-            state.last_error = Some("missing profile sync enrollment file contents".to_string());
-            let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-            return json_response(request, 400, state.to_json(readiness.as_ref()));
-        };
-        let bundle = match ProfileSyncEnrollmentBundle::from_bytes(bundle_text.as_bytes()) {
-            Ok(bundle) => bundle,
-            Err(error) => {
-                let mut state = self.profile_sync_preview.lock().unwrap();
-                state.last_error = Some(error.to_string());
-                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                return json_response(request, 400, state.to_json(readiness.as_ref()));
-            }
-        };
-        match self.apply_profile_sync_enrollment_bundle(&bundle) {
-            Ok(()) => {
-                let mut state = self.profile_sync_preview.lock().unwrap();
-                state.mark_enrollment_bundle(&bundle);
-                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                json_response(request, 200, state.to_json(readiness.as_ref()))
-            }
-            Err(error) => {
-                let mut state = self.profile_sync_preview.lock().unwrap();
-                state.last_error = Some(error.to_string());
-                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                json_response(request, 400, state.to_json(readiness.as_ref()))
             }
         }
     }
@@ -817,16 +596,6 @@ impl SlateProtocolHandler {
         Ok(())
     }
 
-    fn apply_profile_sync_enrollment_bundle(
-        &self,
-        bundle: &ProfileSyncEnrollmentBundle,
-    ) -> Result<(), StorageError> {
-        if let Some(database) = &self.database {
-            database.apply_profile_sync_enrollment_bundle(bundle)?;
-        }
-        Ok(())
-    }
-
     fn apply_profile_sync_secret_handoff_bundle(
         &self,
         bundle: &ProfileSyncSecretHandoffBundle,
@@ -927,8 +696,6 @@ struct ProfileSyncPreviewState {
     metadata_ready: bool,
     active_key_id: Option<String>,
     local_device_id: Option<String>,
-    active_device_request: Option<ProfileSyncDeviceEnrollmentRequest>,
-    active_enrollment_bundle: Option<ProfileSyncEnrollmentBundle>,
     active_handoff_bundle: Option<ProfileSyncSecretHandoffBundle>,
     last_current_sync: Option<ProfileSyncPreviewCurrentSyncState>,
     last_trial: Option<ProfileSyncPreviewTrialState>,
@@ -1305,8 +1072,6 @@ impl ProfileSyncPreviewState {
         self.metadata_ready = false;
         self.active_key_id = None;
         self.local_device_id = None;
-        self.active_device_request = None;
-        self.active_enrollment_bundle = None;
         self.active_handoff_bundle = None;
         self.last_current_sync = None;
         self.last_trial = None;
@@ -1326,8 +1091,6 @@ impl ProfileSyncPreviewState {
         self.metadata_ready = false;
         self.active_key_id = None;
         self.local_device_id = None;
-        self.active_device_request = None;
-        self.active_enrollment_bundle = None;
         self.active_handoff_bundle = None;
         self.last_current_sync = None;
         self.last_trial = None;
@@ -1398,14 +1161,8 @@ impl ProfileSyncPreviewState {
         self.last_error = None;
     }
 
-    fn mark_enrollment_bundle(&mut self, bundle: &ProfileSyncEnrollmentBundle) {
-        self.active_enrollment_bundle = Some(bundle.clone());
-        self.last_error = None;
-    }
-
     fn mark_secret_handoff_bundle(&mut self, bundle: &ProfileSyncSecretHandoffBundle) {
         self.active_handoff_bundle = Some(bundle.clone());
-        self.active_enrollment_bundle = Some(bundle.enrollment_bundle.clone());
         self.last_error = None;
     }
 
@@ -1416,13 +1173,7 @@ impl ProfileSyncPreviewState {
     ) {
         self.active_export = Some(bundle.sync_secret_export.clone());
         self.active_handoff_bundle = Some(bundle.clone());
-        self.active_enrollment_bundle = Some(bundle.enrollment_bundle.clone());
         self.mark_secret_activation_ready(&application.activation);
-    }
-
-    fn mark_device_request(&mut self, request: &ProfileSyncDeviceEnrollmentRequest) {
-        self.active_device_request = Some(request.clone());
-        self.last_error = None;
     }
 
     fn to_json(&self, readiness: Option<&ProfileSyncLocalReadinessReport>) -> String {
@@ -2017,12 +1768,6 @@ fn is_slate_settings_profile_sync_create_url(url: &Url) -> bool {
         && url.path().trim_start_matches('/') == "profile-sync/create"
 }
 
-fn is_slate_settings_profile_sync_import_url(url: &Url) -> bool {
-    url.scheme() == "slate"
-        && url.host_str() == Some("settings")
-        && url.path().trim_start_matches('/') == "profile-sync/import"
-}
-
 fn is_slate_settings_profile_sync_check_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && url.host_str() == Some("settings")
@@ -2033,30 +1778,6 @@ fn is_slate_settings_profile_sync_local_provider_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && url.host_str() == Some("settings")
         && url.path().trim_start_matches('/') == "profile-sync/local-provider"
-}
-
-fn is_slate_settings_profile_sync_device_request_create_url(url: &Url) -> bool {
-    url.scheme() == "slate"
-        && url.host_str() == Some("settings")
-        && url.path().trim_start_matches('/') == "profile-sync/device-request/create"
-}
-
-fn is_slate_settings_profile_sync_device_request_import_url(url: &Url) -> bool {
-    url.scheme() == "slate"
-        && url.host_str() == Some("settings")
-        && url.path().trim_start_matches('/') == "profile-sync/device-request/import"
-}
-
-fn is_slate_settings_profile_sync_enrollment_create_url(url: &Url) -> bool {
-    url.scheme() == "slate"
-        && url.host_str() == Some("settings")
-        && url.path().trim_start_matches('/') == "profile-sync/enrollment/create"
-}
-
-fn is_slate_settings_profile_sync_enrollment_import_url(url: &Url) -> bool {
-    url.scheme() == "slate"
-        && url.host_str() == Some("settings")
-        && url.path().trim_start_matches('/') == "profile-sync/enrollment/import"
 }
 
 fn is_slate_settings_profile_sync_handoff_create_url(url: &Url) -> bool {
@@ -2087,50 +1808,6 @@ fn is_slate_settings_profile_sync_run_local_two_device_url(url: &Url) -> bool {
     url.scheme() == "slate"
         && url.host_str() == Some("settings")
         && url.path().trim_start_matches('/') == "profile-sync/run-local-two-device"
-}
-
-fn profile_sync_secret_export_text_from_url(url: &Url) -> Option<String> {
-    if !is_slate_settings_profile_sync_import_url(url) {
-        return None;
-    }
-
-    url.query_pairs()
-        .find(|(name, _)| name == "secret")
-        .map(|(_, value)| value.into_owned())
-        .filter(|value| !value.trim().is_empty())
-}
-
-fn profile_sync_device_request_text_from_url(url: &Url) -> Option<String> {
-    if !is_slate_settings_profile_sync_device_request_import_url(url) {
-        return None;
-    }
-
-    url.query_pairs()
-        .find(|(name, _)| name == "request")
-        .map(|(_, value)| value.into_owned())
-        .filter(|value| !value.trim().is_empty())
-}
-
-fn profile_sync_enrollment_target_device_id_from_url(url: &Url) -> Option<String> {
-    if !is_slate_settings_profile_sync_enrollment_create_url(url) {
-        return None;
-    }
-
-    url.query_pairs()
-        .find(|(name, _)| name == "target_device")
-        .map(|(_, value)| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-}
-
-fn profile_sync_enrollment_bundle_text_from_url(url: &Url) -> Option<String> {
-    if !is_slate_settings_profile_sync_enrollment_import_url(url) {
-        return None;
-    }
-
-    url.query_pairs()
-        .find(|(name, _)| name == "bundle")
-        .map(|(_, value)| value.into_owned())
-        .filter(|value| !value.trim().is_empty())
 }
 
 fn profile_sync_handoff_target_device_id_from_url(url: &Url) -> Option<String> {
@@ -2176,20 +1853,13 @@ mod tests {
         is_slate_files_url, is_slate_home_url, is_slate_settings_apply_url,
         is_slate_settings_preview_url, is_slate_settings_profile_sync_check_url,
         is_slate_settings_profile_sync_create_url,
-        is_slate_settings_profile_sync_device_request_create_url,
-        is_slate_settings_profile_sync_device_request_import_url,
-        is_slate_settings_profile_sync_enrollment_create_url,
-        is_slate_settings_profile_sync_enrollment_import_url,
         is_slate_settings_profile_sync_handoff_create_url,
         is_slate_settings_profile_sync_handoff_import_url,
-        is_slate_settings_profile_sync_import_url,
         is_slate_settings_profile_sync_local_provider_url,
         is_slate_settings_profile_sync_run_current_url, is_slate_settings_profile_sync_state_url,
         is_slate_settings_save_url, is_slate_settings_url, is_slate_web_url,
-        profile_sync_device_request_text_from_url, profile_sync_enrollment_bundle_text_from_url,
-        profile_sync_enrollment_target_device_id_from_url,
         profile_sync_handoff_bundle_text_from_url, profile_sync_handoff_target_device_id_from_url,
-        profile_sync_secret_export_text_from_url, slate_download_error_html,
+        slate_download_error_html,
     };
     use crate::desktop::key_bindings::{
         SlateKeyBindings, current_key_bindings_json_value, set_current_key_bindings,
@@ -2197,8 +1867,8 @@ mod tests {
     use slate_broadwebd::FetchPurpose;
     use slate_broadwebd::TemporaryDownloadRecord;
     use slate_storage::{
-        DEFAULT_PROFILE_ID, IncomingSyncSettingText, ProfileSyncDeviceEnrollmentRequest,
-        SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS, SlateProfileDatabase,
+        DEFAULT_PROFILE_ID, IncomingSyncSettingText, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS,
+        SlateProfileDatabase,
     };
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -2452,19 +2122,8 @@ mod tests {
     fn slate_settings_profile_sync_action_urls_are_distinct() {
         let state = Url::parse("slate://settings/profile-sync/state").unwrap();
         let create = Url::parse("slate://settings/profile-sync/create").unwrap();
-        let import = Url::parse("slate://settings/profile-sync/import?secret=%7B%7D").unwrap();
         let check = Url::parse("slate://settings/profile-sync/check").unwrap();
         let local_provider = Url::parse("slate://settings/profile-sync/local-provider").unwrap();
-        let device_request_create =
-            Url::parse("slate://settings/profile-sync/device-request/create").unwrap();
-        let device_request_import =
-            Url::parse("slate://settings/profile-sync/device-request/import?request=%7B%7D")
-                .unwrap();
-        let enrollment_create =
-            Url::parse("slate://settings/profile-sync/enrollment/create?target_device=device-b")
-                .unwrap();
-        let enrollment_import =
-            Url::parse("slate://settings/profile-sync/enrollment/import?bundle=%7B%7D").unwrap();
         let handoff_create =
             Url::parse("slate://settings/profile-sync/handoff/create?target_device=device-b")
                 .unwrap();
@@ -2477,22 +2136,9 @@ mod tests {
 
         assert!(is_slate_settings_profile_sync_state_url(&state));
         assert!(is_slate_settings_profile_sync_create_url(&create));
-        assert!(is_slate_settings_profile_sync_import_url(&import));
         assert!(is_slate_settings_profile_sync_check_url(&check));
         assert!(is_slate_settings_profile_sync_local_provider_url(
             &local_provider
-        ));
-        assert!(is_slate_settings_profile_sync_device_request_create_url(
-            &device_request_create
-        ));
-        assert!(is_slate_settings_profile_sync_device_request_import_url(
-            &device_request_import
-        ));
-        assert!(is_slate_settings_profile_sync_enrollment_create_url(
-            &enrollment_create
-        ));
-        assert!(is_slate_settings_profile_sync_enrollment_import_url(
-            &enrollment_import
         ));
         assert!(is_slate_settings_profile_sync_handoff_create_url(
             &handoff_create
@@ -2506,23 +2152,10 @@ mod tests {
             &run_two_device
         ));
         assert!(!is_slate_settings_profile_sync_create_url(&state));
-        assert!(!is_slate_settings_profile_sync_import_url(&create));
-        assert!(!is_slate_settings_profile_sync_check_url(&import));
+        assert!(!is_slate_settings_profile_sync_check_url(&create));
         assert!(!is_slate_settings_profile_sync_local_provider_url(&check));
-        assert!(!is_slate_settings_profile_sync_device_request_create_url(
-            &local_provider
-        ));
-        assert!(!is_slate_settings_profile_sync_device_request_import_url(
-            &device_request_create
-        ));
-        assert!(!is_slate_settings_profile_sync_enrollment_create_url(
-            &local_provider
-        ));
-        assert!(!is_slate_settings_profile_sync_enrollment_import_url(
-            &enrollment_create
-        ));
         assert!(!is_slate_settings_profile_sync_handoff_create_url(
-            &enrollment_create
+            &local_provider
         ));
         assert!(!is_slate_settings_profile_sync_handoff_import_url(
             &handoff_create
@@ -2535,22 +2168,6 @@ mod tests {
             &run_local
         ));
         assert_eq!(
-            profile_sync_secret_export_text_from_url(&import).as_deref(),
-            Some("{}")
-        );
-        assert_eq!(
-            profile_sync_device_request_text_from_url(&device_request_import).as_deref(),
-            Some("{}")
-        );
-        assert_eq!(
-            profile_sync_enrollment_target_device_id_from_url(&enrollment_create).as_deref(),
-            Some("device-b")
-        );
-        assert_eq!(
-            profile_sync_enrollment_bundle_text_from_url(&enrollment_import).as_deref(),
-            Some("{}")
-        );
-        assert_eq!(
             profile_sync_handoff_target_device_id_from_url(&handoff_create).as_deref(),
             Some("device-b")
         );
@@ -2559,13 +2176,13 @@ mod tests {
             Some("{}")
         );
         assert_eq!(
-            profile_sync_secret_export_text_from_url(
-                &Url::parse("slate://settings/profile-sync/import?secret=").unwrap()
+            profile_sync_handoff_target_device_id_from_url(
+                &Url::parse("slate://settings/profile-sync/handoff/create?target_device=").unwrap()
             ),
             None
         );
         assert_eq!(
-            profile_sync_secret_export_text_from_url(&Url::parse("slate://settings").unwrap()),
+            profile_sync_handoff_bundle_text_from_url(&Url::parse("slate://settings").unwrap()),
             None
         );
     }
@@ -2574,22 +2191,12 @@ mod tests {
     fn profile_sync_preview_state_exports_only_explicit_handoff_file() {
         let mut source = super::ProfileSyncPreviewState::default();
         let sync_secret = source.create_secret(DEFAULT_PROFILE_ID, 123).unwrap();
-        let enrollment_bundle = SlateProfileDatabase::profile_sync_enrollment_bundle_from_secret(
-            DEFAULT_PROFILE_ID,
-            &sync_secret,
-            "device-b",
-        )
-        .unwrap();
         let handoff_bundle = SlateProfileDatabase::profile_sync_secret_handoff_bundle_from_secret(
             DEFAULT_PROFILE_ID,
             &sync_secret,
             "device-b",
         )
         .unwrap();
-        let device_request =
-            ProfileSyncDeviceEnrollmentRequest::new(DEFAULT_PROFILE_ID, "device-b", 124).unwrap();
-        source.mark_device_request(&device_request);
-        source.mark_enrollment_bundle(&enrollment_bundle);
         source.mark_secret_handoff_bundle(&handoff_bundle);
         let source_json: serde_json::Value = serde_json::from_str(&source.to_json(None)).unwrap();
         let source_object = source_json.as_object().unwrap();

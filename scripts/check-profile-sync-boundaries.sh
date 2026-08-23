@@ -505,6 +505,10 @@ reject_protocol_model_leak \
     '"export_text":|"device_request_export_text":|"enrollment_export_text":|"export_filename": "slate-sync-secret.json"' \
     'Slate settings profile-sync public JSON must not expose raw key-file, device-request, or internal enrollment-bundle artifacts.'
 reject_protocol_model_leak \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'settings/profile-sync/(import|device-request|enrollment)' \
+    'Slate settings profile-sync protocol must expose only the single enrollment-file handoff route, not raw key, device-request, or internal enrollment-bundle routes.'
+reject_protocol_model_leak \
     resources/resource_protocol/slate-settings.html \
     'id="profile-sync-handoff-create"' \
     'Slate settings page must not expose a separate handoff creation control; download should create the file on demand.'
