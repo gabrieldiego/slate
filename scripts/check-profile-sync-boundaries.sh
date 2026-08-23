@@ -57,7 +57,51 @@ require_text() {
     fi
 }
 
+reject_cargo_dependency_feature_in_section() {
+    file=$1
+    section=$2
+    dependency=$3
+    feature=$4
+    message=$5
+    if awk -v section="$section" -v dependency="$dependency" -v feature="$feature" '
+        $0 == section {
+            in_section = 1
+            next
+        }
+        in_section && /^\[/ {
+            in_section = 0
+        }
+        in_section && index($0, dependency) && index($0, feature) {
+            printf "%s:%d:%s\n", FILENAME, FNR, $0
+            found = 1
+        }
+        END {
+            exit found ? 0 : 1
+        }
+    ' "$file"; then
+        printf '\nprofile-sync boundary violation: %s\n' "$message" >&2
+        exit 1
+    fi
+}
+
 cd "$repo_root"
+
+reject_cargo_dependency_feature_in_section \
+    crates/profile-sync/Cargo.toml \
+    '[dependencies]' \
+    'slate-broadwebd' \
+    'test-fixtures' \
+    'slate-profile-sync must not enable broadwebd test fixtures for normal consumers; gate local preview helpers behind a feature.'
+
+require_text \
+    crates/profile-sync/Cargo.toml \
+    '^local-preview-fixtures = \["slate-broadwebd/test-fixtures"\]' \
+    'slate-profile-sync must expose an explicit fixture feature for local preview helpers.'
+
+require_text \
+    crates/chrome/Cargo.toml \
+    'slate-profile-sync = \{ workspace = true, features = \["local-preview-fixtures"\] \}' \
+    'Slate chrome must opt into profile-sync local preview fixtures explicitly.'
 
 reject_protocol_model_leak \
     crates/broadwebd/src/protocols/ipfs/kubo.rs \
@@ -301,9 +345,9 @@ run_test slate-profile-sync scheduler_stored_fixture_compaction_derives_active_k
 run_test slate-profile-sync scheduler_protocol_stored_compaction_derives_active_key_from_sync_secret
 run_test slate-profile-sync broadwebd_settings_sync_scheduler_runs_with_kubo_profile_sync_materialized_provider
 run_test slate-profile-sync scheduler_membership_fixture_stored_provider_derives_active_key_from_sync_secret
-run_test slate-profile-sync local_settings_sync_current_cycle_publishes_existing_settings_without_preview_write
-run_test slate-profile-sync local_settings_sync_preview_cycle_publishes_and_retains_without_loopback
-run_test slate-profile-sync local_settings_sync_two_device_preview_cycle_applies_on_receiver_without_loopback
+run_test_with_features slate-profile-sync local-preview-fixtures local_settings_sync_current_cycle_publishes_existing_settings_without_preview_write
+run_test_with_features slate-profile-sync local-preview-fixtures local_settings_sync_preview_cycle_publishes_and_retains_without_loopback
+run_test_with_features slate-profile-sync local-preview-fixtures local_settings_sync_two_device_preview_cycle_applies_on_receiver_without_loopback
 run_test slate-profile-sync broadwebd_settings_sync_scheduler_rejects_stale_fixture_endpoint_provider_refs
 
 case "$check_chrome" in

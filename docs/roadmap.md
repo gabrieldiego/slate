@@ -469,6 +469,11 @@ Current baseline:
   deterministic simulation. The scheduler still consumes typed multiaddr and
   deferred-protocol materialization requests either way; fixture models remain
   a transport boundary choice, not protocol logic.
+- `slate-profile-sync` no longer enables broadwebd test fixtures for normal
+  consumers. The settings-page local preview flow opts into a
+  `local-preview-fixtures` feature explicitly, so simulated broadweb models can
+  back user-facing local trials without intermingling with production protocol
+  adapter code or default dependency graphs.
 - Trusted device-head receives now ignore stale root rollback: if a resolved
   device head points at an older sequence than a locally applied head for the
   same trusted device, Slate leaves the newer settings and device-head roots in

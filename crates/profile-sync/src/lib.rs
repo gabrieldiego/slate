@@ -2,27 +2,33 @@
 
 use core::fmt;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "local-preview-fixtures")]
 use slate_broadwebd::test_fixtures::LocalProfileSyncFixture;
 use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
-    PluginRegistry, ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
+    ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
     ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
     ProfileSyncProviderHealth as BroadwebdProfileSyncProviderHealth,
-    ProfileSyncProviderRecord as BroadwebdProfileSyncProviderRecord, ProfileSyncProviderRoles,
+    ProfileSyncProviderRecord as BroadwebdProfileSyncProviderRecord,
     ProfileSyncPutObjectRequest as BroadwebdProfileSyncPutObjectRequest,
     ProfileSyncRequest as BroadwebdProfileSyncRequest,
     ProfileSyncResponse as BroadwebdProfileSyncResponse,
     ProfileSyncRootHealth as BroadwebdProfileSyncRootHealth,
     ProfileSyncRootHealthRequest as BroadwebdProfileSyncRootHealthRequest,
     ProfileSyncRootRequest as BroadwebdProfileSyncRootRequest,
-    ProfileSyncRootUpdate as BroadwebdProfileSyncRootUpdate, ResourceBudget,
+    ProfileSyncRootUpdate as BroadwebdProfileSyncRootUpdate,
     parse_in_process_profile_sync_fixture_endpoint_ref,
 };
+#[cfg(feature = "local-preview-fixtures")]
+use slate_broadwebd::{PluginRegistry, ProfileSyncProviderRoles, ResourceBudget};
 use slate_routing::{Multiaddr, RoutingMode, RoutingPlan};
+#[cfg(feature = "local-preview-fixtures")]
 use slate_storage::{
-    DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-    DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_KIND,
-    EncryptedSyncObject, IncomingSyncSettingText,
+    DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+    DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_KIND, ProfileSyncDeviceEnrollmentRequest,
+};
+use slate_storage::{
+    DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, EncryptedSyncObject, IncomingSyncSettingText,
     PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
     PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
     PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
@@ -30,40 +36,49 @@ use slate_storage::{
     PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE,
     PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY, PROFILE_SYNC_SETTING_CHANGE_OBJECT_KIND,
     PROFILE_SYNC_SETTINGS_SNAPSHOT_OBJECT_KIND, PROFILE_SYNC_SETTINGS_SNAPSHOT_SCHEMA_VERSION,
-    ProfileSyncContentKey, ProfileSyncDeviceEnrollmentRequest, ProfileSyncDeviceHead,
-    ProfileSyncDevicePublicKey, ProfileSyncDeviceSigner, ProfileSyncManifest,
-    ProfileSyncMembershipRecord, ProfileSyncObjectBytes, ProfileSyncObjectSource,
-    ProfileSyncRetentionPolicy, ProfileSyncRootCandidate as StorageProfileSyncRootCandidate,
-    ProfileSyncRootRecord, ProfileSyncRootRegistration,
-    ProfileSyncSettingsCandidatePullApplyStatus, ProfileSyncSettingsManifestApplication,
-    ProfileSyncSettingsSnapshot, ProfileSyncSettingsSnapshotPublication,
-    ProfileSyncSettingsTailChangePublication, ProfileSyncTrustedPullApplyError,
-    SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase, SlateSyncSecret, StorageError,
-    StorageProviderRecord, SyncAccountMembershipRecordApplication, SyncChangeRecord,
-    SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError, SyncSettingTextEvent,
-    SyncSnapshotRecord, SyncSnapshotRegistration, VerifiedProfileSyncDeviceHead,
-    open_signed_profile_sync_device_head, settings_sync_manifest_for_snapshot_and_tail_changes,
-    settings_sync_manifest_for_tail_changes, settings_sync_snapshot_id,
+    ProfileSyncContentKey, ProfileSyncDeviceHead, ProfileSyncDevicePublicKey,
+    ProfileSyncDeviceSigner, ProfileSyncManifest, ProfileSyncMembershipRecord,
+    ProfileSyncObjectBytes, ProfileSyncObjectSource, ProfileSyncRetentionPolicy,
+    ProfileSyncRootCandidate as StorageProfileSyncRootCandidate, ProfileSyncRootRecord,
+    ProfileSyncRootRegistration, ProfileSyncSettingsCandidatePullApplyStatus,
+    ProfileSyncSettingsManifestApplication, ProfileSyncSettingsSnapshot,
+    ProfileSyncSettingsSnapshotPublication, ProfileSyncSettingsTailChangePublication,
+    ProfileSyncTrustedPullApplyError, SYNC_DOMAIN_SETTINGS, SignedSyncObject, SlateProfileDatabase,
+    SlateSyncSecret, StorageError, StorageProviderRecord, SyncAccountMembershipRecordApplication,
+    SyncChangeRecord, SyncCompactionTarget, SyncDevicePublicKeyRecord, SyncObjectError,
+    SyncSettingTextEvent, SyncSnapshotRecord, SyncSnapshotRegistration,
+    VerifiedProfileSyncDeviceHead, open_signed_profile_sync_device_head,
+    settings_sync_manifest_for_snapshot_and_tail_changes, settings_sync_manifest_for_tail_changes,
+    settings_sync_snapshot_id,
 };
 use std::collections::{BTreeMap, BTreeSet};
+#[cfg(feature = "local-preview-fixtures")]
 use std::fs;
+#[cfg(feature = "local-preview-fixtures")]
 use std::path::PathBuf;
+#[cfg(feature = "local-preview-fixtures")]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID: &str = "account/membership/log";
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_MAX_RECORDS: usize = 512;
+#[cfg(feature = "local-preview-fixtures")]
 pub const LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID: &str = "preview";
+#[cfg(feature = "local-preview-fixtures")]
 pub const LOCAL_SETTINGS_SYNC_PREVIEW_ROOT_ID: &str = "settings/latest";
+#[cfg(feature = "local-preview-fixtures")]
 pub const LOCAL_SETTINGS_SYNC_PREVIEW_SETTING_KEY: &str = "profile_sync.preview.last_run";
+#[cfg(feature = "local-preview-fixtures")]
 pub const LOCAL_SETTINGS_SYNC_PREVIEW_REMOTE_SETTING_KEY: &str =
     "profile_sync.preview.two_device_last_run";
+#[cfg(feature = "local-preview-fixtures")]
 pub const LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID: &str = "local-preview-receiver";
 pub const PROFILE_SYNC_DEFERRED_PROVIDER_PROTOCOL: &str = "provider";
 pub const PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL: &str = "iroh-node";
 const PROFILE_SYNC_PROVIDER_MULTIADDR_PRIVACY_BOUNDARY: &str =
     "profile-sync provider endpoint; no browser navigation or public gateway fallback";
 
+#[cfg(feature = "local-preview-fixtures")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalSettingsSyncPreviewCycleReport {
     pub profile: String,
@@ -89,6 +104,7 @@ pub struct LocalSettingsSyncPreviewCycleReport {
     pub degraded_after: bool,
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalSettingsSyncCurrentCycleReport {
     pub profile: String,
@@ -112,6 +128,7 @@ pub struct LocalSettingsSyncCurrentCycleReport {
     pub degraded_after: bool,
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalSettingsSyncTwoDevicePreviewCycleReport {
     pub profile: String,
@@ -135,6 +152,7 @@ pub struct LocalSettingsSyncTwoDevicePreviewCycleReport {
     pub receiver_trusted_device_count: usize,
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 #[derive(Debug)]
 pub enum LocalSettingsSyncPreviewError {
     Storage(StorageError),
@@ -144,6 +162,7 @@ pub enum LocalSettingsSyncPreviewError {
     Io(std::io::Error),
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 impl fmt::Display for LocalSettingsSyncPreviewError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -156,6 +175,7 @@ impl fmt::Display for LocalSettingsSyncPreviewError {
     }
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 impl std::error::Error for LocalSettingsSyncPreviewError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
@@ -168,40 +188,47 @@ impl std::error::Error for LocalSettingsSyncPreviewError {
     }
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 impl From<StorageError> for LocalSettingsSyncPreviewError {
     fn from(error: StorageError) -> Self {
         Self::Storage(error)
     }
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 impl From<SyncObjectError> for LocalSettingsSyncPreviewError {
     fn from(error: SyncObjectError) -> Self {
         Self::SyncObject(error)
     }
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 impl From<BroadwebdError> for LocalSettingsSyncPreviewError {
     fn from(error: BroadwebdError) -> Self {
         Self::Broadwebd(error)
     }
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 impl From<ProfileSyncCycleWithHealthError> for LocalSettingsSyncPreviewError {
     fn from(error: ProfileSyncCycleWithHealthError) -> Self {
         Self::Cycle(error)
     }
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 impl From<std::io::Error> for LocalSettingsSyncPreviewError {
     fn from(error: std::io::Error) -> Self {
         Self::Io(error)
     }
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 struct LocalSettingsSyncPreviewStateRoot {
     path: PathBuf,
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 impl LocalSettingsSyncPreviewStateRoot {
     fn prepare(parent: impl Into<PathBuf>) -> Result<Self, std::io::Error> {
         let nanos = SystemTime::now()
@@ -235,6 +262,7 @@ impl LocalSettingsSyncPreviewStateRoot {
     }
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 impl Drop for LocalSettingsSyncPreviewStateRoot {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
@@ -8991,12 +9019,14 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
     }
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 struct LocalSettingsSyncFixturePreparation {
     local_device_id: String,
     provider_endpoint_ref: String,
     signer: ProfileSyncDeviceSigner,
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 struct LocalSettingsSyncFixtureCycleSummary {
     profile: String,
     local_device_id: String,
@@ -9019,6 +9049,7 @@ struct LocalSettingsSyncFixtureCycleSummary {
     degraded_after: bool,
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 fn prepare_local_settings_sync_fixture(
     database: &SlateProfileDatabase,
     profile: &str,
@@ -9047,6 +9078,7 @@ fn prepare_local_settings_sync_fixture(
     })
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 fn run_local_settings_sync_fixture_cycle(
     database: &SlateProfileDatabase,
     profile: &str,
@@ -9130,6 +9162,7 @@ fn run_local_settings_sync_fixture_cycle(
     })
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 pub fn run_local_settings_sync_current_cycle(
     database: &SlateProfileDatabase,
     profile: &str,
@@ -9168,6 +9201,7 @@ pub fn run_local_settings_sync_current_cycle(
     })
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 pub fn run_local_settings_sync_preview_cycle(
     database: &SlateProfileDatabase,
     profile: &str,
@@ -9222,6 +9256,7 @@ pub fn run_local_settings_sync_preview_cycle(
     })
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 pub fn run_local_settings_sync_two_device_preview_cycle(
     database: &SlateProfileDatabase,
     profile: &str,
@@ -9384,6 +9419,7 @@ pub fn run_local_settings_sync_two_device_preview_cycle(
     })
 }
 
+#[cfg(feature = "local-preview-fixtures")]
 fn unix_time_seconds() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -10959,17 +10995,18 @@ mod tests {
         ProfileSyncResponse as BroadwebdProfileSyncResponse, ResourceBudget,
         test_fixtures::{InProcessBroadwebNetwork, InternalKuboRpcResponse},
     };
+    #[cfg(feature = "local-preview-fixtures")]
+    use slate_storage::DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID;
     use slate_storage::{
         AppSyncDomainRegistration, BookmarkSlotSyncPayload, BookmarkUpdate,
         CalendarEventSyncPayload, CalendarEventUpdate, ChatConversationSyncPayload,
         ChatConversationUpdate, ContactCardSyncPayload, ContactCardUpdate,
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
-        DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID, DownloadMetadataSyncPayload,
-        DownloadMetadataUpdate, FileEntrySyncPayload, FileEntryUpdate, IncomingSyncSettingText,
-        PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305, PROFILE_SYNC_CONTENT_KEY_BYTES,
-        PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND, PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION,
-        PROFILE_SYNC_MANIFEST_OBJECT_KIND, PROFILE_SYNC_MANIFEST_SCHEMA_VERSION,
-        PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
+        DownloadMetadataSyncPayload, DownloadMetadataUpdate, FileEntrySyncPayload, FileEntryUpdate,
+        IncomingSyncSettingText, PROFILE_SYNC_CONTENT_KEY_ALGORITHM_CHACHA20_POLY1305,
+        PROFILE_SYNC_CONTENT_KEY_BYTES, PROFILE_SYNC_DEVICE_HEAD_OBJECT_KIND,
+        PROFILE_SYNC_DEVICE_HEAD_SCHEMA_VERSION, PROFILE_SYNC_MANIFEST_OBJECT_KIND,
+        PROFILE_SYNC_MANIFEST_SCHEMA_VERSION, PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_DEVICE,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ENROLL_PROVIDER,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_REVOKE_DEVICE,
         PROFILE_SYNC_MEMBERSHIP_RECORD_KIND_ROTATE_DEVICE_KEY,
@@ -14574,6 +14611,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(db_root);
     }
 
+    #[cfg(feature = "local-preview-fixtures")]
     #[test]
     fn local_settings_sync_current_cycle_publishes_existing_settings_without_preview_write() {
         let state_root = test_state_root("local-settings-sync-current-state");
@@ -14639,6 +14677,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(db_root);
     }
 
+    #[cfg(feature = "local-preview-fixtures")]
     #[test]
     fn local_settings_sync_preview_cycle_publishes_and_retains_without_loopback() {
         let state_root = test_state_root("local-settings-sync-preview-state");
@@ -14705,6 +14744,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(db_root);
     }
 
+    #[cfg(feature = "local-preview-fixtures")]
     #[test]
     fn local_settings_sync_two_device_preview_cycle_applies_on_receiver_without_loopback() {
         let state_root = test_state_root("local-settings-sync-two-device-state");
