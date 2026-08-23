@@ -11471,8 +11471,8 @@ mod tests {
         ProfileSyncResponse as BroadwebdProfileSyncResponse,
         ProfileSyncRootCandidate as BroadwebdProfileSyncRootCandidate,
         ProfileSyncRootHealth as BroadwebdProfileSyncRootHealth, ResourceBudget,
-        ServiceRequest as BroadwebdServiceRequest, ServiceResponse as BroadwebdServiceResponse,
-        TemporaryDownloadRecord,
+        ServiceFrameBroadwebdClient, ServiceRequest as BroadwebdServiceRequest,
+        ServiceResponse as BroadwebdServiceResponse, TemporaryDownloadRecord,
         test_fixtures::{
             InProcessBroadwebNetwork, InternalKuboRpcResponse, ProfileSyncFixtureCapacity,
         },
@@ -13587,6 +13587,46 @@ mod tests {
         let provider_health = runner
             .profile_sync_provider_health("default")
             .expect("read provider health through broadwebd client trait object");
+        assert_eq!(provider_health.known_providers, 1);
+        assert_eq!(provider_health.fresh_online_providers, 1);
+
+        let _scheduler = BroadwebdSettingsSyncScheduler::new(client);
+        let _ = std::fs::remove_dir_all(state_root);
+    }
+
+    #[test]
+    fn broadwebd_profile_sync_bridges_accept_framed_clients() {
+        let network = InProcessBroadwebNetwork::new();
+        let state_root = test_state_root("broadwebd-framed-client-bridge");
+        let daemon = network
+            .daemon_for_device(
+                &state_root,
+                ResourceBudget::default(),
+                "framed-client-bridge",
+            )
+            .expect("start in-process framed-client bridge daemon");
+        let framed = ServiceFrameBroadwebdClient::new(&daemon);
+        let client: &dyn BroadwebdClient = &framed;
+        let object_bytes = b"encrypted framed client trait object".to_vec();
+
+        let publisher = BroadwebdProfileSyncPublisher::new(client);
+        let object_id = publisher
+            .put_retained_root("default", "settings/latest", object_bytes.clone())
+            .expect("publish through framed broadwebd client");
+        let source = BroadwebdProfileSyncObjectSource::new(client);
+        let resolved = source
+            .resolve_profile_sync_root("default", "settings/latest")
+            .expect("resolve through framed broadwebd client");
+        assert_eq!(resolved.as_deref(), Some(object_id.as_str()));
+        let fetched = source
+            .get_profile_sync_object("default", object_id.as_str())
+            .expect("fetch through framed broadwebd client");
+        assert_eq!(fetched.bytes, object_bytes);
+
+        let runner = BroadwebdSettingsSyncRunner::new(client);
+        let provider_health = runner
+            .profile_sync_provider_health("default")
+            .expect("read provider health through framed broadwebd client");
         assert_eq!(provider_health.known_providers, 1);
         assert_eq!(provider_health.fresh_online_providers, 1);
 

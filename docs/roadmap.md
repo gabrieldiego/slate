@@ -298,6 +298,10 @@ Current baseline:
   proves the profile-sync source, publisher, and runner bridges can work through
   the future IPC-shaped service envelope while the test remains fully
   in-process.
+- `slate-profile-sync` now also runs its source, publisher, runner, and
+  scheduler-construction bridge checks through broadwebd's socketless framed
+  client. That pushes the byte-framed boundary up to the runtime glue without
+  opening loopback ports or choosing the final IPC transport.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the

@@ -408,6 +408,10 @@ require_text \
     'profile-sync bridge wrappers must work through an envelope-only BroadwebdClient implementation.'
 require_text \
     crates/profile-sync/src/lib.rs \
+    'broadwebd_profile_sync_bridges_accept_framed_clients' \
+    'profile-sync bridge wrappers must work through a byte-framed BroadwebdClient implementation.'
+require_text \
+    crates/profile-sync/src/lib.rs \
     'SettingsSyncRootObjectProviderIssue' \
     'profile-sync health reports must expose structured root-object provider issues.'
 require_text \
@@ -847,6 +851,7 @@ run_test slate-broadwebd local_fixture_root_health_reports_offline_latest_object
 run_test slate-broadwebd local_fixture_retained_claim_requires_provider_bytes
 run_test slate-profile-sync broadwebd_profile_sync_bridges_accept_envelope_only_clients
 run_test slate-profile-sync broadwebd_profile_sync_bridges_accept_client_trait_objects
+run_test slate-profile-sync broadwebd_profile_sync_bridges_accept_framed_clients
 run_test slate-profile-sync broadwebd_publisher_and_source_use_stateful_kubo_profile_sync_model
 run_test slate-profile-sync broadwebd_stateful_kubo_model_shares_roots_and_objects_across_daemons
 run_test slate-profile-sync broadwebd_publisher_publishes_signed_settings_tail_manifest_through_stateful_kubo_model
