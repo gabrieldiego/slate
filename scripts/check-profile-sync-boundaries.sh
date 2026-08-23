@@ -267,6 +267,10 @@ require_text \
     crates/profile-sync/src/lib.rs \
     'local_deterministic_simulation' \
     'profile-sync local protocol simulations must be explicit materializer policies.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'SettingsSyncRootObjectProviderIssue' \
+    'profile-sync health reports must expose structured root-object provider issues.'
 reject_protocol_model_leak \
     crates/profile-sync/src/lib.rs \
     'socketless_fixture_models' \
@@ -356,6 +360,7 @@ run_test slate-profile-sync broadwebd_source_rejects_wrong_key_id_shared_root_wi
 run_test slate-profile-sync broadwebd_source_rejects_bad_signature_shared_root_without_mutation
 run_test slate-profile-sync broadwebd_source_rejects_malformed_app_payload_shared_root_without_mutation
 run_test slate-profile-sync broadwebd_source_rejects_missing_tail_object_shared_root_without_mutation
+run_test slate-profile-sync broadwebd_settings_sync_health_reports_delayed_object_transfer
 run_test slate-profile-sync broadwebd_settings_sync_health_reports_stale_latest_object_holders
 run_test slate-profile-sync broadwebd_settings_sync_health_reports_offline_latest_object_holders
 run_test slate-profile-sync iroh_node

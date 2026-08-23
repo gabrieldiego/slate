@@ -5659,6 +5659,22 @@ pub struct SettingsSyncHealthIssue {
     pub message: String,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SettingsSyncRootObjectProviderIssueKind {
+    Delayed,
+    Stale,
+    Offline,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncRootObjectProviderIssue {
+    pub component: SettingsSyncHealthIssueComponent,
+    pub root_id: String,
+    pub object_id: Option<String>,
+    pub provider_id: String,
+    pub kind: SettingsSyncRootObjectProviderIssueKind,
+}
+
 impl SettingsSyncHealthReport {
     pub fn degraded(&self) -> bool {
         self.provider_health.degraded
@@ -5716,6 +5732,78 @@ impl SettingsSyncHealthReport {
         }
         issues
     }
+
+    pub fn root_object_provider_issue_count(&self) -> usize {
+        self.root_object_provider_issues().len()
+    }
+
+    pub fn root_object_provider_issues(&self) -> Vec<SettingsSyncRootObjectProviderIssue> {
+        let mut issues = Vec::new();
+        append_settings_sync_root_object_provider_issues(
+            &mut issues,
+            SettingsSyncHealthIssueComponent::SettingsRoot,
+            self.settings_root_id.as_str(),
+            &self.settings_root_health,
+        );
+        append_settings_sync_root_object_provider_issues(
+            &mut issues,
+            SettingsSyncHealthIssueComponent::LocalDeviceHeadRoot,
+            self.local_device_head_root_id.as_str(),
+            &self.local_device_head_root_health,
+        );
+        issues
+    }
+}
+
+fn append_settings_sync_root_object_provider_issues(
+    issues: &mut Vec<SettingsSyncRootObjectProviderIssue>,
+    component: SettingsSyncHealthIssueComponent,
+    root_id: &str,
+    health: &BroadwebdProfileSyncRootHealth,
+) {
+    append_settings_sync_root_object_provider_issue_kind(
+        issues,
+        component.clone(),
+        root_id,
+        health.latest_object_id.clone(),
+        SettingsSyncRootObjectProviderIssueKind::Delayed,
+        health.delayed_object_provider_ids.as_slice(),
+    );
+    append_settings_sync_root_object_provider_issue_kind(
+        issues,
+        component.clone(),
+        root_id,
+        health.latest_object_id.clone(),
+        SettingsSyncRootObjectProviderIssueKind::Stale,
+        health.latest_object_stale_provider_ids.as_slice(),
+    );
+    append_settings_sync_root_object_provider_issue_kind(
+        issues,
+        component,
+        root_id,
+        health.latest_object_id.clone(),
+        SettingsSyncRootObjectProviderIssueKind::Offline,
+        health.latest_object_offline_provider_ids.as_slice(),
+    );
+}
+
+fn append_settings_sync_root_object_provider_issue_kind(
+    issues: &mut Vec<SettingsSyncRootObjectProviderIssue>,
+    component: SettingsSyncHealthIssueComponent,
+    root_id: &str,
+    object_id: Option<String>,
+    kind: SettingsSyncRootObjectProviderIssueKind,
+    provider_ids: &[String],
+) {
+    issues.extend(provider_ids.iter().cloned().map(|provider_id| {
+        SettingsSyncRootObjectProviderIssue {
+            component: component.clone(),
+            root_id: root_id.to_string(),
+            object_id: object_id.clone(),
+            provider_id,
+            kind,
+        }
+    }));
 }
 
 pub fn settings_device_head_root_id(device_id: &str) -> String {
@@ -10982,7 +11070,9 @@ mod tests {
         ProfileSyncMembershipLogPreviewStatus, ProfileSyncMembershipLogPublicationPlanStatus,
         ProfileSyncMembershipLogPullStatus, ProfileSyncMembershipRecordPullStatus,
         ProfileSyncPolicyError, ProfileSyncPublishError, ProfileSyncReceiveError,
-        SettingsSyncCyclePolicy, SettingsSyncRetentionProviderHandle, SettingsSyncRuntimeSecrets,
+        SettingsSyncCyclePolicy, SettingsSyncHealthIssueComponent,
+        SettingsSyncRetentionProviderHandle, SettingsSyncRootObjectProviderIssue,
+        SettingsSyncRootObjectProviderIssueKind, SettingsSyncRuntimeSecrets,
         SettingsSyncScheduledMembershipCyclePlanAttemptCycle, SettingsSyncSchedulerConfig,
         SettingsSyncStoredProviderEndpointStatus,
         SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle,
@@ -20571,6 +20661,7 @@ mod tests {
         .expect("open delayed-transfer receiver settings database");
         let profile = "delayedtransferhealthprofile";
         let settings_root_id = "settings/latest";
+        let source_provider_id = "local-fixture-device-runtime-delayed-transfer-source";
         let object_id = BroadwebdProfileSyncPublisher::new(&source_daemon)
             .put_retained_root(
                 profile,
@@ -20603,7 +20694,18 @@ mod tests {
             delayed_health
                 .settings_root_health
                 .delayed_object_provider_ids,
-            vec!["local-fixture-device-runtime-delayed-transfer-source".to_string()]
+            vec![source_provider_id.to_string()]
+        );
+        assert_eq!(delayed_health.root_object_provider_issue_count(), 1);
+        assert_eq!(
+            delayed_health.root_object_provider_issues(),
+            vec![SettingsSyncRootObjectProviderIssue {
+                component: SettingsSyncHealthIssueComponent::SettingsRoot,
+                root_id: settings_root_id.to_string(),
+                object_id: Some(object_id.clone()),
+                provider_id: source_provider_id.to_string(),
+                kind: SettingsSyncRootObjectProviderIssueKind::Delayed,
+            }]
         );
         assert!(delayed_health.settings_root_health.degraded);
         assert!(
@@ -20630,6 +20732,7 @@ mod tests {
                 .delayed_object_provider_ids
                 .is_empty()
         );
+        assert!(released_health.root_object_provider_issues().is_empty());
 
         let _ = std::fs::remove_dir_all(source_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
@@ -20705,6 +20808,17 @@ mod tests {
                 .latest_object_stale_provider_ids,
             vec![source_provider_id.to_string()]
         );
+        assert_eq!(stale_health.root_object_provider_issue_count(), 1);
+        assert_eq!(
+            stale_health.root_object_provider_issues(),
+            vec![SettingsSyncRootObjectProviderIssue {
+                component: SettingsSyncHealthIssueComponent::SettingsRoot,
+                root_id: settings_root_id.to_string(),
+                object_id: Some(object_id.clone()),
+                provider_id: source_provider_id.to_string(),
+                kind: SettingsSyncRootObjectProviderIssueKind::Stale,
+            }]
+        );
         assert!(
             stale_health
                 .settings_root_health
@@ -20754,6 +20868,7 @@ mod tests {
                 .latest_object_offline_provider_ids
                 .is_empty()
         );
+        assert!(recovered_health.root_object_provider_issues().is_empty());
 
         let _ = std::fs::remove_dir_all(source_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);
@@ -20832,6 +20947,17 @@ mod tests {
                 .latest_object_offline_provider_ids,
             vec![source_provider_id.to_string()]
         );
+        assert_eq!(offline_health.root_object_provider_issue_count(), 1);
+        assert_eq!(
+            offline_health.root_object_provider_issues(),
+            vec![SettingsSyncRootObjectProviderIssue {
+                component: SettingsSyncHealthIssueComponent::SettingsRoot,
+                root_id: settings_root_id.to_string(),
+                object_id: Some(object_id.clone()),
+                provider_id: source_provider_id.to_string(),
+                kind: SettingsSyncRootObjectProviderIssueKind::Offline,
+            }]
+        );
         assert!(
             offline_health
                 .settings_root_health
@@ -20869,6 +20995,7 @@ mod tests {
                 .latest_object_offline_provider_ids
                 .is_empty()
         );
+        assert!(recovered_health.root_object_provider_issues().is_empty());
 
         let _ = std::fs::remove_dir_all(source_state_root);
         let _ = std::fs::remove_dir_all(receiver_state_root);

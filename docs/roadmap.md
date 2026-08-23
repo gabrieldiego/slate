@@ -481,8 +481,9 @@ Current baseline:
   that still hold that object. This lets schedulers and UI distinguish missing
   bytes from delayed transfer, stale rendezvous, and offline availability in
   deterministic local tests before real broadweb transports are enabled. The
-  profile-sync runner now has regressions proving those fields propagate through
-  the scheduler-facing `settings_sync_health` surface.
+  profile-sync runner now exposes structured root-object provider issues for
+  delayed, stale, and offline holders, with regressions proving those states
+  propagate through the scheduler-facing `settings_sync_health` surface.
 - Trusted device-head receives now ignore stale root rollback: if a resolved
   device head points at an older sequence than a locally applied head for the
   same trusted device, Slate leaves the newer settings and device-head roots in
