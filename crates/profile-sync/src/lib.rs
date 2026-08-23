@@ -11392,11 +11392,17 @@ mod tests {
         settings_device_head_root_id, sign_encrypted_json_object, sync_membership_record_root_id,
     };
     use slate_broadwebd::{
-        BroadwebdClient, BroadwebdError,
+        BroadwebStatusSnapshot, BroadwebdClient, BroadwebdError, DaemonHealth, DaemonLifecycle,
         ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
+        ProfileSyncProviderHealth as BroadwebdProfileSyncProviderHealth,
+        ProfileSyncProviderRecord as BroadwebdProfileSyncProviderRecord,
         ProfileSyncProviderRoles as BroadwebdProfileSyncProviderRoles,
         ProfileSyncRequest as BroadwebdProfileSyncRequest,
-        ProfileSyncResponse as BroadwebdProfileSyncResponse, ResourceBudget,
+        ProfileSyncResponse as BroadwebdProfileSyncResponse,
+        ProfileSyncRootCandidate as BroadwebdProfileSyncRootCandidate,
+        ProfileSyncRootHealth as BroadwebdProfileSyncRootHealth, ResourceBudget,
+        ServiceRequest as BroadwebdServiceRequest, ServiceResponse as BroadwebdServiceResponse,
+        TemporaryDownloadRecord,
         test_fixtures::{
             InProcessBroadwebNetwork, InternalKuboRpcResponse, ProfileSyncFixtureCapacity,
         },
@@ -11432,10 +11438,9 @@ mod tests {
         open_signed_profile_sync_settings_snapshot, open_signed_sync_setting_text,
         pull_signed_profile_sync_device_head, settings_sync_snapshot_id,
     };
-    use std::{
-        collections::BTreeSet,
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::cell::RefCell;
+    use std::collections::{BTreeMap, BTreeSet};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     const TEST_CONTENT_KEY_ID: &str = "content-key-epoch-1";
 
@@ -13139,6 +13144,349 @@ mod tests {
         assert!(released.available);
 
         let _ = std::fs::remove_dir_all(state_root);
+    }
+
+    #[derive(Default)]
+    struct EnvelopeOnlyProfileSyncClient {
+        objects: RefCell<BTreeMap<(String, String), Vec<u8>>>,
+        retained_objects: RefCell<BTreeSet<(String, String)>>,
+        roots: RefCell<BTreeMap<(String, String), String>>,
+        next_object_sequence: RefCell<u64>,
+        dispatch_count: RefCell<usize>,
+    }
+
+    impl EnvelopeOnlyProfileSyncClient {
+        fn dispatch_profile_sync_request(
+            &self,
+            request: BroadwebdProfileSyncRequest,
+        ) -> Result<BroadwebdProfileSyncResponse, BroadwebdError> {
+            match request {
+                BroadwebdProfileSyncRequest::PutEncryptedObject(request) => {
+                    let object_id = self.next_object_id();
+                    self.objects
+                        .borrow_mut()
+                        .insert((request.profile, object_id.clone()), request.bytes);
+                    Ok(BroadwebdProfileSyncResponse::PutEncryptedObject { object_id })
+                }
+                BroadwebdProfileSyncRequest::GetEncryptedObject(request) => {
+                    let bytes = self
+                        .objects
+                        .borrow()
+                        .get(&(request.profile, request.object_id.clone()))
+                        .cloned()
+                        .ok_or_else(|| {
+                            BroadwebdError::Request(format!(
+                                "missing envelope-only profile-sync object {}",
+                                request.object_id
+                            ))
+                        })?;
+                    Ok(BroadwebdProfileSyncResponse::GetEncryptedObject {
+                        object_id: request.object_id,
+                        bytes,
+                    })
+                }
+                BroadwebdProfileSyncRequest::RetainObject(request) => {
+                    self.require_object(request.profile.as_str(), request.object_id.as_str())?;
+                    self.retained_objects
+                        .borrow_mut()
+                        .insert((request.profile, request.object_id.clone()));
+                    Ok(BroadwebdProfileSyncResponse::RetainObject {
+                        object_id: request.object_id,
+                        retained: true,
+                    })
+                }
+                BroadwebdProfileSyncRequest::ReleaseObject(request) => {
+                    self.retained_objects
+                        .borrow_mut()
+                        .remove(&(request.profile, request.object_id.clone()));
+                    Ok(BroadwebdProfileSyncResponse::ReleaseObject {
+                        object_id: request.object_id,
+                        retained: false,
+                    })
+                }
+                BroadwebdProfileSyncRequest::ListRetainedObjects(request) => {
+                    let object_ids = self
+                        .retained_objects
+                        .borrow()
+                        .iter()
+                        .filter(|(profile, _)| profile == &request.profile)
+                        .map(|(_, object_id)| object_id.clone())
+                        .collect();
+                    Ok(BroadwebdProfileSyncResponse::RetainedObjects { object_ids })
+                }
+                BroadwebdProfileSyncRequest::VerifyRetainedObject(request) => {
+                    let available = self
+                        .objects
+                        .borrow()
+                        .contains_key(&(request.profile.clone(), request.object_id.clone()));
+                    let retained = self
+                        .retained_objects
+                        .borrow()
+                        .contains(&(request.profile, request.object_id.clone()));
+                    Ok(BroadwebdProfileSyncResponse::RetainedObjectStatus {
+                        object_id: request.object_id,
+                        retained,
+                        available,
+                    })
+                }
+                BroadwebdProfileSyncRequest::PublishRoot(request) => {
+                    self.require_object(request.profile.as_str(), request.object_id.as_str())?;
+                    self.roots.borrow_mut().insert(
+                        (request.profile, request.root_id.clone()),
+                        request.object_id.clone(),
+                    );
+                    Ok(BroadwebdProfileSyncResponse::Root {
+                        root_id: request.root_id,
+                        object_id: Some(request.object_id),
+                    })
+                }
+                BroadwebdProfileSyncRequest::ResolveRoot(request) => {
+                    let object_id = self
+                        .roots
+                        .borrow()
+                        .get(&(request.profile, request.root_id.clone()))
+                        .cloned();
+                    Ok(BroadwebdProfileSyncResponse::Root {
+                        root_id: request.root_id,
+                        object_id,
+                    })
+                }
+                BroadwebdProfileSyncRequest::ListRootCandidates(request) => {
+                    let candidates = self
+                        .roots
+                        .borrow()
+                        .get(&(request.profile, request.root_id.clone()))
+                        .map(|object_id| {
+                            vec![BroadwebdProfileSyncRootCandidate {
+                                publisher_provider_id: "envelope-only-client".to_string(),
+                                object_id: object_id.clone(),
+                                publish_sequence: 1,
+                            }]
+                        })
+                        .unwrap_or_default();
+                    Ok(BroadwebdProfileSyncResponse::RootCandidates {
+                        root_id: request.root_id,
+                        candidates,
+                    })
+                }
+                BroadwebdProfileSyncRequest::DiscoverProviders(request) => {
+                    let retained_objects = self.retained_object_count(request.profile.as_str());
+                    Ok(BroadwebdProfileSyncResponse::Providers {
+                        providers: vec![BroadwebdProfileSyncProviderRecord {
+                            provider_id: "envelope-only-client".to_string(),
+                            provider_kind: "ipc-envelope".to_string(),
+                            privacy_boundary: "in-process-test".to_string(),
+                            retained_objects,
+                            roles: BroadwebdProfileSyncProviderRoles::logged_in_device(),
+                            can_publish_roots: true,
+                        }],
+                    })
+                }
+                BroadwebdProfileSyncRequest::ProviderHealth(request) => {
+                    Ok(BroadwebdProfileSyncResponse::ProviderHealth {
+                        health: self.provider_health(request.profile),
+                    })
+                }
+                BroadwebdProfileSyncRequest::RootHealth(request) => {
+                    Ok(BroadwebdProfileSyncResponse::RootHealth {
+                        health: self.root_health(
+                            request.profile,
+                            request.root_id,
+                            request.minimum_online_retaining_providers,
+                        ),
+                    })
+                }
+            }
+        }
+
+        fn next_object_id(&self) -> String {
+            let mut sequence = self.next_object_sequence.borrow_mut();
+            *sequence = sequence.saturating_add(1);
+            format!("envelope-object-{}", *sequence)
+        }
+
+        fn require_object(&self, profile: &str, object_id: &str) -> Result<(), BroadwebdError> {
+            if self
+                .objects
+                .borrow()
+                .contains_key(&(profile.to_string(), object_id.to_string()))
+            {
+                return Ok(());
+            }
+            Err(BroadwebdError::Request(format!(
+                "missing envelope-only profile-sync object {object_id}"
+            )))
+        }
+
+        fn retained_object_count(&self, profile: &str) -> usize {
+            self.retained_objects
+                .borrow()
+                .iter()
+                .filter(|(retained_profile, _)| retained_profile == profile)
+                .count()
+        }
+
+        fn provider_health(&self, profile: String) -> BroadwebdProfileSyncProviderHealth {
+            let retained_objects = self.retained_object_count(profile.as_str());
+            BroadwebdProfileSyncProviderHealth {
+                profile,
+                known_providers: 1,
+                online_providers: 1,
+                offline_providers: 0,
+                fresh_online_providers: 1,
+                stale_online_providers: 0,
+                fresh_online_provider_ids: vec!["envelope-only-client".to_string()],
+                stale_online_provider_ids: Vec::new(),
+                offline_provider_ids: Vec::new(),
+                minimum_provider_seen_sequence: 1,
+                object_transfer_providers: 1,
+                availability_providers: 1,
+                mutable_root_providers: 1,
+                retained_objects,
+                degraded: false,
+                message: "Ready".to_string(),
+            }
+        }
+
+        fn root_health(
+            &self,
+            profile: String,
+            root_id: String,
+            minimum_online_retaining_providers: usize,
+        ) -> BroadwebdProfileSyncRootHealth {
+            let latest_object_id = self
+                .roots
+                .borrow()
+                .get(&(profile.clone(), root_id.clone()))
+                .cloned();
+            let latest_object_available = latest_object_id.as_ref().is_some_and(|object_id| {
+                self.objects
+                    .borrow()
+                    .contains_key(&(profile.clone(), object_id.clone()))
+            });
+            let online_retaining_providers = latest_object_id
+                .as_ref()
+                .filter(|object_id| {
+                    self.retained_objects
+                        .borrow()
+                        .contains(&(profile.clone(), (*object_id).clone()))
+                })
+                .map(|_| 1)
+                .unwrap_or_default();
+            let degraded = online_retaining_providers < minimum_online_retaining_providers;
+            let latest_object_available_provider_ids = if latest_object_available {
+                vec!["envelope-only-client".to_string()]
+            } else {
+                Vec::new()
+            };
+            BroadwebdProfileSyncRootHealth {
+                profile,
+                root_id,
+                visible_candidates: usize::from(latest_object_id.is_some()),
+                delayed_candidates: 0,
+                delayed_publisher_provider_ids: Vec::new(),
+                latest_object_id,
+                latest_object_available,
+                latest_object_available_provider_ids,
+                latest_object_stale_provider_ids: Vec::new(),
+                latest_object_offline_provider_ids: Vec::new(),
+                delayed_object_provider_ids: Vec::new(),
+                unavailable_retaining_provider_ids: Vec::new(),
+                online_retaining_providers,
+                minimum_online_retaining_providers,
+                degraded,
+                message: if degraded {
+                    "Not enough retaining providers are online".to_string()
+                } else {
+                    "Ready".to_string()
+                },
+            }
+        }
+
+        fn dispatch_count(&self) -> usize {
+            *self.dispatch_count.borrow()
+        }
+    }
+
+    impl BroadwebdClient for EnvelopeOnlyProfileSyncClient {
+        fn health(&self) -> DaemonHealth {
+            DaemonHealth {
+                lifecycle: DaemonLifecycle::Ready,
+                plugins: Vec::new(),
+            }
+        }
+
+        fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+            BroadwebStatusSnapshot::idle()
+        }
+
+        fn dispatch_service_request(
+            &self,
+            request: BroadwebdServiceRequest,
+        ) -> Result<BroadwebdServiceResponse, BroadwebdError> {
+            *self.dispatch_count.borrow_mut() += 1;
+            match request {
+                BroadwebdServiceRequest::ProfileSync(request) => self
+                    .dispatch_profile_sync_request(request)
+                    .map(BroadwebdServiceResponse::ProfileSync),
+                BroadwebdServiceRequest::HttpFetch(_) => Err(BroadwebdError::UnsupportedRequest(
+                    "envelope-only profile-sync client does not fetch HTTP".to_string(),
+                )),
+            }
+        }
+
+        fn temporary_downloads(
+            &self,
+            _profile: &str,
+        ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+            Ok(Vec::new())
+        }
+
+        fn downloads(
+            &self,
+            _profile: &str,
+        ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+            Ok(Vec::new())
+        }
+    }
+
+    #[test]
+    fn broadwebd_profile_sync_bridges_accept_envelope_only_clients() {
+        let client = EnvelopeOnlyProfileSyncClient::default();
+        let client_ref: &dyn BroadwebdClient = &client;
+        let object_bytes = b"encrypted envelope-only client object".to_vec();
+
+        let publisher = BroadwebdProfileSyncPublisher::new(client_ref);
+        let object_id = publisher
+            .put_retained_root("default", "settings/latest", object_bytes.clone())
+            .expect("publish through broadwebd service request envelope");
+        let retained = publisher
+            .verify_retained_object("default", object_id.as_str())
+            .expect("verify retained object through broadwebd service request envelope");
+        assert!(retained.retained);
+        assert!(retained.available);
+
+        let source = BroadwebdProfileSyncObjectSource::new(client_ref);
+        let resolved = source
+            .resolve_profile_sync_root("default", "settings/latest")
+            .expect("resolve through broadwebd service request envelope");
+        assert_eq!(resolved.as_deref(), Some(object_id.as_str()));
+        let fetched = source
+            .get_profile_sync_object("default", object_id.as_str())
+            .expect("fetch through broadwebd service request envelope");
+        assert_eq!(fetched.bytes, object_bytes);
+
+        let runner = BroadwebdSettingsSyncRunner::new(client_ref);
+        let provider_health = runner
+            .profile_sync_provider_health("default")
+            .expect("read provider health through broadwebd service request envelope");
+        assert_eq!(provider_health.known_providers, 1);
+        assert_eq!(provider_health.fresh_online_providers, 1);
+        assert_eq!(provider_health.retained_objects, 1);
+        assert!(
+            client.dispatch_count() >= 7,
+            "profile-sync bridge calls should flow through dispatch_service_request"
+        );
     }
 
     #[test]

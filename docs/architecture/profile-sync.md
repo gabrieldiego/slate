@@ -619,7 +619,9 @@ provide a small publisher for putting encrypted objects, retaining objects,
 publishing mutable roots, and checking retention state. Storage stays
 protocol-neutral, broadwebd stays independent from storage's encrypted object
 semantics, and sync-only tests should target this crate when possible so they do
-not compile the renderer.
+not compile the renderer. Bridge coverage includes a daemon-backed client and an
+envelope-only client that implements `dispatch_service_request`, keeping the
+runtime glue aligned with the future IPC command surface.
 The publisher also has a retained dependency/root helper for publish flows that
 must upload snapshot or tail objects before publishing the manifest root.
 For settings tails, the bridge can convert local `SyncChangeRecord` values into

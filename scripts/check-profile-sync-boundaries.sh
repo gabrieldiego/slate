@@ -352,6 +352,10 @@ require_text \
     'profile-sync bridge wrappers must have focused regression coverage for BroadwebdClient trait objects.'
 require_text \
     crates/profile-sync/src/lib.rs \
+    'broadwebd_profile_sync_bridges_accept_envelope_only_clients' \
+    'profile-sync bridge wrappers must work through an envelope-only BroadwebdClient implementation.'
+require_text \
+    crates/profile-sync/src/lib.rs \
     'SettingsSyncRootObjectProviderIssue' \
     'profile-sync health reports must expose structured root-object provider issues.'
 require_text \
@@ -408,9 +412,17 @@ require_text \
     '`ProfileSyncObjectSource` trait over broadwebd'\''s `BroadwebdClient` boundary' \
     'Profile-sync architecture must document that runtime bridge wrappers use BroadwebdClient.'
 require_text \
+    docs/architecture/profile-sync.md \
+    'envelope-only client that implements `dispatch_service_request`' \
+    'Profile-sync architecture must document envelope-only bridge coverage.'
+require_text \
     docs/roadmap.md \
     'source, publisher, runner, and scheduler bridge wrappers now hold' \
     'Roadmap must record profile-sync bridge adoption of the BroadwebdClient boundary.'
+require_text \
+    docs/roadmap.md \
+    'envelope-only `BroadwebdClient` regression' \
+    'Roadmap must record envelope-only profile-sync bridge coverage.'
 require_text \
     docs/roadmap.md \
     'Socketless broadweb models must stay behind transport shims' \
@@ -581,6 +593,7 @@ run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_rel
 run_test slate-broadwebd local_fixture_root_health_reports_stale_latest_object_holders
 run_test slate-broadwebd local_fixture_root_health_reports_offline_latest_object_holders
 run_test slate-broadwebd local_fixture_retained_claim_requires_provider_bytes
+run_test slate-profile-sync broadwebd_profile_sync_bridges_accept_envelope_only_clients
 run_test slate-profile-sync broadwebd_profile_sync_bridges_accept_client_trait_objects
 run_test slate-profile-sync broadwebd_publisher_and_source_use_stateful_kubo_profile_sync_model
 run_test slate-profile-sync broadwebd_stateful_kubo_model_shares_roots_and_objects_across_daemons

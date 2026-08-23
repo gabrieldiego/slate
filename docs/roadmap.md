@@ -280,6 +280,11 @@ Current baseline:
 - `slate-profile-sync` has started consuming that boundary directly: its
   source, publisher, runner, and scheduler bridge wrappers now hold
   `BroadwebdClient` trait objects instead of concrete daemon references.
+- `slate-profile-sync` now has an envelope-only `BroadwebdClient` regression
+  that implements `dispatch_service_request` without a `BroadwebDaemon`. This
+  proves the profile-sync source, publisher, and runner bridges can work through
+  the future IPC-shaped service envelope while the test remains fully
+  in-process.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the
