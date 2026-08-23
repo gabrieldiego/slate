@@ -11356,7 +11356,9 @@ mod tests {
         ProfileSyncProviderRoles as BroadwebdProfileSyncProviderRoles,
         ProfileSyncRequest as BroadwebdProfileSyncRequest,
         ProfileSyncResponse as BroadwebdProfileSyncResponse, ResourceBudget,
-        test_fixtures::{InProcessBroadwebNetwork, InternalKuboRpcResponse},
+        test_fixtures::{
+            InProcessBroadwebNetwork, InternalKuboRpcResponse, ProfileSyncFixtureCapacity,
+        },
     };
     #[cfg(feature = "local-preview-fixtures")]
     use slate_storage::DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID;
@@ -25990,6 +25992,126 @@ mod tests {
                 .settings_root_health
                 .online_retaining_providers,
             2
+        );
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn scheduler_surfaces_iroh_node_materialized_provider_fixture_capacity() {
+        let network =
+            InProcessBroadwebNetwork::with_profile_sync_capacity(ProfileSyncFixtureCapacity {
+                max_providers: Some(2),
+                max_objects: Some(3),
+                max_roots: Some(4),
+            });
+        let device_state_root = test_state_root("scheduler-iroh-capacity-device");
+        let provider_state_root = test_state_root("scheduler-iroh-capacity-provider");
+        let db_root = test_state_root("scheduler-iroh-capacity-db");
+        let device_id = "runtime-scheduler-iroh-capacity-a";
+        let provider_id = "iroh-capacity-provider";
+        let provider_endpoint_ref = "iroh-node:capacity-limited-node";
+        let device_daemon = network
+            .daemon_for_device(&device_state_root, ResourceBudget::default(), device_id)
+            .expect("start bounded in-process Iroh capacity device daemon");
+        let provider_daemon = network
+            .daemon_for_provider_with_roles(
+                &provider_state_root,
+                ResourceBudget::default(),
+                provider_id,
+                "socketless-iroh-model-provider",
+                BroadwebdProfileSyncProviderRoles::availability_provider(),
+            )
+            .expect("start bounded socketless Iroh-modeled provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            device_id,
+        )
+        .expect("open bounded Iroh scheduler settings database");
+        let profile = "schedulerirohcapacityprofile";
+        let settings_root_id = "settings/latest";
+        let content_key = ProfileSyncContentKey::from_bytes([97; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let signer =
+            ProfileSyncDeviceSigner::generate(device_id).expect("generate Iroh capacity signer");
+        register_test_content_key_epoch(&database, profile);
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: signer.public_key().expect("local public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register Iroh capacity local trusted public key");
+        authorize_test_storage_provider(&database, profile, provider_id);
+        database
+            .upsert_storage_provider(&StorageProviderUpdate {
+                endpoint_ref: Some(provider_endpoint_ref.to_string()),
+                ..test_storage_provider_update(
+                    &network,
+                    profile,
+                    provider_id,
+                    "socketless-iroh-model-provider",
+                    "Iroh capacity-limited profile-sync provider",
+                    true,
+                    true,
+                    true,
+                )
+            })
+            .expect("write Iroh capacity provider metadata");
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write Iroh capacity local setting");
+
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::local_deterministic_simulation(),
+            vec![super::SettingsSyncProtocolProviderDaemon::new(
+                provider_id,
+                provider_endpoint_ref,
+                &provider_daemon,
+            )],
+        );
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+
+        let error = match scheduler
+            .run_once_with_stored_protocol_materializer_retention_provider_handles(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &signer),
+                4,
+                &materializer,
+            ) {
+            Ok(_) => panic!("bounded Iroh-modeled provider should fail retention capacity"),
+            Err(error) => error,
+        };
+
+        assert!(matches!(
+            error,
+            ProfileSyncCycleWithHealthError::Retention(BroadwebdError::UnsupportedRequest(message))
+                if message.contains("object capacity exceeded")
+        ));
+        assert!(
+            database
+                .profile_sync_root(profile, settings_root_id)
+                .expect("read settings root after bounded Iroh capacity failure")
+                .is_some(),
+            "local publish should complete before materialized provider retention hits capacity"
+        );
+        let retained = provider_daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
+                BroadwebdProfileSyncProfileRequest::new(profile),
+            ))
+            .expect("bounded Iroh provider can list retained objects after failure");
+        assert_eq!(
+            retained,
+            BroadwebdProfileSyncResponse::RetainedObjects {
+                object_ids: Vec::new(),
+            }
         );
 
         let _ = std::fs::remove_dir_all(device_state_root);

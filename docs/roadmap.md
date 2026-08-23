@@ -442,7 +442,11 @@ Current baseline:
   succeeds after the fixture releases the transfer path. A live-transfer-only
   Iroh-shaped peer is still rejected for durable retention when broadwebd health
   does not advertise the availability role, even if local stored metadata claims
-  it can retain data.
+  it can retain data. The same Iroh-shaped materialized-provider path now also
+  inherits `InProcessBroadwebNetwork` fixture capacity limits: a bounded local
+  publish can complete, then provider retention fails before the materialized
+  provider grows the shared in-process object store beyond its configured
+  object budget.
 - Internal broadweb models must remain socket substitutes, not protocol
   implementations. IPFS/IPNS, Iroh, Tor, I2P, and future adapters should keep
   building their normal routing plans, requests, responses, parsers, privacy
@@ -1740,9 +1744,9 @@ Next:
   delayed sync, availability loss, pinning policy, and conflicts entirely
   through in-process fixture transports, without loopback ports, the real
   internet, Tor, public IPFS/IPNS, or external relays.
-- Extend bounded fixture-state accounting from the shared local profile-sync
-  fixture store into Kubo/IPNS, Iroh-like, and future protocol models at the
-  socket/transport shim layer, not inside production protocol request builders.
+- Continue extending bounded fixture-state accounting from the shared local
+  profile-sync fixture store into future protocol models at the socket/transport
+  shim layer, not inside production protocol request builders.
 - Keep fixture behavior behind transport executors or shims. Protocol adapters
   should still build and parse production-shaped HTTP, Kubo, IPNS, Iroh-like,
   Tor/I2P, LAN, or retention-provider messages; the test layer only swaps the

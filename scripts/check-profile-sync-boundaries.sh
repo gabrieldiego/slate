@@ -375,6 +375,14 @@ require_text \
     docs/roadmap.md \
     'socketless model rejects new encrypted objects' \
     'Roadmap must record bounded Kubo/IPNS profile-sync fixture state.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'scheduler_surfaces_iroh_node_materialized_provider_fixture_capacity' \
+    'Iroh-shaped protocol materializer coverage must include bounded fixture-state enforcement.'
+require_text \
+    docs/roadmap.md \
+    'Iroh-shaped materialized-provider path now also' \
+    'Roadmap must record bounded Iroh-shaped materialized-provider fixture state.'
 
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
