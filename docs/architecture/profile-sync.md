@@ -1013,7 +1013,10 @@ fixtures before retention.
 Protocol materializers can drive the same compaction handoff from selected
 multiaddr or deferred endpoint plans; they return normal retention-provider
 handles before compaction, keeping adapter-specific socket behavior outside
-scheduler state.
+scheduler state. The secret-backed protocol materializer compaction regression
+now runs the scheduler, provider retention handle, and post-run manifest fetch
+through framed broadwebd clients, so this compaction path is also checked across
+the future daemon byte boundary.
 The first `iroh-node:<node>` checkpoint stays at this materializer boundary:
 tests treat the endpoint as a deferred protocol target, materialize it through
 a caller-supplied socketless provider daemon, verify that read-only previews do

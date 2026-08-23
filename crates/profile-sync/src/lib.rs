@@ -24190,7 +24190,7 @@ mod tests {
     }
 
     #[test]
-    fn scheduler_protocol_stored_compaction_derives_active_key_from_sync_secret() {
+    fn scheduler_protocol_stored_compaction_derives_active_key_through_framed_clients() {
         let network = InProcessBroadwebNetwork::new();
         let device_state_root = test_state_root("scheduler-protocol-secret-compaction-device");
         let provider_state_root = test_state_root("scheduler-protocol-secret-compaction-provider");
@@ -24214,6 +24214,8 @@ mod tests {
                 BroadwebdProfileSyncProviderRoles::availability_provider(),
             )
             .expect("start socketless protocol secret compaction materialized provider daemon");
+        let device_client = ServiceFrameBroadwebdClient::new(&device_daemon);
+        let provider_client = ServiceFrameBroadwebdClient::new(&provider_daemon);
         let database = SlateProfileDatabase::open_resolved_with_device_id(
             db_root.join(DEFAULT_DATABASE_FILE_NAME),
             "runtime-scheduler-protocol-secret-compaction-a",
@@ -24275,11 +24277,11 @@ mod tests {
             vec![super::SettingsSyncProtocolProviderDaemon::new(
                 provider_id,
                 provider_endpoint,
-                &provider_daemon,
+                &provider_client,
             )],
         );
         let config = SettingsSyncSchedulerConfig::new(profile, settings_root_id, policy);
-        let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
+        let run = BroadwebdSettingsSyncScheduler::new(&device_client)
             .compact_once_with_stored_protocol_materializer_retention_provider_handles_and_sync_secret(
                 &database,
                 &config,
@@ -24360,7 +24362,7 @@ mod tests {
             .derive_profile_sync_content_key(profile, TEST_CONTENT_KEY_ID)
             .expect("derive protocol secret compaction content key");
         let public_key = signer.public_key().expect("local public key");
-        let source = BroadwebdProfileSyncObjectSource::new(&device_daemon);
+        let source = BroadwebdProfileSyncObjectSource::new(&device_client);
         let manifest_object = source
             .get_profile_sync_object(profile, compaction.publication.manifest_object_id.as_str())
             .expect("fetch protocol secret-derived compaction manifest");

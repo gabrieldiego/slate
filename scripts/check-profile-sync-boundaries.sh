@@ -404,6 +404,10 @@ require_text \
     'Kubo-shaped protocol materialization must run through a byte-framed BroadwebdClient handle in local tests.'
 require_text \
     crates/profile-sync/src/lib.rs \
+    'scheduler_protocol_stored_compaction_derives_active_key_through_framed_clients' \
+    'Secret-backed protocol materialized compaction must run through byte-framed BroadwebdClient handles in local tests.'
+require_text \
+    crates/profile-sync/src/lib.rs \
     'daemon: &'\''a dyn BroadwebdClient' \
     'profile-sync runtime bridge wrappers must consume the IPC-neutral broadwebd client boundary.'
 require_text \
@@ -894,7 +898,7 @@ run_test slate-profile-sync broadwebd_settings_sync_scheduler_compacts_with_sele
 run_test slate-profile-sync broadwebd_settings_sync_scheduler_compacts_with_stored_retention_provider_handles
 run_test slate-profile-sync broadwebd_settings_sync_scheduler_stored_compaction_derives_active_key_from_sync_secret
 run_test slate-profile-sync scheduler_stored_fixture_compaction_derives_active_key_from_sync_secret
-run_test slate-profile-sync scheduler_protocol_stored_compaction_derives_active_key_from_sync_secret
+run_test slate-profile-sync scheduler_protocol_stored_compaction_derives_active_key_through_framed_clients
 run_test slate-profile-sync broadwebd_kubo_materialized_provider_runs_through_framed_client
 run_test slate-profile-sync scheduler_membership_fixture_stored_provider_derives_active_key_from_sync_secret
 run_test_with_features slate-profile-sync local-preview-fixtures local_settings_sync_current_cycle_publishes_existing_settings_without_preview_write

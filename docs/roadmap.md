@@ -1610,6 +1610,10 @@ Current baseline:
   caller-supplied protocol materializer, publishes encrypted settings, and
   retains the object set without scheduler callers passing raw content-key
   bytes.
+- Secret-backed protocol-materialized compaction now runs through framed
+  broadwebd clients for the scheduler, materialized provider handle, and
+  post-run manifest fetch, so snapshot compaction also crosses the socketless
+  byte boundary before the real daemon IPC transport exists.
 - Membership-aware protocol-materialized stored-provider scheduler runs now
   have the same secret-backed path. A local-only fixture publishes the
   membership log, materializes the selected multiaddr provider, publishes
