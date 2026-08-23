@@ -1074,7 +1074,10 @@ separate ways. Root health reports delayed mutable-root candidate counts,
 delayed publisher provider ids, and delayed object-transfer provider ids, so
 scheduler-facing health can distinguish a truly empty root, a root hidden by
 delayed in-process propagation, and a visible root whose latest object is
-temporarily unreachable. The fixture keeps one visible root candidate per
+temporarily unreachable. The fixture can also keep a retained-object claim while
+removing the provider-held bytes, so verification reports the stale claim but
+retaining-provider quorum fails closed until bytes are restored. The fixture
+keeps one visible root candidate per
 publishing device and can list competing candidates in newest-first order,
 giving merge tests a local model for equal-control devices publishing different
 signed roots.

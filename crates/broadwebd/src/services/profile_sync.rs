@@ -485,13 +485,22 @@ impl ProfileSyncService {
             request.object_id.clone(),
         );
         let retained = store.retained.contains(&retained_key);
-        let available = find_online_object(
-            &store,
-            &self.provider_id,
-            &request.profile,
-            &request.object_id,
-        )
-        .is_some();
+        let available = if retained {
+            provider_has_object(
+                &store,
+                &self.provider_id,
+                &request.profile,
+                &request.object_id,
+            )
+        } else {
+            find_online_object(
+                &store,
+                &self.provider_id,
+                &request.profile,
+                &request.object_id,
+            )
+            .is_some()
+        };
         Ok(ProfileSyncResponse::RetainedObjectStatus {
             object_id: request.object_id,
             retained,
@@ -1173,6 +1182,54 @@ impl LocalProfileSyncFixture {
         Ok(())
     }
 
+    pub fn remove_device_object_bytes(
+        &self,
+        device_id: impl AsRef<str>,
+        profile: impl AsRef<str>,
+        object_id: impl AsRef<str>,
+    ) -> Result<bool, BroadwebdError> {
+        self.remove_provider_object_bytes(local_fixture_provider_id(device_id), profile, object_id)
+    }
+
+    pub fn remove_availability_provider_object_bytes(
+        &self,
+        provider_id: impl AsRef<str>,
+        profile: impl AsRef<str>,
+        object_id: impl AsRef<str>,
+    ) -> Result<bool, BroadwebdError> {
+        self.remove_provider_object_bytes(
+            local_fixture_availability_provider_id(provider_id),
+            profile,
+            object_id,
+        )
+    }
+
+    pub fn remove_provider_object_bytes(
+        &self,
+        provider_id: impl AsRef<str>,
+        profile: impl AsRef<str>,
+        object_id: impl AsRef<str>,
+    ) -> Result<bool, BroadwebdError> {
+        let provider_id = provider_id.as_ref();
+        let profile = profile.as_ref();
+        let object_id = object_id.as_ref();
+        validate_profile(profile)?;
+        validate_profile_sync_object_id(object_id)?;
+        let mut store = self
+            .store
+            .lock()
+            .map_err(|_| BroadwebdError::Request("profile sync store lock poisoned".to_string()))?;
+        require_known_profile_sync_provider(&store, provider_id)?;
+        Ok(store
+            .objects
+            .remove(&(
+                provider_id.to_string(),
+                profile.to_string(),
+                object_id.to_string(),
+            ))
+            .is_some())
+    }
+
     pub fn set_device_transfer_available(
         &self,
         source_device_id: impl AsRef<str>,
@@ -1533,6 +1590,7 @@ fn online_retaining_provider_count(
                 && provider_is_fresh_online_for_role(store, provider_id, |roles| {
                     roles.availability && roles.object_transfer
                 })
+                && provider_has_object(store, provider_id, profile, object_id)
         })
         .count()
 }
@@ -3454,6 +3512,135 @@ mod tests {
             verified,
             ProfileSyncResponse::RetainedObjectStatus {
                 object_id: local_object_id(b"encrypted object only on device a"),
+                retained: true,
+                available: true,
+            }
+        );
+    }
+
+    #[test]
+    fn local_fixture_retained_claim_requires_provider_bytes() {
+        let fixture = LocalProfileSyncFixture::new();
+        let mut device_a = PluginRegistry::new();
+        let mut device_b = PluginRegistry::new();
+        let mut availability_provider = PluginRegistry::new();
+        let budget = ResourceBudget::default();
+
+        device_a.register_service(fixture.service_for_device("a"));
+        device_b.register_service(fixture.service_for_device("b"));
+        availability_provider.register_service(fixture.service_for_availability_provider("pin-1"));
+
+        let put = device_a
+            .profile_sync(
+                ProfileSyncRequest::PutEncryptedObject(ProfileSyncPutObjectRequest::new(
+                    "default",
+                    b"encrypted object with missing retained bytes".to_vec(),
+                )),
+                &budget,
+            )
+            .expect("device a can put retained-claim fixture data");
+        let ProfileSyncResponse::PutEncryptedObject { object_id } = put else {
+            panic!("unexpected put response");
+        };
+        device_a
+            .profile_sync(
+                ProfileSyncRequest::PublishRoot(ProfileSyncRootUpdate::new(
+                    "default",
+                    "settings/latest",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("device a can publish retained-claim root");
+        availability_provider
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("availability provider can retain object before bytes are removed");
+
+        assert!(
+            fixture
+                .remove_availability_provider_object_bytes("pin-1", "default", object_id.as_str())
+                .expect("fixture can remove provider-held bytes")
+        );
+
+        let retained_claim = availability_provider
+            .profile_sync(
+                ProfileSyncRequest::ListRetainedObjects(ProfileSyncProfileRequest::new("default")),
+                &budget,
+            )
+            .expect("provider still reports retained object claim");
+        assert_eq!(
+            retained_claim,
+            ProfileSyncResponse::RetainedObjects {
+                object_ids: vec![object_id.clone()],
+            }
+        );
+        let retained_status = availability_provider
+            .profile_sync(
+                ProfileSyncRequest::VerifyRetainedObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("provider can verify missing retained bytes");
+        assert_eq!(
+            retained_status,
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id: object_id.clone(),
+                retained: true,
+                available: false,
+            }
+        );
+
+        let health = device_b
+            .profile_sync(
+                ProfileSyncRequest::RootHealth(ProfileSyncRootHealthRequest::new(
+                    "default",
+                    "settings/latest",
+                )),
+                &budget,
+            )
+            .expect("receiver can inspect root health with missing retained bytes");
+        let ProfileSyncResponse::RootHealth { health } = health else {
+            panic!("unexpected root health response");
+        };
+        assert_eq!(health.latest_object_id.as_deref(), Some(object_id.as_str()));
+        assert!(health.latest_object_available);
+        assert_eq!(
+            health.latest_object_available_provider_ids,
+            vec!["local-fixture-device-a".to_string()]
+        );
+        assert_eq!(health.online_retaining_providers, 0);
+        assert!(health.degraded);
+        assert!(health.message.contains("not retained"));
+
+        availability_provider
+            .profile_sync(
+                ProfileSyncRequest::RetainObject(ProfileSyncObjectRequest::new(
+                    "default",
+                    object_id.clone(),
+                )),
+                &budget,
+            )
+            .expect("provider can restore retained bytes from an online source");
+        let restored_status = availability_provider
+            .profile_sync(
+                ProfileSyncRequest::VerifyRetainedObject(ProfileSyncObjectRequest::new(
+                    "default", object_id,
+                )),
+                &budget,
+            )
+            .expect("provider can verify restored retained bytes");
+        assert_eq!(
+            restored_status,
+            ProfileSyncResponse::RetainedObjectStatus {
+                object_id: local_object_id(b"encrypted object with missing retained bytes"),
                 retained: true,
                 available: true,
             }

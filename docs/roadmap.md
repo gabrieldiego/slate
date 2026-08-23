@@ -524,6 +524,11 @@ Current baseline:
   through the same bridge. The receiver fails at the pull/source boundary and
   leaves the previous shared root, materialized settings, and trusted-device
   sequence unchanged.
+- The local profile-sync fixture can now model a provider that still claims a
+  retained object after its provider-held bytes disappear. Retained-object
+  verification reports `retained: true` with unavailable bytes, and root health
+  no longer counts that provider toward retaining-provider quorum until bytes
+  are restored through the normal retain path.
 - The same bridge now publishes a real signed encrypted settings tail manifest
   through one Kubo fixture daemon, then verifies the manifest and tail bytes
   fetched by a second daemon through the shared stateful Kubo/IPNS model. The
