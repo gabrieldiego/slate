@@ -1016,11 +1016,14 @@ The first `iroh-node:<node>` checkpoint stays at this materializer boundary:
 tests treat the endpoint as a deferred protocol target, materialize it through
 a caller-supplied socketless provider daemon, verify that read-only previews do
 not mutate `slate-settings.db`, and then retain encrypted settings objects
-through the same scheduler path. A companion regression leaves the provider
-visible in broadwebd discovery but withholds the socketless materializer handle,
-proving that the scheduler blocks on provider quorum before publishing or
-mutating roots. Another regression keeps the Iroh-modeled provider discoverable
-but delays transfer from the publishing device to that provider; the scheduler
+through the same scheduler path. That happy-path materialized provider now also
+runs behind the broadwebd framed-client adapter, keeping the Iroh-shaped model
+aligned with the future daemon byte boundary. A companion regression leaves the
+provider visible in broadwebd discovery but withholds the socketless
+materializer handle, proving that the scheduler blocks on provider quorum
+before publishing or mutating roots. Another regression keeps the Iroh-modeled
+provider discoverable but delays transfer from the publishing device to that
+provider; the scheduler
 surfaces the retention failure, the provider retains no bytes, and a later run
 can recover after the fixture releases transfer. This is an internal model of
 rendezvous and transfer behavior, not a live Iroh adapter; a production adapter

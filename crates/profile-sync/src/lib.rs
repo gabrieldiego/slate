@@ -26369,7 +26369,7 @@ mod tests {
     }
 
     #[test]
-    fn scheduler_runs_with_iroh_node_protocol_materialized_provider() {
+    fn scheduler_runs_with_iroh_node_protocol_materialized_provider_through_framed_clients() {
         let network = InProcessBroadwebNetwork::new();
         let device_state_root = test_state_root("scheduler-iroh-provider-device");
         let provider_state_root = test_state_root("scheduler-iroh-provider-provider");
@@ -26392,6 +26392,8 @@ mod tests {
                 BroadwebdProfileSyncProviderRoles::availability_provider(),
             )
             .expect("start socketless Iroh-modeled provider daemon");
+        let device_client = ServiceFrameBroadwebdClient::new(&device_daemon);
+        let provider_client = ServiceFrameBroadwebdClient::new(&provider_daemon);
         let database = SlateProfileDatabase::open_resolved_with_device_id(
             db_root.join(DEFAULT_DATABASE_FILE_NAME),
             "runtime-scheduler-iroh-a",
@@ -26435,7 +26437,7 @@ mod tests {
             vec![super::SettingsSyncProtocolProviderDaemon::new(
                 provider_id,
                 provider_endpoint_ref,
-                &provider_daemon,
+                &provider_client,
             )],
         );
         let config = SettingsSyncSchedulerConfig::new(
@@ -26443,7 +26445,7 @@ mod tests {
             settings_root_id,
             SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
         );
-        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_client);
         let latest_revision_before_preview = database
             .latest_sync_revision(profile)
             .expect("read Iroh preview latest revision");

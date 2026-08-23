@@ -921,6 +921,10 @@ Current baseline:
   be materialized into a normal retention-provider handle, pass the existing
   endpoint-ref checks, and satisfy the retention quorum in the socketless
   in-process broadweb fixture without adding any live network dependency.
+- The Iroh-shaped deferred-protocol materializer happy path now runs through
+  framed broadwebd clients for both the scheduler and the materialized provider
+  handle, keeping the internal model aligned with the future daemon byte
+  boundary while still avoiding loopback sockets and real relays.
 - Stored-provider scheduler runs now also cover a socketless Kubo
   profile-sync provider materialized from a deferred `provider:` endpoint. The
   regression publishes a `slate-settings.db` snapshot, updates the settings and

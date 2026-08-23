@@ -396,6 +396,10 @@ require_text \
     'profile-sync protocol materializer capacity limits must have focused regression coverage.'
 require_text \
     crates/profile-sync/src/lib.rs \
+    'scheduler_runs_with_iroh_node_protocol_materialized_provider_through_framed_clients' \
+    'Iroh-shaped protocol materialization must run through byte-framed BroadwebdClient handles in local tests.'
+require_text \
+    crates/profile-sync/src/lib.rs \
     'daemon: &'\''a dyn BroadwebdClient' \
     'profile-sync runtime bridge wrappers must consume the IPC-neutral broadwebd client boundary.'
 require_text \
