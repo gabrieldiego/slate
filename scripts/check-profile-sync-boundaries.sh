@@ -182,6 +182,14 @@ require_text \
     crates/broadwebd/src/lib.rs \
     'daemon_dispatches_profile_sync_through_service_request_envelope' \
     'broadwebd must cover profile-sync dispatch through the IPC-shaped service request envelope.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'daemon: &.*dyn BroadwebdClient' \
+    'slate-profile-sync provider handles must depend on the IPC-neutral broadwebd client trait.'
+reject_protocol_model_leak \
+    crates/profile-sync/src/lib.rs \
+    'SettingsSyncRetentionProviderHandle.*BroadwebDaemon|retention_provider_daemons: \&\[\&BroadwebDaemon\]|Vec<\&.*BroadwebDaemon>|daemon: \&.*BroadwebDaemon' \
+    'slate-profile-sync scheduler retention-provider APIs must not require the in-process BroadwebDaemon type.'
 
 protocol_model_terms='slate-fixture|InProcessBroadwebNetwork|Internal[A-Za-z0-9_]*Fixture|ProfileSyncModel|socketless-fixture|in-process-fixture|simulated|Simulation|fixture model|internal model'
 

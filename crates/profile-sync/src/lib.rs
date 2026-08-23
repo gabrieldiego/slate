@@ -3,10 +3,11 @@
 use core::fmt;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "local-preview-fixtures")]
+use slate_broadwebd::BroadwebDaemon;
+#[cfg(feature = "local-preview-fixtures")]
 use slate_broadwebd::test_fixtures::LocalProfileSyncFixture;
 use slate_broadwebd::{
-    BroadwebDaemon, BroadwebdClient, BroadwebdError,
-    IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
+    BroadwebdClient, BroadwebdError, IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
     ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
     ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
     ProfileSyncProviderHealth as BroadwebdProfileSyncProviderHealth,
@@ -1736,11 +1737,11 @@ fn shared_root_candidate_object_ids(
 pub struct SettingsSyncRetentionProviderHandle<'a> {
     pub provider_id: &'a str,
     pub endpoint_ref: Option<&'a str>,
-    pub daemon: &'a BroadwebDaemon,
+    pub daemon: &'a dyn BroadwebdClient,
 }
 
 impl<'a> SettingsSyncRetentionProviderHandle<'a> {
-    pub fn new(provider_id: &'a str, daemon: &'a BroadwebDaemon) -> Self {
+    pub fn new(provider_id: &'a str, daemon: &'a dyn BroadwebdClient) -> Self {
         Self {
             provider_id,
             endpoint_ref: None,
@@ -1751,7 +1752,7 @@ impl<'a> SettingsSyncRetentionProviderHandle<'a> {
     pub fn with_endpoint_ref(
         provider_id: &'a str,
         endpoint_ref: &'a str,
-        daemon: &'a BroadwebDaemon,
+        daemon: &'a dyn BroadwebdClient,
     ) -> Self {
         Self {
             provider_id,
@@ -3138,14 +3139,14 @@ pub struct SettingsSyncInProcessFixtureMaterializationTarget {
 pub struct SettingsSyncInProcessFixtureProviderDaemon<'a> {
     pub provider_id: &'a str,
     pub fixture_network_id: &'a str,
-    pub daemon: &'a BroadwebDaemon,
+    pub daemon: &'a dyn BroadwebdClient,
 }
 
 impl<'a> SettingsSyncInProcessFixtureProviderDaemon<'a> {
     pub fn new(
         provider_id: &'a str,
         fixture_network_id: &'a str,
-        daemon: &'a BroadwebDaemon,
+        daemon: &'a dyn BroadwebdClient,
     ) -> Self {
         Self {
             provider_id,
@@ -3160,7 +3161,7 @@ pub struct SettingsSyncInProcessFixtureMaterializedProvider<'a> {
     pub provider_id: String,
     pub fixture_network_id: String,
     pub endpoint_ref: String,
-    pub daemon: &'a BroadwebDaemon,
+    pub daemon: &'a dyn BroadwebdClient,
 }
 
 impl<'a> SettingsSyncInProcessFixtureMaterializedProvider<'a> {
@@ -3274,11 +3275,15 @@ fn append_in_process_fixture_materialization_issues(
 pub struct SettingsSyncProtocolProviderDaemon<'a> {
     pub provider_id: &'a str,
     pub endpoint_ref: &'a str,
-    pub daemon: &'a BroadwebDaemon,
+    pub daemon: &'a dyn BroadwebdClient,
 }
 
 impl<'a> SettingsSyncProtocolProviderDaemon<'a> {
-    pub fn new(provider_id: &'a str, endpoint_ref: &'a str, daemon: &'a BroadwebDaemon) -> Self {
+    pub fn new(
+        provider_id: &'a str,
+        endpoint_ref: &'a str,
+        daemon: &'a dyn BroadwebdClient,
+    ) -> Self {
         Self {
             provider_id,
             endpoint_ref,
@@ -3291,7 +3296,7 @@ impl<'a> SettingsSyncProtocolProviderDaemon<'a> {
 pub struct SettingsSyncProtocolMaterializedProvider<'a> {
     pub provider_id: String,
     pub endpoint_ref: String,
-    pub daemon: &'a BroadwebDaemon,
+    pub daemon: &'a dyn BroadwebdClient,
 }
 
 impl<'a> SettingsSyncProtocolMaterializedProvider<'a> {
@@ -5117,7 +5122,7 @@ impl SettingsSyncStoredProtocolProviderRetentionProviderMembershipRun<'_> {
 
 struct SelectedSettingsSyncRetentionProviders<'a> {
     plan: SettingsSyncScheduledCyclePlan,
-    daemons: Vec<&'a BroadwebDaemon>,
+    daemons: Vec<&'a dyn BroadwebdClient>,
 }
 
 fn stored_provider_metadata_issues(
@@ -5667,7 +5672,7 @@ struct MaterializedStoredRetentionProviders<'a> {
     endpoint_mismatch_retention_provider_ids: Vec<String>,
     duplicate_handle_retention_provider_ids: Vec<String>,
     unsupported_endpoint_retention_provider_ids: Vec<String>,
-    daemons: Vec<&'a BroadwebDaemon>,
+    daemons: Vec<&'a dyn BroadwebdClient>,
 }
 
 impl<'a> MaterializedStoredRetentionProviders<'a> {
@@ -6590,7 +6595,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         content_key: &ProfileSyncContentKey,
         signer: &ProfileSyncDeviceSigner,
         policy: &SettingsSyncCyclePolicy,
-        retention_provider_daemons: &[&BroadwebDaemon],
+        retention_provider_daemons: &[&dyn BroadwebdClient],
     ) -> Result<SettingsSyncCycleWithRetentionRun, ProfileSyncCycleWithHealthError> {
         let preflight = self.settings_sync_cycle_preflight_with_active_key_policy(
             database,
@@ -6645,7 +6650,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         signer: &ProfileSyncDeviceSigner,
         policy: &SettingsSyncCyclePolicy,
         now: i64,
-        retention_provider_daemons: &[&BroadwebDaemon],
+        retention_provider_daemons: &[&dyn BroadwebdClient],
     ) -> Result<SettingsSyncCompactionWithRetentionRun, ProfileSyncCycleWithHealthError> {
         let preflight = self.settings_sync_cycle_preflight_with_active_key_policy(
             database,
@@ -6672,7 +6677,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         signer: &ProfileSyncDeviceSigner,
         policy: &SettingsSyncCyclePolicy,
         now: i64,
-        retention_provider_daemons: &[&BroadwebDaemon],
+        retention_provider_daemons: &[&dyn BroadwebdClient],
         preflight: &SettingsSyncCyclePreflight,
     ) -> Result<SettingsSyncCompactionWithRetentionRun, ProfileSyncCycleWithHealthError> {
         let compaction = BroadwebdProfileSyncPublisher::new(self.daemon)
@@ -6782,7 +6787,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         content_key: &ProfileSyncContentKey,
         signer: &ProfileSyncDeviceSigner,
         policy: &SettingsSyncCyclePolicy,
-        retention_provider_daemons: &[&BroadwebDaemon],
+        retention_provider_daemons: &[&dyn BroadwebdClient],
     ) -> Result<SettingsSyncCycleWithSharedRootRetentionRun, ProfileSyncCycleWithHealthError> {
         let preflight = self.settings_sync_cycle_preflight_with_active_key_policy(
             database,
@@ -6807,7 +6812,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         content_key: &ProfileSyncContentKey,
         signer: &ProfileSyncDeviceSigner,
         policy: &SettingsSyncCyclePolicy,
-        retention_provider_daemons: &[&BroadwebDaemon],
+        retention_provider_daemons: &[&dyn BroadwebdClient],
         preflight: &SettingsSyncCyclePreflight,
     ) -> Result<SettingsSyncCycleWithSharedRootRetentionRun, ProfileSyncCycleWithHealthError> {
         let cycle = self.run_settings_sync_cycle(
@@ -7121,7 +7126,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         retention_policy: ProfileSyncRetentionPolicy,
         max_publish_steps: u32,
         max_trusted_devices: u32,
-        retention_provider_daemons: &[&BroadwebDaemon],
+        retention_provider_daemons: &[&dyn BroadwebdClient],
     ) -> Result<SettingsSyncCycleWithMembershipLogRetentionRun, ProfileSyncCycleWithHealthError>
     {
         let cycle = self
@@ -7148,7 +7153,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         signer: &ProfileSyncDeviceSigner,
         policy: &SettingsSyncCyclePolicy,
         membership_log_root_id: &str,
-        retention_provider_daemons: &[&BroadwebDaemon],
+        retention_provider_daemons: &[&dyn BroadwebdClient],
         preflight: &SettingsSyncCyclePreflightWithMembershipLog,
     ) -> Result<SettingsSyncCycleWithMembershipLogRetentionRun, ProfileSyncCycleWithHealthError>
     {
@@ -7189,7 +7194,7 @@ impl<'a> BroadwebdSettingsSyncRunner<'a> {
         &self,
         profile: &str,
         cycle: SettingsSyncCycleWithMembershipLogRun,
-        retention_provider_daemons: &[&BroadwebDaemon],
+        retention_provider_daemons: &[&dyn BroadwebdClient],
     ) -> Result<SettingsSyncCycleWithMembershipLogRetentionRun, ProfileSyncCycleWithHealthError>
     {
         let retained_object_ids = cycle.published_object_ids();
@@ -9304,7 +9309,7 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         database: &SlateProfileDatabase,
         config: &SettingsSyncSchedulerConfig,
         secrets: SettingsSyncRuntimeSecrets<'_>,
-        retention_provider_daemons: &[&BroadwebDaemon],
+        retention_provider_daemons: &[&dyn BroadwebdClient],
     ) -> Result<SettingsSyncCycleWithSharedRootRetentionRun, ProfileSyncCycleWithHealthError> {
         BroadwebdSettingsSyncRunner::new(self.daemon)
             .run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers(
@@ -9324,7 +9329,7 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         config: &SettingsSyncSchedulerConfig,
         sync_secret: &SlateSyncSecret,
         signer: &ProfileSyncDeviceSigner,
-        retention_provider_daemons: &[&BroadwebDaemon],
+        retention_provider_daemons: &[&dyn BroadwebdClient],
     ) -> Result<SettingsSyncCycleWithSharedRootRetentionRun, ProfileSyncCycleWithHealthError> {
         let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
         let preflight = runner.settings_sync_cycle_preflight_with_active_key_policy(
