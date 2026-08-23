@@ -845,7 +845,9 @@ That path now also covers a signed encrypted settings tail manifest: the
 publisher uploads the real signed manifest and tail bytes through one daemon,
 another daemon resolves and fetches them through the shared Kubo/IPNS fixture
 model, and the source verifies the fetched bytes with the normal storage
-sync-object openers.
+sync-object openers. The Kubo-shaped stored-provider scheduler happy path now
+also runs behind the broadwebd framed-client adapter, so deferred `provider:`
+materialization is checked across the future daemon byte boundary.
 The runner can also return before-and-after health around one bounded settings
 sync cycle. That keeps the future runtime scheduler's first responsibility
 simple: run a capped cycle, inspect whether provider/root health changed, and

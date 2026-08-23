@@ -931,6 +931,9 @@ Current baseline:
   local device-head roots, and retains the resulting objects through
   broadwebd's in-process Kubo fixture without loopback sockets, DNS, public
   IPFS/IPNS, or an external Kubo daemon.
+- That Kubo-shaped deferred-provider scheduler path now runs through the
+  broadwebd framed-client adapter, so the socketless Kubo/IPNS fixture also
+  exercises the future daemon byte boundary.
 - The same socketless Kubo scheduler path now covers retained-object
   verification failures. If Kubo `pin/ls` reports a just-pinned manifest as not
   recursively pinned, the run returns structured retention issues and degraded

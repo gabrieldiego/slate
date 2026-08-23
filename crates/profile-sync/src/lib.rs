@@ -27175,7 +27175,7 @@ mod tests {
     }
 
     #[test]
-    fn broadwebd_settings_sync_scheduler_runs_with_kubo_profile_sync_materialized_provider() {
+    fn broadwebd_kubo_materialized_provider_runs_through_framed_client() {
         let network = InProcessBroadwebNetwork::new();
         let fixture = network.kubo_profile_sync_model();
         let kubo_state_root = test_state_root("scheduler-kubo-provider-daemon");
@@ -27190,6 +27190,7 @@ mod tests {
                 provider_id,
             )
             .expect("start socketless Kubo profile-sync daemon");
+        let kubo_client = ServiceFrameBroadwebdClient::new(&kubo_daemon);
         let database = SlateProfileDatabase::open_resolved_with_device_id(
             db_root.join(DEFAULT_DATABASE_FILE_NAME),
             "runtime-scheduler-kubo-a",
@@ -27236,7 +27237,7 @@ mod tests {
             vec![super::SettingsSyncProtocolProviderDaemon::new(
                 provider_id,
                 provider_endpoint_ref,
-                &kubo_daemon,
+                &kubo_client,
             )],
         );
         let config = SettingsSyncSchedulerConfig::new(
@@ -27244,7 +27245,7 @@ mod tests {
             settings_root_id,
             SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 1),
         );
-        let scheduler = BroadwebdSettingsSyncScheduler::new(&kubo_daemon);
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&kubo_client);
         let preview = scheduler
             .plan_once_with_stored_protocol_materializer_retention_provider_handles(
                 &database,
