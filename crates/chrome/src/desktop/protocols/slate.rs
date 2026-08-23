@@ -2645,6 +2645,8 @@ mod tests {
         assert!(settings_page.contains("Authorized providers"));
         assert!(settings_page.contains("profileSyncAuthorizedProviderStatus"));
         assert!(settings_page.contains("Sync issues"));
+        assert!(settings_page.contains("Sync health"));
+        assert!(settings_page.contains("profileSyncHealthStatus"));
         assert!(settings_page.contains("profileSyncIssueStatus"));
         assert!(settings_page.contains("Issue details"));
         assert!(settings_page.contains("profileSyncIssueDetails"));

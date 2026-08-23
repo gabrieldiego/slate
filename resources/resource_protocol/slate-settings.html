@@ -1146,6 +1146,20 @@
       });
     }
 
+    function profileSyncHealthStatus(state) {
+      const run = profileSyncLatestIssueRun(state);
+      if (!run) {
+        return "not checked";
+      }
+      if (run.degraded_after) {
+        return "degraded";
+      }
+      if (run.degraded_before) {
+        return "recovered";
+      }
+      return "healthy";
+    }
+
     function profileSyncIssueStatus(state) {
       const run = profileSyncLatestIssueRun(state);
       if (!run) {
@@ -1279,6 +1293,7 @@
         ["Local trial", profileSyncLocalTrialStatus(state)],
         ["Two-device trial", profileSyncTwoDeviceTrialStatus(state)],
         ["Endpoint status", profileSyncEndpointMaterializationStatus(state)],
+        ["Sync health", profileSyncHealthStatus(state)],
         ["Sync issues", profileSyncIssueStatus(state)]
       ];
       const issueDetails = profileSyncIssueDetails(state);

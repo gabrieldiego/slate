@@ -682,6 +682,14 @@ require_text \
     'Slate settings page must render endpoint materialization status from protocol-neutral reports.'
 require_text \
     resources/resource_protocol/slate-settings.html \
+    'Sync health' \
+    'Slate settings page must show profile-sync health after local sync checks.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'profileSyncHealthStatus' \
+    'Slate settings page must distinguish healthy, recovered, and degraded profile-sync health.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
     'retention_issues' \
     'Slate settings page must include retained-object issues in sync issue details.'
 require_text \

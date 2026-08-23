@@ -1723,6 +1723,11 @@ Current baseline:
   references. Fixture and protocol materializers can still hand over in-process
   daemons during tests, but the scheduler path no longer assumes Slate is linked
   directly to an in-process daemon when retaining published objects.
+- The Settings Profile Sync Preview now separates sync health from issue
+  details. After the current-settings or local trial action, the page reports
+  whether the latest local fixture run is healthy, still degraded, or recovered
+  from a degraded pre-run state, while issue details remain the protocol-neutral
+  retained-object, provider-selection, and endpoint problems.
 - `make profile-sync-boundary-check` now provides a low-memory regression gate
   for the sync work. It runs focused rail-app sync-domain checks, verifies that
   visible rail app sync descriptors match the seeded `slate-settings.db`
