@@ -1447,12 +1447,29 @@ fn profile_sync_local_readiness_json(
         "active_key_id": readiness.active_key_id.as_deref(),
         "app_domain_count": readiness.app_domain_count,
         "enabled_app_domain_count": readiness.enabled_app_domain_count,
+        "app_domains": profile_sync_app_domains_json(readiness.app_domains.as_slice()),
         "storage_provider_count": readiness.storage_provider_count,
         "enabled_storage_provider_count": readiness.enabled_storage_provider_count,
         "retention_capable_provider_count": readiness.retention_capable_provider_count,
         "authorized_retention_provider_count": readiness.authorized_retention_provider_count,
         "ready_for_manual_sync": readiness.ready_for_manual_sync,
         "blocked_reason": readiness.blocked_reason.as_deref(),
+    })
+}
+
+fn profile_sync_app_domains_json(
+    domains: &[slate_storage::AppSyncDomainRecord],
+) -> serde_json::Value {
+    serde_json::Value::Array(domains.iter().map(profile_sync_app_domain_json).collect())
+}
+
+fn profile_sync_app_domain_json(domain: &slate_storage::AppSyncDomainRecord) -> serde_json::Value {
+    serde_json::json!({
+        "domain": domain.domain.as_str(),
+        "schema_version": domain.schema_version,
+        "enabled": domain.enabled,
+        "privacy_classification": domain.privacy_classification.as_str(),
+        "sync_content": domain.sync_content,
     })
 }
 
@@ -2868,6 +2885,8 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-handoff-import\""));
         assert!(settings_page.contains("Current sync"));
         assert!(settings_page.contains("Two-device trial"));
+        assert!(settings_page.contains("Enabled domains"));
+        assert!(settings_page.contains("profileSyncEnabledAppDomainStatus"));
         assert!(settings_page.contains("Sync issues"));
         assert!(settings_page.contains("profileSyncIssueStatus"));
         assert!(settings_page.contains("Issue details"));

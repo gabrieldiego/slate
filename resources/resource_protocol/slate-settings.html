@@ -1062,6 +1062,24 @@
       return "missing";
     }
 
+    function profileSyncEnabledAppDomainStatus(state) {
+      const localSync = state && state.local_sync ? state.local_sync : null;
+      const domains = localSync && Array.isArray(localSync.app_domains) ?
+        localSync.app_domains :
+        [];
+      const enabledDomains = domains
+        .filter((domain) => domain && domain.enabled)
+        .map((domain) => profileSyncText(domain.domain, "unknown").replace(/_/g, " "));
+      if (enabledDomains.length === 0) {
+        return "none";
+      }
+      const visibleDomains = enabledDomains.slice(0, 4);
+      if (enabledDomains.length > visibleDomains.length) {
+        visibleDomains.push(`${enabledDomains.length - visibleDomains.length} more`);
+      }
+      return visibleDomains.join(", ");
+    }
+
     function profileSyncLocalTrialStatus(state) {
       if (!state || !state.last_trial) {
         return "not run";
@@ -1178,6 +1196,7 @@
         ["Provider", profileSyncProviderStatus(state)],
         ["Trusted devices", localSync ? profileSyncCount(localSync.trusted_device_count) : "0"],
         ["App domains", localSync ? profileSyncCount(localSync.app_domain_count) : "0"],
+        ["Enabled domains", profileSyncEnabledAppDomainStatus(state)],
         ["Device request", profileSyncText(state && state.device_request_device_id, "none")],
         ["Enrollment", profileSyncText(state && state.enrollment_target_device_id, "none")],
         ["Handoff", profileSyncText(state && state.handoff_target_device_id, "none")],

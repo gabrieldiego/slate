@@ -2675,6 +2675,7 @@ pub struct ProfileSyncLocalReadinessReport {
     pub active_key_id: Option<String>,
     pub app_domain_count: usize,
     pub enabled_app_domain_count: usize,
+    pub app_domains: Vec<AppSyncDomainRecord>,
     pub storage_provider_count: usize,
     pub enabled_storage_provider_count: usize,
     pub retention_capable_provider_count: usize,
@@ -6649,6 +6650,7 @@ impl SlateProfileDatabase {
             active_key_id,
             app_domain_count: app_domains.len(),
             enabled_app_domain_count,
+            app_domains,
             storage_provider_count: storage_providers.len(),
             enabled_storage_provider_count,
             retention_capable_provider_count,
@@ -17446,7 +17448,20 @@ mod tests {
             Some(DEFAULT_PROFILE_SYNC_CONTENT_KEY_ID)
         );
         assert!(report.local_device_registered);
+        assert_eq!(report.app_domain_count, report.app_domains.len());
         assert!(report.enabled_app_domain_count > 0);
+        assert!(
+            report
+                .app_domains
+                .iter()
+                .any(|domain| domain.domain == SYNC_DOMAIN_SETTINGS && domain.enabled)
+        );
+        assert!(
+            report
+                .app_domains
+                .iter()
+                .any(|domain| domain.domain == SYNC_DOMAIN_BOOKMARKS && domain.enabled)
+        );
         assert_eq!(report.storage_provider_count, 0);
         assert_eq!(report.authorized_retention_provider_count, 0);
         assert!(!report.ready_for_manual_sync);
@@ -17496,6 +17511,15 @@ mod tests {
         assert!(report.local_device_trusted);
         assert!(report.account_authority_trusted);
         assert_eq!(report.trusted_device_count, 3);
+        assert_eq!(report.app_domain_count, report.app_domains.len());
+        assert_eq!(
+            report
+                .app_domains
+                .iter()
+                .filter(|domain| domain.enabled)
+                .count(),
+            report.enabled_app_domain_count
+        );
         assert_eq!(report.storage_provider_count, 1);
         assert_eq!(report.enabled_storage_provider_count, 1);
         assert_eq!(report.retention_capable_provider_count, 1);

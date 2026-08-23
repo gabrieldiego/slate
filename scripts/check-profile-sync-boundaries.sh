@@ -272,6 +272,10 @@ require_text \
     'SettingsSyncRootObjectProviderIssue' \
     'profile-sync health reports must expose structured root-object provider issues.'
 require_text \
+    crates/storage/src/lib.rs \
+    'pub app_domains: Vec<AppSyncDomainRecord>' \
+    'profile-sync local readiness must carry app sync domain records for settings preview status.'
+require_text \
     crates/profile-sync/src/lib.rs \
     'root_object_provider_issues: Vec<LocalSettingsSyncRootObjectProviderIssueSummary>' \
     'profile-sync local preview reports must carry root-object provider issue summaries.'
@@ -342,9 +346,17 @@ require_text \
     'stored_provider_metadata_issues' \
     'Slate settings profile-sync JSON must expose stored provider metadata issue summaries.'
 require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'profile_sync_app_domains_json' \
+    'Slate settings profile-sync JSON must expose app sync domain records.'
+require_text \
     resources/resource_protocol/slate-settings.html \
     'Sync issues' \
     'Slate settings page must show profile-sync issue status.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Enabled domains' \
+    'Slate settings page must show enabled app sync domains.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Issue details' \
