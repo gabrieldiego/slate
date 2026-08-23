@@ -617,15 +617,16 @@ assert expected state was reused or rejected
 
 This proves persistence without creating ordering dependencies between tests.
 
-### Fake Protocol Adapters
+### Deterministic Protocol Models
 
-The first daemon tests should use fake adapters before real IPFS/Tor/I2P:
+The first daemon tests should use deterministic model transports before live
+IPFS/Tor/I2P integration:
 
-- fake adapter with deterministic success;
-- fake adapter that delays startup;
-- fake adapter that exceeds memory/cache budget;
-- fake adapter that requires background permission;
-- fake adapter that attempts forbidden fallback.
+- model transport with deterministic success;
+- model transport that delays startup;
+- model transport that exceeds memory/cache budget;
+- model transport that requires background permission;
+- model transport that attempts forbidden fallback.
 
 Profile sync fixtures should model distributed-web protocol behavior locally:
 peer discovery, mutable root records, encrypted object transfer,
@@ -666,11 +667,12 @@ synthetic `slate-fixture-kubo://` URLs inside the in-memory registry before any
 real HTTP client is created. Production-shaped Kubo protocol and profile-sync
 service code must still talk through Kubo request/response executors; direct
 access to fixture model registries or internal stores belongs only in the
-fixture modules. Protocol implementations should behave as if they are talking
-to the real network: they build the same requests, parse the same responses,
-and enforce the same endpoint policy. Fixture code may swap the socket layer
-for an in-process transport shim, but simulated behavior must stay behind that
-shim.
+fixture modules. Fixture shims should be exported through `test_fixtures`, not
+through the normal protocol module API. Protocol implementations should behave
+as if they are talking to the real network: they build the same requests, parse
+the same responses, and enforce the same endpoint policy. Fixture code may swap
+the socket layer for an in-process transport shim, but simulated behavior must
+stay behind that shim.
 
 Real protocol tests should use local fixtures or mock daemons. Tests must not
 require live IPFS, Tor, I2P, public gateways, or external network availability

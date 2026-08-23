@@ -305,7 +305,9 @@ Current baseline:
   registry calls from the Kubo protocol implementation and broadwebd
   profile-sync service. Local models stay behind transport executor shims, so
   the adapters keep the same request/response shape expected from real Kubo,
-  IPFS/IPNS, and future broadweb backends.
+  IPFS/IPNS, and future broadweb backends. Kubo fixture shims are exported
+  only through broadwebd's `test_fixtures` module now, not through the normal
+  `protocols::ipfs` API.
 - The opt-in Kubo RPC endpoint validator and local IPFS gateway validator now
   accept only numeric loopback addresses, plus synthetic in-process fixture URLs
   in tests. Hostname-shaped endpoints such as `localhost` are rejected before

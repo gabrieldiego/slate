@@ -3,7 +3,7 @@ mod config;
 mod gateway;
 mod kubo;
 #[cfg(any(test, feature = "test-fixtures"))]
-mod kubo_fixtures;
+pub(crate) mod kubo_fixtures;
 mod service;
 
 pub use config::{IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsTransportKind};
@@ -20,12 +20,4 @@ pub use kubo::{
     ipfs_kubo_profile_sync_pin_rm_url, ipfs_kubo_profile_sync_published_object_id,
     ipfs_kubo_profile_sync_resolved_object_id,
 };
-#[cfg(any(test, feature = "test-fixtures"))]
-pub(crate) use kubo_fixtures::{
-    InternalKuboRpcFixtureTransport, internal_kubo_rpc_url_belongs_to_network,
-    register_internal_kubo_profile_sync_model_for_network,
-    register_internal_kubo_rpc_fixture_for_network, take_internal_kubo_rpc_fixture_requests,
-};
-#[cfg(any(test, feature = "test-fixtures"))]
-pub use kubo_fixtures::{InternalKuboRpcResponse, InternalKuboRpcTransportShim};
 pub use service::IpfsService;

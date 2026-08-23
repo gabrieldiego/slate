@@ -114,6 +114,11 @@ reject_protocol_model_leak \
     'Kubo protocol transport must stay fixture-blind; install fixture transports from the in-process network layer.'
 
 reject_protocol_model_leak \
+    crates/broadwebd/src/protocols/ipfs/mod.rs \
+    'InternalKuboRpc|register_internal_kubo|take_internal_kubo|internal_kubo_rpc_url' \
+    'The IPFS protocol module must not re-export Kubo fixture shims; expose socket substitutes only through test_fixtures.'
+
+reject_protocol_model_leak \
     crates/broadwebd/src/protocols/ipfs/config.rs \
     'is_internal_fixture_http_url|internal_fixture_http|slate-fixture-http|in-process-fixture|socketless-fixture|InProcessBroadwebNetwork|InternalFixture|ProfileSyncModel|Simulation|simulated' \
     'IPFS gateway config must stay fixture-blind; in-process tests may inject prevalidated endpoints from the fixture layer.'
@@ -191,6 +196,10 @@ require_text \
     'runtime local profile-sync service must advertise the local preview backend capability.'
 require_text \
     crates/broadwebd/src/lib.rs \
+    'pub use crate::protocols::ipfs::kubo_fixtures::' \
+    'In-process Kubo fixture shims must be exported only from the broadwebd test_fixtures module.'
+require_text \
+    crates/broadwebd/src/lib.rs \
     'impl KuboProfileSyncExecutorFactory for InProcessKuboProfileSyncExecutorFactory' \
     'In-process Kubo profile-sync fixtures must inject the socketless executor from the fixture layer.'
 require_text \
@@ -262,6 +271,15 @@ reject_protocol_model_leak \
     crates/profile-sync/src/lib.rs \
     'socketless_fixture_models' \
     'profile-sync materializer policies should name local simulation boundaries, not fixture models.'
+
+require_text \
+    docs/architecture/broadwebd.md \
+    'Fixture shims should be exported through `test_fixtures`, not' \
+    'broadwebd architecture must document that protocol modules do not export fixture shims.'
+require_text \
+    docs/roadmap.md \
+    'Kubo fixture shims are exported' \
+    'Roadmap must record that socketless models stay outside the normal protocol API.'
 
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \

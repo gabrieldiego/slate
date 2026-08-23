@@ -138,12 +138,14 @@ pub mod test_fixtures {
         register_internal_fixture_http_sequence_for_network, take_internal_fixture_http_requests,
         unregistered_internal_fixture_http_url_for_network,
     };
-    use crate::protocols::ipfs::{
-        InternalKuboRpcFixtureTransport, IpfsGatewayEndpoint, IpfsGatewayHttpExecutor,
-        IpfsGatewayTransport, IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcExecutor,
-        IpfsKuboRpcEndpoint, internal_kubo_rpc_url_belongs_to_network,
+    use crate::protocols::ipfs::kubo_fixtures::{
+        InternalKuboRpcFixtureTransport, internal_kubo_rpc_url_belongs_to_network,
         register_internal_kubo_profile_sync_model_for_network,
         register_internal_kubo_rpc_fixture_for_network, take_internal_kubo_rpc_fixture_requests,
+    };
+    use crate::protocols::ipfs::{
+        IpfsGatewayEndpoint, IpfsGatewayHttpExecutor, IpfsGatewayTransport, IpfsKuboProfileSyncRpc,
+        IpfsKuboProfileSyncRpcExecutor, IpfsKuboRpcEndpoint,
     };
     use crate::services::{
         http_fetch::HttpFetchService,
@@ -160,7 +162,9 @@ pub mod test_fixtures {
     use std::sync::Arc;
 
     pub use crate::http::InternalFixtureHttpResponse;
-    pub use crate::protocols::ipfs::{InternalKuboRpcResponse, InternalKuboRpcTransportShim};
+    pub use crate::protocols::ipfs::kubo_fixtures::{
+        InternalKuboRpcResponse, InternalKuboRpcTransportShim,
+    };
     pub use crate::services::profile_sync::LocalProfileSyncFixture;
 
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
