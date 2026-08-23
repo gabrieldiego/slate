@@ -80,6 +80,62 @@ const PROFILE_SYNC_PROVIDER_MULTIADDR_PRIVACY_BOUNDARY: &str =
 
 #[cfg(feature = "local-preview-fixtures")]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalSettingsSyncRootObjectProviderIssueSummary {
+    pub component: String,
+    pub root_id: String,
+    pub object_id: Option<String>,
+    pub provider_id: String,
+    pub kind: String,
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+impl LocalSettingsSyncRootObjectProviderIssueSummary {
+    fn from_issue(issue: SettingsSyncRootObjectProviderIssue) -> Self {
+        Self {
+            component: settings_sync_health_issue_component_name(issue.component).to_string(),
+            root_id: issue.root_id,
+            object_id: issue.object_id,
+            provider_id: issue.provider_id,
+            kind: settings_sync_root_object_provider_issue_kind_name(issue.kind).to_string(),
+        }
+    }
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+fn local_settings_sync_root_object_provider_issue_summaries(
+    health: &SettingsSyncHealthReport,
+) -> Vec<LocalSettingsSyncRootObjectProviderIssueSummary> {
+    health
+        .root_object_provider_issues()
+        .into_iter()
+        .map(LocalSettingsSyncRootObjectProviderIssueSummary::from_issue)
+        .collect()
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+fn settings_sync_health_issue_component_name(
+    component: SettingsSyncHealthIssueComponent,
+) -> &'static str {
+    match component {
+        SettingsSyncHealthIssueComponent::Providers => "providers",
+        SettingsSyncHealthIssueComponent::SettingsRoot => "settings_root",
+        SettingsSyncHealthIssueComponent::LocalDeviceHeadRoot => "local_device_head_root",
+    }
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+fn settings_sync_root_object_provider_issue_kind_name(
+    kind: SettingsSyncRootObjectProviderIssueKind,
+) -> &'static str {
+    match kind {
+        SettingsSyncRootObjectProviderIssueKind::Delayed => "delayed",
+        SettingsSyncRootObjectProviderIssueKind::Stale => "stale",
+        SettingsSyncRootObjectProviderIssueKind::Offline => "offline",
+    }
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalSettingsSyncPreviewCycleReport {
     pub profile: String,
     pub local_device_id: String,
@@ -102,6 +158,8 @@ pub struct LocalSettingsSyncPreviewCycleReport {
     pub all_fixture_providers_materialized: bool,
     pub degraded_before: bool,
     pub degraded_after: bool,
+    pub root_object_provider_issue_count: usize,
+    pub root_object_provider_issues: Vec<LocalSettingsSyncRootObjectProviderIssueSummary>,
 }
 
 #[cfg(feature = "local-preview-fixtures")]
@@ -126,6 +184,8 @@ pub struct LocalSettingsSyncCurrentCycleReport {
     pub all_fixture_providers_materialized: bool,
     pub degraded_before: bool,
     pub degraded_after: bool,
+    pub root_object_provider_issue_count: usize,
+    pub root_object_provider_issues: Vec<LocalSettingsSyncRootObjectProviderIssueSummary>,
 }
 
 #[cfg(feature = "local-preview-fixtures")]
@@ -9135,6 +9195,8 @@ struct LocalSettingsSyncFixtureCycleSummary {
     all_fixture_providers_materialized: bool,
     degraded_before: bool,
     degraded_after: bool,
+    root_object_provider_issue_count: usize,
+    root_object_provider_issues: Vec<LocalSettingsSyncRootObjectProviderIssueSummary>,
 }
 
 #[cfg(feature = "local-preview-fixtures")]
@@ -9226,6 +9288,8 @@ fn run_local_settings_sync_fixture_cycle(
     )?;
     let readiness = database.profile_sync_local_readiness(profile)?;
     let published_object_count = run.run.cycle.cycle.published_object_ids().len();
+    let root_object_provider_issues =
+        local_settings_sync_root_object_provider_issue_summaries(&after_health);
 
     Ok(LocalSettingsSyncFixtureCycleSummary {
         profile: profile.to_string(),
@@ -9247,6 +9311,8 @@ fn run_local_settings_sync_fixture_cycle(
         all_fixture_providers_materialized: run.all_fixture_providers_materialized(),
         degraded_before: run.run.preflight.preflight.before_health.degraded(),
         degraded_after: after_health.degraded(),
+        root_object_provider_issue_count: root_object_provider_issues.len(),
+        root_object_provider_issues,
     })
 }
 
@@ -9286,6 +9352,8 @@ pub fn run_local_settings_sync_current_cycle(
         all_fixture_providers_materialized: summary.all_fixture_providers_materialized,
         degraded_before: summary.degraded_before,
         degraded_after: summary.degraded_after,
+        root_object_provider_issue_count: summary.root_object_provider_issue_count,
+        root_object_provider_issues: summary.root_object_provider_issues,
     })
 }
 
@@ -9341,6 +9409,8 @@ pub fn run_local_settings_sync_preview_cycle(
         all_fixture_providers_materialized: summary.all_fixture_providers_materialized,
         degraded_before: summary.degraded_before,
         degraded_after: summary.degraded_after,
+        root_object_provider_issue_count: summary.root_object_provider_issue_count,
+        root_object_provider_issues: summary.root_object_provider_issues,
     })
 }
 
@@ -14706,6 +14776,26 @@ mod tests {
 
     #[cfg(feature = "local-preview-fixtures")]
     #[test]
+    fn local_settings_sync_root_object_provider_issue_summary_names_states() {
+        let summary = super::LocalSettingsSyncRootObjectProviderIssueSummary::from_issue(
+            SettingsSyncRootObjectProviderIssue {
+                component: SettingsSyncHealthIssueComponent::SettingsRoot,
+                root_id: "settings/latest".to_string(),
+                object_id: Some("bafyfixture123".to_string()),
+                provider_id: "provider-a".to_string(),
+                kind: SettingsSyncRootObjectProviderIssueKind::Offline,
+            },
+        );
+
+        assert_eq!(summary.component, "settings_root");
+        assert_eq!(summary.root_id, "settings/latest");
+        assert_eq!(summary.object_id.as_deref(), Some("bafyfixture123"));
+        assert_eq!(summary.provider_id, "provider-a");
+        assert_eq!(summary.kind, "offline");
+    }
+
+    #[cfg(feature = "local-preview-fixtures")]
+    #[test]
     fn local_settings_sync_current_cycle_publishes_existing_settings_without_preview_write() {
         let state_root = test_state_root("local-settings-sync-current-state");
         let db_root = test_state_root("local-settings-sync-current-db");
@@ -14747,6 +14837,8 @@ mod tests {
         assert!(report.all_fixture_providers_materialized);
         assert!(report.degraded_before);
         assert!(!report.degraded_after);
+        assert_eq!(report.root_object_provider_issue_count, 0);
+        assert!(report.root_object_provider_issues.is_empty());
         assert!(
             database
                 .get_sync_setting_text(
@@ -14811,6 +14903,8 @@ mod tests {
         assert!(report.all_fixture_providers_materialized);
         assert!(report.degraded_before);
         assert!(!report.degraded_after);
+        assert_eq!(report.root_object_provider_issue_count, 0);
+        assert!(report.root_object_provider_issues.is_empty());
         assert!(
             database
                 .get_sync_setting_text(

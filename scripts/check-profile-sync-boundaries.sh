@@ -271,6 +271,10 @@ require_text \
     crates/profile-sync/src/lib.rs \
     'SettingsSyncRootObjectProviderIssue' \
     'profile-sync health reports must expose structured root-object provider issues.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'root_object_provider_issues: Vec<LocalSettingsSyncRootObjectProviderIssueSummary>' \
+    'profile-sync local preview reports must carry root-object provider issue summaries.'
 reject_protocol_model_leak \
     crates/profile-sync/src/lib.rs \
     'socketless_fixture_models' \
@@ -284,6 +288,10 @@ require_text \
     docs/roadmap.md \
     'Kubo fixture shims are exported' \
     'Roadmap must record that socketless models stay outside the normal protocol API.'
+require_text \
+    docs/roadmap.md \
+    'Socketless broadweb models must stay behind transport shims' \
+    'Roadmap must record that protocol models only replace socket IO, not protocol implementation logic.'
 
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
@@ -313,6 +321,14 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'handoff/import' \
     'Slate settings page must call the handoff import route.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'root_object_provider_issues' \
+    'Slate settings profile-sync JSON must expose root-object provider issue summaries.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Sync issues' \
+    'Slate settings page must show profile-sync issue status.'
 
 run_test slate-apps sync_domains
 run_test slate-storage rail_app_sync_domains_match_seeded_storage_domains

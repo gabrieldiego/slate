@@ -23,9 +23,9 @@ use slate_broadwebd::{
 };
 use slate_profile_sync::{
     LocalSettingsSyncCurrentCycleReport, LocalSettingsSyncPreviewCycleReport,
-    LocalSettingsSyncPreviewError, LocalSettingsSyncTwoDevicePreviewCycleReport,
-    run_local_settings_sync_current_cycle, run_local_settings_sync_preview_cycle,
-    run_local_settings_sync_two_device_preview_cycle,
+    LocalSettingsSyncPreviewError, LocalSettingsSyncRootObjectProviderIssueSummary,
+    LocalSettingsSyncTwoDevicePreviewCycleReport, run_local_settings_sync_current_cycle,
+    run_local_settings_sync_preview_cycle, run_local_settings_sync_two_device_preview_cycle,
 };
 use slate_storage::{
     DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
@@ -949,6 +949,8 @@ struct ProfileSyncPreviewCurrentSyncState {
     all_fixture_providers_materialized: bool,
     degraded_before: bool,
     degraded_after: bool,
+    root_object_provider_issue_count: usize,
+    root_object_provider_issues: Vec<LocalSettingsSyncRootObjectProviderIssueSummary>,
 }
 
 impl ProfileSyncPreviewCurrentSyncState {
@@ -972,6 +974,8 @@ impl ProfileSyncPreviewCurrentSyncState {
             all_fixture_providers_materialized: report.all_fixture_providers_materialized,
             degraded_before: report.degraded_before,
             degraded_after: report.degraded_after,
+            root_object_provider_issue_count: report.root_object_provider_issue_count,
+            root_object_provider_issues: report.root_object_provider_issues.clone(),
         }
     }
 
@@ -994,6 +998,8 @@ impl ProfileSyncPreviewCurrentSyncState {
             "all_fixture_providers_materialized": self.all_fixture_providers_materialized,
             "degraded_before": self.degraded_before,
             "degraded_after": self.degraded_after,
+            "root_object_provider_issue_count": self.root_object_provider_issue_count,
+            "root_object_provider_issues": profile_sync_root_object_provider_issues_json(self.root_object_provider_issues.as_slice()),
         })
     }
 }
@@ -1019,6 +1025,8 @@ struct ProfileSyncPreviewTrialState {
     all_fixture_providers_materialized: bool,
     degraded_before: bool,
     degraded_after: bool,
+    root_object_provider_issue_count: usize,
+    root_object_provider_issues: Vec<LocalSettingsSyncRootObjectProviderIssueSummary>,
 }
 
 impl ProfileSyncPreviewTrialState {
@@ -1044,6 +1052,8 @@ impl ProfileSyncPreviewTrialState {
             all_fixture_providers_materialized: report.all_fixture_providers_materialized,
             degraded_before: report.degraded_before,
             degraded_after: report.degraded_after,
+            root_object_provider_issue_count: report.root_object_provider_issue_count,
+            root_object_provider_issues: report.root_object_provider_issues.clone(),
         }
     }
 
@@ -1068,8 +1078,33 @@ impl ProfileSyncPreviewTrialState {
             "all_fixture_providers_materialized": self.all_fixture_providers_materialized,
             "degraded_before": self.degraded_before,
             "degraded_after": self.degraded_after,
+            "root_object_provider_issue_count": self.root_object_provider_issue_count,
+            "root_object_provider_issues": profile_sync_root_object_provider_issues_json(self.root_object_provider_issues.as_slice()),
         })
     }
+}
+
+fn profile_sync_root_object_provider_issues_json(
+    issues: &[LocalSettingsSyncRootObjectProviderIssueSummary],
+) -> serde_json::Value {
+    serde_json::Value::Array(
+        issues
+            .iter()
+            .map(profile_sync_root_object_provider_issue_json)
+            .collect(),
+    )
+}
+
+fn profile_sync_root_object_provider_issue_json(
+    issue: &LocalSettingsSyncRootObjectProviderIssueSummary,
+) -> serde_json::Value {
+    serde_json::json!({
+        "component": issue.component.as_str(),
+        "root_id": issue.root_id.as_str(),
+        "object_id": issue.object_id.as_deref(),
+        "provider_id": issue.provider_id.as_str(),
+        "kind": issue.kind.as_str(),
+    })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -2706,6 +2741,8 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-handoff-import\""));
         assert!(settings_page.contains("Current sync"));
         assert!(settings_page.contains("Two-device trial"));
+        assert!(settings_page.contains("Sync issues"));
+        assert!(settings_page.contains("profileSyncIssueStatus"));
         assert!(settings_page.contains("slate://settings/profile-sync/"));
         assert!(settings_page.contains("slate-sync-secret.json"));
         assert!(!settings_page.contains("replaceState"));

@@ -1087,6 +1087,20 @@
       return `${trial.receiver_applied_setting_count} applied; ${received}`;
     }
 
+    function profileSyncIssueStatus(state) {
+      const run = state && (state.last_current_sync || state.last_trial);
+      if (!run) {
+        return "not checked";
+      }
+      const issueCount = Number.isFinite(run.root_object_provider_issue_count) ?
+        run.root_object_provider_issue_count :
+        0;
+      if (issueCount > 0) {
+        return `${issueCount} root object ${issueCount === 1 ? "issue" : "issues"}`;
+      }
+      return run.degraded_after ? "degraded" : "none";
+    }
+
     function renderProfileSyncDetails(state) {
       profileSyncDetails.textContent = "";
       const localSync = state && state.local_sync ? state.local_sync : null;
@@ -1101,7 +1115,8 @@
         ["Handoff", profileSyncText(state && state.handoff_target_device_id, "none")],
         ["Current sync", profileSyncCurrentSyncStatus(state)],
         ["Local trial", profileSyncLocalTrialStatus(state)],
-        ["Two-device trial", profileSyncTwoDeviceTrialStatus(state)]
+        ["Two-device trial", profileSyncTwoDeviceTrialStatus(state)],
+        ["Sync issues", profileSyncIssueStatus(state)]
       ];
       rows.forEach(([label, value]) => {
         const row = document.createElement("div");
