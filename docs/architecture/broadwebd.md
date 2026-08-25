@@ -439,6 +439,12 @@ it implements `BroadwebdClient` by round-tripping service requests and responses
 through the bounded frame codec before and after dispatching to an inner client.
 This gives local tests an IPC-shaped byte boundary without opening loopback
 ports or choosing the final daemon transport.
+The codec now also has length-prefixed read/write helpers and an opt-in
+`TcpServiceFrameBroadwebdClient` for manual LAN smoke tests. This TCP client is
+not the default Slate-to-broadwebd IPC design and does not provide daemon
+authentication, streaming, cancellation, or backpressure yet; it exists so the
+same bounded service envelopes can be exercised across a real network link
+while the production OS-local IPC remains undecided.
 
 ## IPFS Initial Shape
 
@@ -709,6 +715,15 @@ to exercise a real daemon compatibility path, and should be ignored or otherwise
 opt-in. External tests may contact stable public endpoints, but they must be
 ignored by default and gated behind an explicit environment variable such as
 `SLATE_EXTERNAL_NETWORK_TESTS=1`.
+
+LAN smoke tests are also opt-in. The current `slate-broadwebd-net-probe` utility
+can run a temporary broadwebd profile-sync service over bounded TCP service
+frames, and `scripts/profile-sync-lan-smoke.sh` stages that probe to an SSH
+target, caps the remote process at 256 MiB by default, runs a put/publish/
+resolve/get/retain/root-health sequence, and removes the remote temp directory
+afterward. These probes must take hostnames, ports, and SSH targets from runtime
+arguments or environment variables; repository tests and committed config must
+not depend on a specific local-network IP address.
 
 ## Implementation Slices
 

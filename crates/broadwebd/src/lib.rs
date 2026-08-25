@@ -124,6 +124,7 @@ pub use registry::{
 };
 pub use service_frame::{
     DEFAULT_SERVICE_FRAME_MAX_BYTES, ServiceFrameBroadwebdClient, ServiceFrameCodec,
+    TcpServiceFrameBroadwebdClient,
 };
 pub use services::{
     http_fetch::HttpFetchService,

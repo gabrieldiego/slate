@@ -1,13 +1,15 @@
 use crate::{
     daemon::BroadwebdClient,
     error::BroadwebdError,
-    health::DaemonHealth,
+    health::{DaemonHealth, DaemonLifecycle},
     http::{ServiceRequest, ServiceResponse},
     state::TemporaryDownloadRecord,
     status::BroadwebStatusSnapshot,
 };
 use serde::{Serialize, de::DeserializeOwned};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
+use std::net::{TcpStream, ToSocketAddrs};
+use std::time::Duration;
 
 pub const DEFAULT_SERVICE_FRAME_MAX_BYTES: usize = 32 * 1024 * 1024;
 
@@ -39,6 +41,34 @@ impl ServiceFrameCodec {
 
     pub fn decode_response(&self, frame: &[u8]) -> Result<ServiceResponse, BroadwebdError> {
         decode_json_frame(frame, self.max_frame_bytes, "response")
+    }
+
+    pub fn write_request(
+        &self,
+        writer: &mut impl Write,
+        request: &ServiceRequest,
+    ) -> Result<(), BroadwebdError> {
+        let frame = self.encode_request(request)?;
+        write_len_prefixed_frame(writer, frame.as_slice())
+    }
+
+    pub fn read_request(&self, reader: &mut impl Read) -> Result<ServiceRequest, BroadwebdError> {
+        let frame = read_len_prefixed_frame(reader, self.max_frame_bytes)?;
+        self.decode_request(frame.as_slice())
+    }
+
+    pub fn write_response(
+        &self,
+        writer: &mut impl Write,
+        response: &ServiceResponse,
+    ) -> Result<(), BroadwebdError> {
+        let frame = self.encode_response(response)?;
+        write_len_prefixed_frame(writer, frame.as_slice())
+    }
+
+    pub fn read_response(&self, reader: &mut impl Read) -> Result<ServiceResponse, BroadwebdError> {
+        let frame = read_len_prefixed_frame(reader, self.max_frame_bytes)?;
+        self.decode_response(frame.as_slice())
     }
 }
 
@@ -99,6 +129,90 @@ impl BroadwebdClient for ServiceFrameBroadwebdClient<'_> {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct TcpServiceFrameBroadwebdClient {
+    address: String,
+    codec: ServiceFrameCodec,
+    timeout: Duration,
+}
+
+impl TcpServiceFrameBroadwebdClient {
+    pub fn new(address: impl Into<String>) -> Self {
+        Self::with_codec(address, ServiceFrameCodec::default())
+    }
+
+    pub fn with_codec(address: impl Into<String>, codec: ServiceFrameCodec) -> Self {
+        Self {
+            address: address.into(),
+            codec,
+            timeout: Duration::from_secs(12),
+        }
+    }
+
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    pub fn address(&self) -> &str {
+        &self.address
+    }
+
+    pub fn codec(&self) -> ServiceFrameCodec {
+        self.codec
+    }
+
+    pub fn timeout(&self) -> Duration {
+        self.timeout
+    }
+}
+
+impl BroadwebdClient for TcpServiceFrameBroadwebdClient {
+    fn health(&self) -> DaemonHealth {
+        DaemonHealth {
+            lifecycle: DaemonLifecycle::Ready,
+            plugins: Vec::new(),
+        }
+    }
+
+    fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+        BroadwebStatusSnapshot::idle()
+    }
+
+    fn dispatch_service_request(
+        &self,
+        request: ServiceRequest,
+    ) -> Result<ServiceResponse, BroadwebdError> {
+        let mut addresses = self.address.to_socket_addrs()?;
+        let address = addresses.next().ok_or_else(|| {
+            BroadwebdError::Request(format!(
+                "TCP service-frame endpoint resolved no socket addresses: {}",
+                self.address
+            ))
+        })?;
+        let mut stream = TcpStream::connect_timeout(&address, self.timeout)?;
+        stream.set_read_timeout(Some(self.timeout))?;
+        stream.set_write_timeout(Some(self.timeout))?;
+        self.codec.write_request(&mut stream, &request)?;
+        self.codec.read_response(&mut stream)
+    }
+
+    fn temporary_downloads(
+        &self,
+        _profile: &str,
+    ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+        Err(BroadwebdError::UnsupportedRequest(
+            "temporary download listing is not exposed through TCP service frames yet".to_string(),
+        ))
+    }
+
+    fn downloads(&self, _profile: &str) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+        Err(BroadwebdError::UnsupportedRequest(
+            "download listing is not exposed through TCP service frames yet".to_string(),
+        ))
+    }
+}
+
 fn encode_json_frame<T: Serialize>(
     value: &T,
     max_frame_bytes: usize,
@@ -136,6 +250,38 @@ fn decode_json_frame<T: DeserializeOwned>(
 
     serde_json::from_slice(frame)
         .map_err(|error| BroadwebdError::Request(format!("decode {label} service frame: {error}")))
+}
+
+fn write_len_prefixed_frame(writer: &mut impl Write, frame: &[u8]) -> Result<(), BroadwebdError> {
+    let frame_len = u32::try_from(frame.len()).map_err(|_| {
+        BroadwebdError::Request(format!(
+            "service frame is too large for length-prefixed transport: {} bytes",
+            frame.len()
+        ))
+    })?;
+    writer.write_all(&frame_len.to_be_bytes())?;
+    writer.write_all(frame)?;
+    writer.flush()?;
+    Ok(())
+}
+
+fn read_len_prefixed_frame(
+    reader: &mut impl Read,
+    max_frame_bytes: usize,
+) -> Result<Vec<u8>, BroadwebdError> {
+    let mut len_bytes = [0_u8; 4];
+    reader.read_exact(&mut len_bytes)?;
+    let frame_len = u32::from_be_bytes(len_bytes) as usize;
+    if frame_len > max_frame_bytes {
+        return Err(BroadwebdError::FrameTooLarge {
+            limit: max_frame_bytes,
+            actual: frame_len,
+        });
+    }
+
+    let mut frame = vec![0_u8; frame_len];
+    reader.read_exact(&mut frame)?;
+    Ok(frame)
 }
 
 struct BoundedFrameWriter {
@@ -179,5 +325,65 @@ impl Write for BoundedFrameWriter {
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        ProfileSyncProfileRequest, ProfileSyncRequest, ProfileSyncResponse, ServiceRequest,
+        ServiceResponse,
+    };
+    use std::io::Cursor;
+
+    #[test]
+    fn length_prefixed_service_frames_round_trip_request_and_response() {
+        let codec = ServiceFrameCodec::new(4096);
+        let request = ServiceRequest::ProfileSync(ProfileSyncRequest::DiscoverProviders(
+            ProfileSyncProfileRequest::new("default"),
+        ));
+        let response = ServiceResponse::ProfileSync(ProfileSyncResponse::RetainedObjects {
+            object_ids: vec!["object-a".to_string()],
+        });
+        let mut bytes = Vec::new();
+
+        codec
+            .write_request(&mut bytes, &request)
+            .expect("write request frame");
+        codec
+            .write_response(&mut bytes, &response)
+            .expect("write response frame");
+
+        let mut cursor = Cursor::new(bytes);
+        assert_eq!(
+            codec.read_request(&mut cursor).expect("read request frame"),
+            request
+        );
+        assert_eq!(
+            codec
+                .read_response(&mut cursor)
+                .expect("read response frame"),
+            response
+        );
+    }
+
+    #[test]
+    fn length_prefixed_service_frames_reject_oversized_payloads_before_reading_json() {
+        let codec = ServiceFrameCodec::new(2);
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&3_u32.to_be_bytes());
+        bytes.extend_from_slice(b"{}!");
+
+        let error = codec
+            .read_request(&mut Cursor::new(bytes))
+            .expect_err("oversized frame should fail before JSON parsing");
+        assert_eq!(
+            error,
+            BroadwebdError::FrameTooLarge {
+                limit: 2,
+                actual: 3,
+            }
+        );
     }
 }

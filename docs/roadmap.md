@@ -310,6 +310,14 @@ Current baseline:
   broadwebd clients for both the local device scheduler and provider handles,
   so provider retention and availability calls are covered across the same
   socketless byte boundary.
+- broadwebd now also has an opt-in TCP service-frame client and
+  `slate-broadwebd-net-probe` utility for manual LAN smoke tests. This keeps the
+  same bounded service request/response envelopes, but exercises them across a
+  real network link for put/publish/resolve/get/retain/root-health profile-sync
+  operations. The companion `scripts/profile-sync-lan-smoke.sh` stages the
+  probe through an SSH target supplied at runtime, caps the remote process at
+  256 MiB by default, uses a temporary remote state root, and removes the remote
+  artifacts after the smoke run.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the
@@ -1811,6 +1819,10 @@ Current baseline:
   Later opt-in real-network probes should compare observed behavior against
   those models and drive fixture refinements when the real web behaves
   differently.
+- The first real-network smoke is now available as an opt-in LAN probe rather
+  than a committed test. It should remain host-agnostic, memory-limited, and
+  cleanup-oriented while the default regression suite continues to use
+  socketless deterministic fixtures.
 
 Next:
 
