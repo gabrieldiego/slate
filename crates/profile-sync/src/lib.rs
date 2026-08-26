@@ -64,7 +64,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 mod discovery_trust;
 mod errors;
+mod health;
 mod object_ids;
+mod root_ids;
 
 pub use discovery_trust::{
     ProfileSyncPeerDiscoveryTrustRejection, RejectedProfileSyncPeerDiscoveryCandidate,
@@ -74,7 +76,12 @@ pub use errors::{
     ProfileSyncCredentialError, ProfileSyncCycleError, ProfileSyncCycleWithHealthError,
     ProfileSyncPolicyError, ProfileSyncPublishError, ProfileSyncReceiveError,
 };
+pub use health::{
+    SettingsSyncHealthIssue, SettingsSyncHealthIssueComponent, SettingsSyncHealthReport,
+    SettingsSyncRootObjectProviderIssue, SettingsSyncRootObjectProviderIssueKind,
+};
 use object_ids::{extend_unique_object_ids, push_unique_object_id};
+pub use root_ids::{settings_device_head_root_id, sync_membership_record_root_id};
 
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_SCHEMA_VERSION: u8 = 1;
 pub const PROFILE_SYNC_MEMBERSHIP_LOG_ROOT_ID: &str = "account/membership/log";
@@ -5491,194 +5498,6 @@ impl<'a> SettingsSyncRuntimeSecrets<'a> {
             signer,
         }
     }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SettingsSyncHealthReport {
-    pub profile: String,
-    pub settings_root_id: String,
-    pub local_device_head_root_id: String,
-    pub provider_health: BroadwebdProfileSyncProviderHealth,
-    pub settings_root_health: BroadwebdProfileSyncRootHealth,
-    pub local_device_head_root_health: BroadwebdProfileSyncRootHealth,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SettingsSyncHealthIssueComponent {
-    Providers,
-    SettingsRoot,
-    LocalDeviceHeadRoot,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SettingsSyncHealthIssue {
-    pub component: SettingsSyncHealthIssueComponent,
-    pub root_id: Option<String>,
-    pub message: String,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SettingsSyncRootObjectProviderIssueKind {
-    Delayed,
-    Stale,
-    Offline,
-    RetainedUnavailable,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SettingsSyncRootObjectProviderIssue {
-    pub component: SettingsSyncHealthIssueComponent,
-    pub root_id: String,
-    pub object_id: Option<String>,
-    pub provider_id: String,
-    pub kind: SettingsSyncRootObjectProviderIssueKind,
-}
-
-impl SettingsSyncHealthReport {
-    pub fn degraded(&self) -> bool {
-        self.provider_health.degraded
-            || self.settings_root_health.degraded
-            || self.local_device_head_root_health.degraded
-    }
-
-    pub fn healthy(&self) -> bool {
-        !self.degraded()
-    }
-
-    pub fn provider_degraded(&self) -> bool {
-        self.provider_health.degraded
-    }
-
-    pub fn settings_root_degraded(&self) -> bool {
-        self.settings_root_health.degraded
-    }
-
-    pub fn local_device_head_root_degraded(&self) -> bool {
-        self.local_device_head_root_health.degraded
-    }
-
-    pub fn degraded_root_count(&self) -> usize {
-        usize::from(self.settings_root_degraded())
-            + usize::from(self.local_device_head_root_degraded())
-    }
-
-    pub fn degradation_issue_count(&self) -> usize {
-        self.degradation_issues().len()
-    }
-
-    pub fn degradation_issues(&self) -> Vec<SettingsSyncHealthIssue> {
-        let mut issues = Vec::new();
-        if self.provider_degraded() {
-            issues.push(SettingsSyncHealthIssue {
-                component: SettingsSyncHealthIssueComponent::Providers,
-                root_id: None,
-                message: self.provider_health.message.clone(),
-            });
-        }
-        if self.settings_root_degraded() {
-            issues.push(SettingsSyncHealthIssue {
-                component: SettingsSyncHealthIssueComponent::SettingsRoot,
-                root_id: Some(self.settings_root_id.clone()),
-                message: self.settings_root_health.message.clone(),
-            });
-        }
-        if self.local_device_head_root_degraded() {
-            issues.push(SettingsSyncHealthIssue {
-                component: SettingsSyncHealthIssueComponent::LocalDeviceHeadRoot,
-                root_id: Some(self.local_device_head_root_id.clone()),
-                message: self.local_device_head_root_health.message.clone(),
-            });
-        }
-        issues
-    }
-
-    pub fn root_object_provider_issue_count(&self) -> usize {
-        self.root_object_provider_issues().len()
-    }
-
-    pub fn root_object_provider_issues(&self) -> Vec<SettingsSyncRootObjectProviderIssue> {
-        let mut issues = Vec::new();
-        append_settings_sync_root_object_provider_issues(
-            &mut issues,
-            SettingsSyncHealthIssueComponent::SettingsRoot,
-            self.settings_root_id.as_str(),
-            &self.settings_root_health,
-        );
-        append_settings_sync_root_object_provider_issues(
-            &mut issues,
-            SettingsSyncHealthIssueComponent::LocalDeviceHeadRoot,
-            self.local_device_head_root_id.as_str(),
-            &self.local_device_head_root_health,
-        );
-        issues
-    }
-}
-
-fn append_settings_sync_root_object_provider_issues(
-    issues: &mut Vec<SettingsSyncRootObjectProviderIssue>,
-    component: SettingsSyncHealthIssueComponent,
-    root_id: &str,
-    health: &BroadwebdProfileSyncRootHealth,
-) {
-    append_settings_sync_root_object_provider_issue_kind(
-        issues,
-        component.clone(),
-        root_id,
-        health.latest_object_id.clone(),
-        SettingsSyncRootObjectProviderIssueKind::Delayed,
-        health.delayed_object_provider_ids.as_slice(),
-    );
-    append_settings_sync_root_object_provider_issue_kind(
-        issues,
-        component.clone(),
-        root_id,
-        health.latest_object_id.clone(),
-        SettingsSyncRootObjectProviderIssueKind::Stale,
-        health.latest_object_stale_provider_ids.as_slice(),
-    );
-    append_settings_sync_root_object_provider_issue_kind(
-        issues,
-        component.clone(),
-        root_id,
-        health.latest_object_id.clone(),
-        SettingsSyncRootObjectProviderIssueKind::Offline,
-        health.latest_object_offline_provider_ids.as_slice(),
-    );
-    append_settings_sync_root_object_provider_issue_kind(
-        issues,
-        component,
-        root_id,
-        health.latest_object_id.clone(),
-        SettingsSyncRootObjectProviderIssueKind::RetainedUnavailable,
-        health.unavailable_retaining_provider_ids.as_slice(),
-    );
-}
-
-fn append_settings_sync_root_object_provider_issue_kind(
-    issues: &mut Vec<SettingsSyncRootObjectProviderIssue>,
-    component: SettingsSyncHealthIssueComponent,
-    root_id: &str,
-    object_id: Option<String>,
-    kind: SettingsSyncRootObjectProviderIssueKind,
-    provider_ids: &[String],
-) {
-    issues.extend(provider_ids.iter().cloned().map(|provider_id| {
-        SettingsSyncRootObjectProviderIssue {
-            component: component.clone(),
-            root_id: root_id.to_string(),
-            object_id: object_id.clone(),
-            provider_id,
-            kind,
-        }
-    }));
-}
-
-pub fn settings_device_head_root_id(device_id: &str) -> String {
-    format!("settings/devices/{device_id}/head")
-}
-
-pub fn sync_membership_record_root_id(record_id: &str) -> String {
-    format!("account/membership/{record_id}")
 }
 
 impl<'a> BroadwebdProfileSyncObjectSource<'a> {
