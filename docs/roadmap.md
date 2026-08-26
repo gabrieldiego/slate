@@ -1839,11 +1839,22 @@ Current baseline:
   trusts discovered peers. libp2p, IPNS, Iroh, or mDNS adapters should implement
   the same advertisement semantics rather than bypassing the profile-sync
   scheduler/provider boundary.
+- Profile-sync discovery now has a protocol-neutral provider boundary in
+  broadwebd. The in-process broadweb fixture can publish and discover
+  libp2p-rendezvous and IPNS-shaped multiaddr advertisements without opening
+  sockets, resolving DNS, starting loopback services, or joining external p2p
+  networks. This is the fast local model for future broadweb discovery tests:
+  real libp2p Kademlia/rendezvous, IPNS/IPFS, Iroh, mDNS, relay, or delegated
+  routing adapters should plug into the same `ProfileSyncPeerDiscoveryProvider`
+  trait instead of adding profile-sync-specific socket discovery paths.
 
 Next:
 
 - Continue extending the protocol-neutral `profile-sync` application service
   toward real protocol-backed provider materialization.
+- Add a real discovery adapter behind `ProfileSyncPeerDiscoveryProvider`, with
+  libp2p rendezvous/Kademlia as the likely first candidate if its dependency
+  footprint remains acceptable under Slate's low-memory development profile.
 - Add signed peer advertisements and membership checks so LAN discovery cannot
   inject arbitrary profile-sync providers into an enrolled account.
 - Continue splitting sync backends into discovery, connectivity, transfer,

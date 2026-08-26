@@ -103,9 +103,16 @@ pub use http::{
     ProfileSyncRootUpdate, ServiceRequest, ServiceResponse, TransportHttpRequest,
 };
 pub use peer_discovery::{
-    DEFAULT_PROFILE_SYNC_PEER_DISCOVERY_MAX_BYTES, DiscoveredProfileSyncPeer,
-    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY, ProfileSyncPeerAdvertisement,
-    ProfileSyncPeerDiscoveryMessage, collect_profile_sync_peer_advertisements,
+    DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE, DEFAULT_PROFILE_SYNC_PEER_DISCOVERY_MAX_BYTES,
+    DiscoveredProfileSyncPeer, PROFILE_SYNC_DISCOVERY_PROTOCOL_IPNS,
+    PROFILE_SYNC_DISCOVERY_PROTOCOL_IROH_RENDEZVOUS,
+    PROFILE_SYNC_DISCOVERY_PROTOCOL_LIBP2P_KADEMLIA,
+    PROFILE_SYNC_DISCOVERY_PROTOCOL_LIBP2P_RENDEZVOUS,
+    PROFILE_SYNC_DISCOVERY_PROTOCOL_LOCAL_SIMULATION, PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+    ProfileSyncPeerAdvertisement, ProfileSyncPeerDiscoveryMessage,
+    ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryProvider,
+    ProfileSyncPeerDiscoveryPublication, ProfileSyncPeerDiscoveryQuery,
+    ProfileSyncPeerDiscoveryResult, collect_profile_sync_peer_advertisements,
     decode_profile_sync_peer_discovery_message, discover_profile_sync_peers,
     encode_profile_sync_peer_discovery_message, recv_profile_sync_peer_discovery_message,
     respond_to_profile_sync_peer_solicit, send_profile_sync_peer_discovery_message,
@@ -177,6 +184,9 @@ pub mod test_fixtures {
     use std::sync::Arc;
 
     pub use crate::http::InternalFixtureHttpResponse;
+    pub use crate::peer_discovery::{
+        SimulatedProfileSyncPeerDiscoveryNetwork, SimulatedProfileSyncPeerDiscoveryProvider,
+    };
     pub use crate::protocols::ipfs::kubo_fixtures::{
         InternalKuboRpcResponse, InternalKuboRpcTransportShim,
     };
@@ -464,6 +474,7 @@ pub mod test_fixtures {
         network_id: String,
         profile_sync: LocalProfileSyncFixture,
         profile_sync_capacity: ProfileSyncFixtureCapacity,
+        peer_discovery: SimulatedProfileSyncPeerDiscoveryNetwork,
     }
 
     #[derive(Clone, Debug, Eq, PartialEq)]
@@ -502,6 +513,7 @@ pub mod test_fixtures {
                 network_id: next_in_process_network_id(),
                 profile_sync: LocalProfileSyncFixture::new(),
                 profile_sync_capacity: ProfileSyncFixtureCapacity::default(),
+                peer_discovery: SimulatedProfileSyncPeerDiscoveryNetwork::new(),
             }
         }
     }
@@ -516,6 +528,7 @@ pub mod test_fixtures {
                 network_id: next_in_process_network_id(),
                 profile_sync: LocalProfileSyncFixture::with_capacity(capacity),
                 profile_sync_capacity: capacity,
+                peer_discovery: SimulatedProfileSyncPeerDiscoveryNetwork::new(),
             }
         }
 
@@ -545,6 +558,12 @@ pub mod test_fixtures {
         pub fn profile_sync_provider_endpoint_ref(&self, provider_id: impl Into<String>) -> String {
             self.profile_sync_provider_endpoint(provider_id)
                 .into_endpoint_ref()
+        }
+
+        pub fn profile_sync_peer_discovery_provider(
+            &self,
+        ) -> crate::peer_discovery::SimulatedProfileSyncPeerDiscoveryProvider {
+            self.peer_discovery.provider()
         }
 
         pub fn registry_for_device(&self, device_id: impl AsRef<str>) -> PluginRegistry {

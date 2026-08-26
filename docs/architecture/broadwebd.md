@@ -457,6 +457,24 @@ contract is deliberately small enough that later adapters can publish or
 resolve the same provider records through mDNS, libp2p rendezvous, IPNS, Iroh,
 or another broadweb provider without changing the profile-sync scheduler API.
 
+The next slice introduces that adapter boundary directly. `broadwebd` now has a
+`ProfileSyncPeerDiscoveryProvider` trait with typed discovery protocols for
+libp2p rendezvous, libp2p Kademlia, IPNS, Iroh rendezvous, and local
+simulation. Discovery records use the same profile-sync advertisement DTO, but
+the service endpoint may now be a multiaddr instead of only a socket address.
+The in-process fixture network exposes a simulated provider that publishes and
+discovers libp2p/IPNS-shaped records without sockets, DNS, loopback listeners,
+or external p2p network startup. Real adapters should implement the same trait
+with mature protocol libraries and keep NAT traversal, rendezvous, delegated
+routing, relay, and mutable-name behavior behind the adapter rather than in the
+profile-sync scheduler.
+
+The simulated provider is a deterministic model, not a handwritten production
+transport. It lets tests cover namespace filtering, account/profile scoping,
+self-record filtering, capability filtering, protocol ordering, and result
+limits while preserving the production-facing contract that later libp2p, IPNS,
+Iroh, or IPFS adapters must satisfy.
+
 ## IPFS Initial Shape
 
 IPFS should be the first broadweb protocol to use the daemon because `ipfs://`

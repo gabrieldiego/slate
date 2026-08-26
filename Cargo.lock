@@ -10866,6 +10866,7 @@ dependencies = [
  "serde",
  "serde_json",
  "slate-net",
+ "slate-routing",
  "slate-storage",
  "tokio",
  "tor-rtcompat",

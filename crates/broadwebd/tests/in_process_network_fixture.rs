@@ -2,9 +2,11 @@
 #![cfg(feature = "test-fixtures")]
 
 use slate_broadwebd::{
-    BroadwebDaemon, BroadwebdError, HttpFetchRequest, HttpHeader, PluginRegistry,
-    ProfileSyncObjectRequest, ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
-    ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
+    BroadwebDaemon, BroadwebdError, DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE, HttpFetchRequest,
+    HttpHeader, PluginRegistry, ProfileSyncObjectRequest, ProfileSyncPeerAdvertisement,
+    ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryProvider,
+    ProfileSyncPeerDiscoveryQuery, ProfileSyncPutObjectRequest, ProfileSyncRequest,
+    ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
     test_fixtures::{
         InProcessBroadwebNetwork, InternalFixtureHttpResponse, InternalKuboRpcResponse,
         InternalKuboRpcTransportShim, ProfileSyncFixtureCapacity,
@@ -169,6 +171,95 @@ fn default_registry_rejects_internal_http_fixture_urls() {
 
     assert!(fixture.finish().is_empty());
     let _ = std::fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn in_process_profile_sync_peer_discovery_models_p2p_networks_without_sockets() {
+    let network = InProcessBroadwebNetwork::new();
+    let first_device = network.profile_sync_peer_discovery_provider();
+    let second_device = network.profile_sync_peer_discovery_provider();
+    let requester = network.profile_sync_peer_discovery_provider();
+
+    first_device
+        .publish_profile_sync_peer(
+            ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
+            DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+            ProfileSyncPeerAdvertisement::new(
+                "profile-a",
+                "device-a",
+                "provider-a",
+                "/dnsaddr/rendezvous.slate.test/tcp/443/wss/p2p/12D3KooWDeviceA",
+                1,
+            )
+            .expect("libp2p rendezvous-shaped advertisement"),
+        )
+        .expect("publish libp2p rendezvous-shaped advertisement");
+    second_device
+        .publish_profile_sync_peer(
+            ProfileSyncPeerDiscoveryProtocol::Ipns,
+            DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+            ProfileSyncPeerAdvertisement::new(
+                "profile-a",
+                "device-b",
+                "provider-b",
+                "/ipns/k51-profile-sync-root-device-b",
+                2,
+            )
+            .expect("IPNS-shaped advertisement"),
+        )
+        .expect("publish IPNS-shaped advertisement");
+    requester
+        .publish_profile_sync_peer(
+            ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
+            DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+            ProfileSyncPeerAdvertisement::new(
+                "profile-a",
+                "device-local",
+                "provider-local",
+                "/dnsaddr/rendezvous.slate.test/tcp/443/wss/p2p/12D3KooWLocal",
+                3,
+            )
+            .expect("requester's own advertisement"),
+        )
+        .expect("publish requester's own advertisement");
+
+    let query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
+        "profile-a",
+        "device-local",
+        [
+            ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
+            ProfileSyncPeerDiscoveryProtocol::Ipns,
+        ],
+        8,
+    )
+    .expect("discovery query");
+    let discovered = requester
+        .discover_profile_sync_peers(&query)
+        .expect("discover peers through simulated p2p providers");
+
+    assert_eq!(discovered.len(), 2);
+    assert_eq!(
+        discovered
+            .iter()
+            .map(|peer| peer.protocol)
+            .collect::<Vec<_>>(),
+        vec![
+            ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
+            ProfileSyncPeerDiscoveryProtocol::Ipns,
+        ]
+    );
+    assert_eq!(discovered[0].advertisement.node_id, "device-a");
+    assert_eq!(discovered[1].advertisement.node_id, "device-b");
+    assert!(
+        discovered
+            .iter()
+            .all(|peer| peer.advertisement.has_multiaddr_service_endpoint())
+    );
+    assert!(
+        discovered
+            .iter()
+            .all(|peer| peer.advertisement.service_socket_addr().is_err())
+    );
 }
 
 #[test]
