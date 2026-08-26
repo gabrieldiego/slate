@@ -318,6 +318,15 @@ Current baseline:
   probe through an SSH target supplied at runtime, caps the remote process at
   256 MiB by default, uses a temporary remote state root, and removes the remote
   artifacts after the smoke run.
+- broadwebd now has a minimal profile-sync peer-discovery contract. UDP solicit
+  and advertisement messages carry a network id, node id, provider id,
+  service-frame TCP endpoint, capabilities, and sequence number. The opt-in
+  local socket fixture swaps in loopback UDP/TCP sockets and proves discovery
+  can find a peer before running the profile-sync service-frame smoke. The
+  companion `scripts/profile-sync-p2p-lan-smoke.sh` can stage a temporary peer
+  on an SSH target, answer multicast discovery, let the local node discover the
+  peer, and then run the same put/publish/resolve/get/retain/root-health
+  sequence through the discovered endpoint under 256 MiB runtime caps.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the
@@ -1823,11 +1832,20 @@ Current baseline:
   than a committed test. It should remain host-agnostic, memory-limited, and
   cleanup-oriented while the default regression suite continues to use
   socketless deterministic fixtures.
+- The first peer-discovery LAN smoke is also available as an opt-in probe. It
+  currently uses unauthenticated UDP multicast advertisements, so the next
+  production step is to bind advertisements to enrolled device identity,
+  membership epoch, and signed provider records before any automatic sync policy
+  trusts discovered peers. libp2p, IPNS, Iroh, or mDNS adapters should implement
+  the same advertisement semantics rather than bypassing the profile-sync
+  scheduler/provider boundary.
 
 Next:
 
 - Continue extending the protocol-neutral `profile-sync` application service
   toward real protocol-backed provider materialization.
+- Add signed peer advertisements and membership checks so LAN discovery cannot
+  inject arbitrary profile-sync providers into an enrolled account.
 - Continue splitting sync backends into discovery, connectivity, transfer,
   availability, and mutable-root implementations so different broadweb
   protocols can be combined behind the typed provider role records.

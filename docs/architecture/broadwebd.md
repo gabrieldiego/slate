@@ -446,6 +446,17 @@ authentication, streaming, cancellation, or backpressure yet; it exists so the
 same bounded service envelopes can be exercised across a real network link
 while the production OS-local IPC remains undecided.
 
+The first peer-discovery slice adds bounded UDP profile-sync solicit and
+advertisement messages. A peer advertisement carries a network id, node id,
+provider id, capabilities, sequence, and a service-frame TCP endpoint. Local
+socket fixtures can swap in a loopback UDP responder and TCP service-frame
+server to prove that a requester can discover a peer, derive the reachable
+service endpoint from the advertisement and UDP source address, then run the
+normal profile-sync service requests through `BroadwebdClient`. This discovery
+contract is deliberately small enough that later adapters can publish or
+resolve the same provider records through mDNS, libp2p rendezvous, IPNS, Iroh,
+or another broadweb provider without changing the profile-sync scheduler API.
+
 ## IPFS Initial Shape
 
 IPFS should be the first broadweb protocol to use the daemon because `ipfs://`
@@ -724,6 +735,13 @@ resolve/get/retain/root-health sequence, and removes the remote temp directory
 afterward. These probes must take hostnames, ports, and SSH targets from runtime
 arguments or environment variables; repository tests and committed config must
 not depend on a specific local-network IP address.
+`scripts/profile-sync-p2p-lan-smoke.sh` adds the first peer-discovery variant:
+the remote temporary probe joins an opt-in UDP multicast group, the local probe
+sends a discovery solicit, learns the remote service-frame endpoint from the
+peer advertisement, and only then runs the same profile-sync sequence. This is
+still unauthenticated LAN smoke coverage rather than production discovery.
+Production use must bind advertisements to enrolled device identity and sync
+membership before trusting them.
 
 ## Implementation Slices
 

@@ -5,6 +5,7 @@ mod daemon;
 mod error;
 mod health;
 mod http;
+mod peer_discovery;
 pub mod protocols;
 mod registry;
 mod service_frame;
@@ -100,6 +101,14 @@ pub use http::{
     ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootCandidate,
     ProfileSyncRootHealth, ProfileSyncRootHealthRequest, ProfileSyncRootRequest,
     ProfileSyncRootUpdate, ServiceRequest, ServiceResponse, TransportHttpRequest,
+};
+pub use peer_discovery::{
+    DEFAULT_PROFILE_SYNC_PEER_DISCOVERY_MAX_BYTES, DiscoveredProfileSyncPeer,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY, ProfileSyncPeerAdvertisement,
+    ProfileSyncPeerDiscoveryMessage, collect_profile_sync_peer_advertisements,
+    decode_profile_sync_peer_discovery_message, discover_profile_sync_peers,
+    encode_profile_sync_peer_discovery_message, recv_profile_sync_peer_discovery_message,
+    respond_to_profile_sync_peer_solicit, send_profile_sync_peer_discovery_message,
 };
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport,

@@ -199,6 +199,18 @@ require_text \
     'impl BroadwebdClient for ServiceFrameBroadwebdClient' \
     'broadwebd framed client adapter must implement the normal client trait.'
 require_text \
+    crates/broadwebd/src/peer_discovery.rs \
+    'pub struct ProfileSyncPeerAdvertisement' \
+    'broadwebd must keep a typed profile-sync peer advertisement DTO for discovery adapters.'
+require_text \
+    crates/broadwebd/src/peer_discovery.rs \
+    'pub enum ProfileSyncPeerDiscoveryMessage' \
+    'broadwebd must keep bounded solicit/advertisement messages for peer discovery adapters.'
+require_text \
+    crates/broadwebd/tests/peer_discovery_socket.rs \
+    'SLATE_LOCAL_SOCKET_TESTS' \
+    'local socket peer-discovery coverage must remain opt-in instead of binding sockets in default tests.'
+require_text \
     crates/broadwebd/src/lib.rs \
     'daemon_dispatches_profile_sync_through_service_request_envelope' \
     'broadwebd must cover profile-sync dispatch through the IPC-shaped service request envelope.'
@@ -863,6 +875,7 @@ run_test slate-broadwebd daemon_dispatches_through_ipc_neutral_client_trait
 run_test slate-broadwebd daemon_dispatches_profile_sync_through_service_request_envelope
 run_test slate-broadwebd service_request_response_envelopes_round_trip_for_ipc_framing
 run_test slate-broadwebd service_frame
+run_test slate-broadwebd peer_discovery
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_get_uses_transport_bytes_not_local_upload_metadata
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_round_trips_state_without_canned_responses
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_release_updates_retention_health
