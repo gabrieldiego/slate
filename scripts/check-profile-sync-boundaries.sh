@@ -280,6 +280,10 @@ require_text \
     'slate-profile-sync must keep scheduler-facing health DTO logic outside the monolithic lib.rs.'
 require_text \
     crates/profile-sync/src/lib.rs \
+    '^mod membership_log;' \
+    'slate-profile-sync must keep membership-log DTO and plan helpers outside the monolithic lib.rs.'
+require_text \
+    crates/profile-sync/src/lib.rs \
     '^mod object_ids;' \
     'slate-profile-sync must keep object-id aggregation helpers outside the monolithic lib.rs.'
 require_text \
@@ -298,6 +302,10 @@ require_text \
     crates/profile-sync/src/health.rs \
     'health_report_collects_root_object_provider_issues' \
     'slate-profile-sync health report module must own focused unit tests.'
+require_text \
+    crates/profile-sync/src/membership_log.rs \
+    'membership_log_publication_plan_classifies_record_count_boundaries' \
+    'slate-profile-sync membership-log module must own focused unit tests.'
 require_text \
     crates/profile-sync/src/root_ids.rs \
     'settings_device_head_root_id_formats_per_device_head' \
@@ -961,6 +969,7 @@ run_test slate-broadwebd local_fixture_root_health_reports_stale_latest_object_h
 run_test slate-broadwebd local_fixture_root_health_reports_offline_latest_object_holders
 run_test slate-broadwebd local_fixture_retained_claim_requires_provider_bytes
 run_test slate-profile-sync health::tests
+run_test slate-profile-sync membership_log::tests
 run_test slate-profile-sync root_ids::tests
 run_test slate-profile-sync trusted_profile_sync_peer_discovery_filters_by_local_trust_state
 run_test slate-profile-sync broadwebd_profile_sync_bridges_accept_envelope_only_clients
