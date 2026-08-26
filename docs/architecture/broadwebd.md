@@ -475,6 +475,17 @@ self-record filtering, capability filtering, protocol ordering, and result
 limits while preserving the production-facing contract that later libp2p, IPNS,
 Iroh, or IPFS adapters must satisfy.
 
+`IpnsProfileSyncPeerDiscoveryProvider` is the first concrete protocol-shaped
+implementation of that trait. It stores a bounded JSON discovery record as an
+IPFS object through the existing Kubo profile-sync RPC, pins it, publishes the
+object under a configured IPNS key, and discovers peers by resolving configured
+IPNS names and loading the advertised records back through Kubo. Local tests run
+the same adapter against the in-process Kubo model, so the provider exercises
+Kubo/IPNS request planning and record validation without opening sockets or
+joining the public IPFS network. Runtime use still depends on an explicitly
+configured local Kubo endpoint and should remain opt-in until discovery records
+are signed and bound to the enrolled profile membership log.
+
 ## IPFS Initial Shape
 
 IPFS should be the first broadweb protocol to use the daemon because `ipfs://`

@@ -3,10 +3,11 @@
 
 use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE, HttpFetchRequest,
-    HttpHeader, PluginRegistry, ProfileSyncObjectRequest, ProfileSyncPeerAdvertisement,
-    ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryProvider,
-    ProfileSyncPeerDiscoveryQuery, ProfileSyncPutObjectRequest, ProfileSyncRequest,
-    ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
+    HttpHeader, IpnsProfileSyncPeerDiscoveryProvider, PluginRegistry, ProfileSyncObjectRequest,
+    ProfileSyncPeerAdvertisement, ProfileSyncPeerDiscoveryProtocol,
+    ProfileSyncPeerDiscoveryProvider, ProfileSyncPeerDiscoveryQuery, ProfileSyncPutObjectRequest,
+    ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate,
+    ResourceBudget,
     test_fixtures::{
         InProcessBroadwebNetwork, InternalFixtureHttpResponse, InternalKuboRpcResponse,
         InternalKuboRpcTransportShim, ProfileSyncFixtureCapacity,
@@ -259,6 +260,83 @@ fn in_process_profile_sync_peer_discovery_models_p2p_networks_without_sockets() 
         discovered
             .iter()
             .all(|peer| peer.advertisement.service_socket_addr().is_err())
+    );
+}
+
+#[test]
+fn ipns_profile_sync_peer_discovery_round_trips_through_kubo_model_without_sockets() {
+    let network = InProcessBroadwebNetwork::new();
+    let kubo = network.kubo_profile_sync_model();
+    let rpc = kubo
+        .profile_sync_rpc()
+        .expect("fixture Kubo profile-sync RPC");
+    let provider = IpnsProfileSyncPeerDiscoveryProvider::new(
+        rpc,
+        InternalKuboRpcTransportShim,
+        ResourceBudget::default(),
+    )
+    .with_publish_key_id("device-a")
+    .with_resolve_name("device-a");
+
+    provider
+        .publish_profile_sync_peer(
+            ProfileSyncPeerDiscoveryProtocol::Ipns,
+            DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+            ProfileSyncPeerAdvertisement::new(
+                "profile-a",
+                "device-a",
+                "provider-a",
+                "/dnsaddr/rendezvous.slate.test/tcp/443/wss/p2p/12D3KooWDeviceA",
+                1,
+            )
+            .expect("IPNS-discovered advertisement"),
+        )
+        .expect("publish IPNS discovery record through Kubo fixture");
+
+    let query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
+        "profile-a",
+        "device-local",
+        [ProfileSyncPeerDiscoveryProtocol::Ipns],
+        4,
+    )
+    .expect("IPNS discovery query");
+    let discovered = provider
+        .discover_profile_sync_peers(&query)
+        .expect("discover IPNS record through Kubo fixture");
+
+    assert_eq!(discovered.len(), 1);
+    assert_eq!(
+        discovered[0].protocol,
+        ProfileSyncPeerDiscoveryProtocol::Ipns
+    );
+    assert_eq!(discovered[0].advertisement.node_id, "device-a");
+    assert_eq!(discovered[0].advertisement.provider_id, "provider-a");
+    assert!(discovered[0].advertisement.has_multiaddr_service_endpoint());
+    let requests = kubo.finish();
+    assert_eq!(requests.len(), 5);
+    assert_eq!(
+        requests[0],
+        "POST /api/v0/add?cid-version=1&raw-leaves=true&pin=false HTTP/1.1"
+    );
+    assert!(requests[1].starts_with("POST /api/v0/pin/add?arg=bafyfixture"));
+    assert!(requests[1].ends_with("&recursive=true HTTP/1.1"));
+    let object_id = requests[1]
+        .strip_prefix("POST /api/v0/pin/add?arg=")
+        .and_then(|request| request.strip_suffix("&recursive=true HTTP/1.1"))
+        .expect("pin request carries object id");
+    assert_eq!(
+        requests[2],
+        format!(
+            "POST /api/v0/name/publish?arg=%2Fipfs%2F{object_id}&key=device-a&allow-offline=true HTTP/1.1"
+        )
+    );
+    assert_eq!(
+        requests[3],
+        "POST /api/v0/name/resolve?arg=%2Fipns%2Fdevice-a&recursive=false HTTP/1.1"
+    );
+    assert_eq!(
+        requests[4],
+        format!("POST /api/v0/cat?arg=%2Fipfs%2F{object_id} HTTP/1.1")
     );
 }
 

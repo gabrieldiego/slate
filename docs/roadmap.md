@@ -1847,14 +1847,23 @@ Current baseline:
   real libp2p Kademlia/rendezvous, IPNS/IPFS, Iroh, mDNS, relay, or delegated
   routing adapters should plug into the same `ProfileSyncPeerDiscoveryProvider`
   trait instead of adding profile-sync-specific socket discovery paths.
+- The first concrete discovery adapter is now Kubo/IPNS-shaped:
+  `IpnsProfileSyncPeerDiscoveryProvider` publishes a bounded peer
+  advertisement record through Kubo `add`, `pin/add`, and `name/publish`, then
+  discovers by resolving configured IPNS names and loading the advertised object
+  back through Kubo `cat`. The regression runs this against the socketless
+  in-process Kubo model, so local CI validates the protocol request sequence
+  without joining the public IPFS network.
 
 Next:
 
 - Continue extending the protocol-neutral `profile-sync` application service
   toward real protocol-backed provider materialization.
-- Add a real discovery adapter behind `ProfileSyncPeerDiscoveryProvider`, with
-  libp2p rendezvous/Kademlia as the likely first candidate if its dependency
-  footprint remains acceptable under Slate's low-memory development profile.
+- Add signed discovery advertisements and a scheduler-side trust check before
+  automatic sync accepts IPNS, libp2p, Iroh, mDNS, or LAN-discovered providers.
+- Add a libp2p rendezvous/Kademlia discovery adapter behind
+  `ProfileSyncPeerDiscoveryProvider` if its dependency footprint remains
+  acceptable under Slate's low-memory development profile.
 - Add signed peer advertisements and membership checks so LAN discovery cannot
   inject arbitrary profile-sync providers into an enrolled account.
 - Continue splitting sync backends into discovery, connectivity, transfer,

@@ -122,12 +122,12 @@ pub use protocols::ipfs::{
     IpfsKuboProfileSyncOperation, IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcExecutor,
     IpfsKuboProfileSyncRpcRequest, IpfsKuboReqwestProfileSyncRpcExecutor, IpfsKuboRpcEndpoint,
     IpfsKuboRpcResponse, IpfsKuboRpcTransport, IpfsService, IpfsTransportKind,
-    ipfs_gateway_http_url, ipfs_kubo_cat_url, ipfs_kubo_profile_sync_add_url,
-    ipfs_kubo_profile_sync_added_object_id, ipfs_kubo_profile_sync_name_publish_url,
-    ipfs_kubo_profile_sync_name_resolve_url, ipfs_kubo_profile_sync_pin_add_url,
-    ipfs_kubo_profile_sync_pin_ls_has_recursive_pin, ipfs_kubo_profile_sync_pin_ls_url,
-    ipfs_kubo_profile_sync_pin_rm_url, ipfs_kubo_profile_sync_published_object_id,
-    ipfs_kubo_profile_sync_resolved_object_id,
+    IpnsProfileSyncPeerDiscoveryProvider, ipfs_gateway_http_url, ipfs_kubo_cat_url,
+    ipfs_kubo_profile_sync_add_url, ipfs_kubo_profile_sync_added_object_id,
+    ipfs_kubo_profile_sync_name_publish_url, ipfs_kubo_profile_sync_name_resolve_url,
+    ipfs_kubo_profile_sync_pin_add_url, ipfs_kubo_profile_sync_pin_ls_has_recursive_pin,
+    ipfs_kubo_profile_sync_pin_ls_url, ipfs_kubo_profile_sync_pin_rm_url,
+    ipfs_kubo_profile_sync_published_object_id, ipfs_kubo_profile_sync_resolved_object_id,
 };
 pub use protocols::tor::{
     TOR_HTTP_SCHEME, TOR_HTTPS_SCHEME, TorArtiHttpTransport, TorHttpTarget, TorNetworkScheme,

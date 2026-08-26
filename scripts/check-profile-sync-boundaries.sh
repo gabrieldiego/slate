@@ -223,6 +223,14 @@ require_text \
     'in_process_profile_sync_peer_discovery_models_p2p_networks_without_sockets' \
     'in-process broadweb fixtures must cover p2p-shaped profile-sync discovery without loopback sockets.'
 require_text \
+    crates/broadwebd/src/protocols/ipfs/discovery.rs \
+    'pub struct IpnsProfileSyncPeerDiscoveryProvider' \
+    'broadwebd must keep a concrete IPNS-backed profile-sync discovery provider at the IPFS adapter boundary.'
+require_text \
+    crates/broadwebd/tests/in_process_network_fixture.rs \
+    'ipns_profile_sync_peer_discovery_round_trips_through_kubo_model_without_sockets' \
+    'IPNS-backed profile-sync discovery must be covered through the socketless Kubo model.'
+require_text \
     crates/broadwebd/tests/peer_discovery_socket.rs \
     'SLATE_LOCAL_SOCKET_TESTS' \
     'local socket peer-discovery coverage must remain opt-in instead of binding sockets in default tests.'
@@ -893,6 +901,7 @@ run_test slate-broadwebd service_request_response_envelopes_round_trip_for_ipc_f
 run_test slate-broadwebd service_frame
 run_test slate-broadwebd peer_discovery
 run_test_with_features slate-broadwebd test-fixtures in_process_profile_sync_peer_discovery_models_p2p_networks_without_sockets
+run_test_with_features slate-broadwebd test-fixtures ipns_profile_sync_peer_discovery_round_trips_through_kubo_model_without_sockets
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_get_uses_transport_bytes_not_local_upload_metadata
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_round_trips_state_without_canned_responses
 run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_release_updates_retention_health
