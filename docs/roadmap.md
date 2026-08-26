@@ -1854,13 +1854,22 @@ Current baseline:
   back through Kubo `cat`. The regression runs this against the socketless
   in-process Kubo model, so local CI validates the protocol request sequence
   without joining the public IPFS network.
+- Profile-sync now owns the first trust gate above broadwebd discovery:
+  `filter_trusted_profile_sync_peer_discovery_results` accepts only discovered
+  candidates whose advertised network matches the selected sync network, whose
+  node id is not the local device, whose service-frame capability is present,
+  and whose device public key is already registered and trusted in
+  `slate-settings.db`. The focused regression covers trusted, revoked, unknown,
+  wrong-network, local-device, and wrong-capability advertisements without
+  opening sockets or contacting external discovery.
 
 Next:
 
 - Continue extending the protocol-neutral `profile-sync` application service
   toward real protocol-backed provider materialization.
-- Add signed discovery advertisements and a scheduler-side trust check before
-  automatic sync accepts IPNS, libp2p, Iroh, mDNS, or LAN-discovered providers.
+- Add signed discovery advertisements and wire the trust report into scheduler
+  peer selection before automatic sync accepts IPNS, libp2p, Iroh, mDNS, or
+  LAN-discovered providers.
 - Add a libp2p rendezvous/Kademlia discovery adapter behind
   `ProfileSyncPeerDiscoveryProvider` if its dependency footprint remains
   acceptable under Slate's low-memory development profile.

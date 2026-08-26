@@ -266,6 +266,22 @@ require_text \
     crates/profile-sync/src/lib.rs \
     'daemon: &.*dyn BroadwebdClient' \
     'slate-profile-sync provider handles must depend on the IPC-neutral broadwebd client trait.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'filter_trusted_profile_sync_peer_discovery_results' \
+    'slate-profile-sync must filter broadwebd peer discovery candidates against local trust state before scheduler use.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'trusted_profile_sync_peer_discovery_filters_by_local_trust_state' \
+    'slate-profile-sync peer discovery trust filtering must have focused regression coverage.'
+require_text \
+    docs/architecture/profile-sync.md \
+    'Discovery is only candidate discovery' \
+    'Profile-sync architecture must document that broadwebd discovery is candidate discovery until profile trust checks accept it.'
+require_text \
+    docs/roadmap.md \
+    'first trust gate above broadwebd discovery' \
+    'Roadmap must record the current profile-sync peer discovery trust gate.'
 reject_protocol_model_leak \
     crates/profile-sync/src/lib.rs \
     'SettingsSyncRetentionProviderHandle.*BroadwebDaemon|retention_provider_daemons: \&\[\&BroadwebDaemon\]|Vec<\&.*BroadwebDaemon>|daemon: \&.*BroadwebDaemon' \
@@ -908,6 +924,7 @@ run_test_with_features slate-broadwebd test-fixtures kubo_profile_sync_model_rel
 run_test slate-broadwebd local_fixture_root_health_reports_stale_latest_object_holders
 run_test slate-broadwebd local_fixture_root_health_reports_offline_latest_object_holders
 run_test slate-broadwebd local_fixture_retained_claim_requires_provider_bytes
+run_test slate-profile-sync trusted_profile_sync_peer_discovery_filters_by_local_trust_state
 run_test slate-profile-sync broadwebd_profile_sync_bridges_accept_envelope_only_clients
 run_test slate-profile-sync broadwebd_profile_sync_bridges_accept_client_trait_objects
 run_test slate-profile-sync broadwebd_profile_sync_bridges_accept_framed_clients

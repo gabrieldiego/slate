@@ -1166,6 +1166,16 @@ daemon communication layer with deterministic in-process shims that model
 remote behavior, such as delayed discovery, missing bytes, stale roots, or
 malformed protocol responses.
 
+Discovery is only candidate discovery. Profile-sync owns the trust gate above
+the broadwebd adapter boundary: discovered candidates are filtered against the
+selected sync network, local device id, required profile-sync service-frame
+capability, and the trusted device public-key records already stored in
+`slate-settings.db`. Rejected candidates remain reportable so scheduler and UI
+surfaces can explain wrong-network, self, missing-capability, unknown-device,
+and revoked-device cases without trusting the discovery protocol itself. Signed
+advertisements are still required before this candidate trust gate is used for
+automatic broadweb peer selection.
+
 The low-memory boundary gate now includes a corrupt shared-root object
 regression through the socketless broadwebd bridge. A root may resolve and the
 object bytes may be available, but if those bytes are not a trusted signed
