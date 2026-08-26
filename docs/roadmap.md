@@ -1862,6 +1862,12 @@ Current baseline:
   `slate-settings.db`. The focused regression covers trusted, revoked, unknown,
   wrong-network, local-device, and wrong-capability advertisements without
   opening sockets or contacting external discovery.
+- The `slate-profile-sync` crate is no longer a single source file. The first
+  low-risk split extracts discovery trust filtering, shared object-id
+  de-duplication helpers, and error types into dedicated modules while keeping
+  the public crate re-exports stable. Each extracted module owns focused unit
+  tests so future scheduler/protocol work can change those pieces without
+  relying only on the large integration-style test module.
 
 Next:
 

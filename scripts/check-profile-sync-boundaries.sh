@@ -268,10 +268,30 @@ require_text \
     'slate-profile-sync provider handles must depend on the IPC-neutral broadwebd client trait.'
 require_text \
     crates/profile-sync/src/lib.rs \
+    '^mod discovery_trust;' \
+    'slate-profile-sync must keep discovery trust filtering outside the monolithic lib.rs.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    '^mod errors;' \
+    'slate-profile-sync must keep shared error types outside the monolithic lib.rs.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    '^mod object_ids;' \
+    'slate-profile-sync must keep object-id aggregation helpers outside the monolithic lib.rs.'
+require_text \
+    crates/profile-sync/src/object_ids.rs \
+    'push_unique_object_id_keeps_first_seen_order' \
+    'slate-profile-sync object-id helper module must own focused unit tests.'
+require_text \
+    crates/profile-sync/src/errors.rs \
+    'policy_error_display_includes_profile_role_and_counts' \
+    'slate-profile-sync error module must own focused unit tests.'
+require_text \
+    crates/profile-sync/src/lib.rs \
     'filter_trusted_profile_sync_peer_discovery_results' \
     'slate-profile-sync must filter broadwebd peer discovery candidates against local trust state before scheduler use.'
 require_text \
-    crates/profile-sync/src/lib.rs \
+    crates/profile-sync/src/discovery_trust.rs \
     'trusted_profile_sync_peer_discovery_filters_by_local_trust_state' \
     'slate-profile-sync peer discovery trust filtering must have focused regression coverage.'
 require_text \
