@@ -10,6 +10,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub const DEFAULT_PROFILE_SYNC_PEER_DISCOVERY_MAX_BYTES: usize = 8 * 1024;
+pub const PROFILE_SYNC_PEER_ADVERTISEMENT_SCHEMA_VERSION: u8 = 1;
+pub const PROFILE_SYNC_PEER_ADVERTISEMENT_SIGNATURE_ALGORITHM_ED25519: &str = "ed25519";
 pub const PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY: &str = "profile-sync/service-frame-tcp";
 pub const PROFILE_SYNC_DISCOVERY_PROTOCOL_LIBP2P_RENDEZVOUS: &str = "libp2p-rendezvous";
 pub const PROFILE_SYNC_DISCOVERY_PROTOCOL_LIBP2P_KADEMLIA: &str = "libp2p-kademlia";
@@ -26,6 +28,17 @@ pub struct ProfileSyncPeerAdvertisement {
     pub service_addr: String,
     pub capabilities: Vec<String>,
     pub sequence: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub identity_signature: Option<ProfileSyncPeerAdvertisementSignature>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct ProfileSyncPeerAdvertisementSignature {
+    pub version: u8,
+    pub algorithm: String,
+    pub device_id: String,
+    pub public_key: Vec<u8>,
+    pub signature: Vec<u8>,
 }
 
 impl ProfileSyncPeerAdvertisement {
@@ -61,9 +74,19 @@ impl ProfileSyncPeerAdvertisement {
             service_addr: service_addr.into(),
             capabilities: capabilities.into_iter().map(Into::into).collect::<Vec<_>>(),
             sequence,
+            identity_signature: None,
         };
         advertisement.validate()?;
         Ok(advertisement)
+    }
+
+    pub fn with_identity_signature(
+        mut self,
+        signature: ProfileSyncPeerAdvertisementSignature,
+    ) -> Result<Self, BroadwebdError> {
+        self.identity_signature = Some(signature);
+        self.validate()?;
+        Ok(self)
     }
 
     pub fn validate(&self) -> Result<(), BroadwebdError> {
@@ -79,7 +102,28 @@ impl ProfileSyncPeerAdvertisement {
         for capability in &self.capabilities {
             validate_capability(capability)?;
         }
+        if let Some(signature) = &self.identity_signature {
+            signature.validate_for_node(self.node_id.as_str())?;
+        }
         Ok(())
+    }
+
+    pub fn signing_payload_bytes(&self) -> Result<Vec<u8>, BroadwebdError> {
+        self.validate()?;
+        let payload = ProfileSyncPeerAdvertisementSigningPayload {
+            schema_version: PROFILE_SYNC_PEER_ADVERTISEMENT_SCHEMA_VERSION,
+            network_id: self.network_id.as_str(),
+            node_id: self.node_id.as_str(),
+            provider_id: self.provider_id.as_str(),
+            service_addr: self.service_addr.as_str(),
+            capabilities: self.capabilities.as_slice(),
+            sequence: self.sequence,
+        };
+        serde_json::to_vec(&payload).map_err(|error| {
+            BroadwebdError::Request(format!(
+                "encode profile-sync peer advertisement signing payload: {error}"
+            ))
+        })
     }
 
     pub fn service_socket_addr(&self) -> Result<SocketAddr, BroadwebdError> {
@@ -116,6 +160,75 @@ impl ProfileSyncPeerAdvertisement {
             .iter()
             .any(|capability| capability == PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY)
     }
+}
+
+impl ProfileSyncPeerAdvertisementSignature {
+    pub fn ed25519(
+        device_id: impl Into<String>,
+        public_key: impl Into<Vec<u8>>,
+        signature: impl Into<Vec<u8>>,
+    ) -> Result<Self, BroadwebdError> {
+        let signature = Self {
+            version: PROFILE_SYNC_PEER_ADVERTISEMENT_SCHEMA_VERSION,
+            algorithm: PROFILE_SYNC_PEER_ADVERTISEMENT_SIGNATURE_ALGORITHM_ED25519.to_string(),
+            device_id: device_id.into(),
+            public_key: public_key.into(),
+            signature: signature.into(),
+        };
+        signature.validate()?;
+        Ok(signature)
+    }
+
+    pub fn validate(&self) -> Result<(), BroadwebdError> {
+        validate_discovery_token("signature device id", self.device_id.as_str())?;
+        if self.version != PROFILE_SYNC_PEER_ADVERTISEMENT_SCHEMA_VERSION {
+            return Err(BroadwebdError::Request(format!(
+                "unsupported profile-sync peer advertisement signature version: {}",
+                self.version
+            )));
+        }
+        if self.algorithm != PROFILE_SYNC_PEER_ADVERTISEMENT_SIGNATURE_ALGORITHM_ED25519 {
+            return Err(BroadwebdError::Request(format!(
+                "unsupported profile-sync peer advertisement signature algorithm: {}",
+                self.algorithm
+            )));
+        }
+        if self.public_key.len() != 32 {
+            return Err(BroadwebdError::Request(format!(
+                "profile-sync peer advertisement Ed25519 public key must be 32 bytes, got {}",
+                self.public_key.len()
+            )));
+        }
+        if self.signature.len() != 64 {
+            return Err(BroadwebdError::Request(format!(
+                "profile-sync peer advertisement Ed25519 signature must be 64 bytes, got {}",
+                self.signature.len()
+            )));
+        }
+        Ok(())
+    }
+
+    pub fn validate_for_node(&self, node_id: &str) -> Result<(), BroadwebdError> {
+        self.validate()?;
+        if self.device_id != node_id {
+            return Err(BroadwebdError::Request(format!(
+                "profile-sync peer advertisement signature device {} does not match node {}",
+                self.device_id, node_id
+            )));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize)]
+struct ProfileSyncPeerAdvertisementSigningPayload<'a> {
+    schema_version: u8,
+    network_id: &'a str,
+    node_id: &'a str,
+    provider_id: &'a str,
+    service_addr: &'a str,
+    capabilities: &'a [String],
+    sequence: u64,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -650,6 +763,38 @@ mod tests {
             message
         );
         assert!(advertisement.supports_profile_sync_service_frames());
+    }
+
+    #[test]
+    fn peer_discovery_message_round_trips_signed_profile_sync_advertisement() {
+        let signature =
+            ProfileSyncPeerAdvertisementSignature::ed25519("node-a", vec![7; 32], vec![8; 64])
+                .expect("signature envelope");
+        let advertisement =
+            ProfileSyncPeerAdvertisement::new("local", "node-a", "provider-a", "0.0.0.0:9000", 7)
+                .expect("valid advertisement")
+                .with_identity_signature(signature)
+                .expect("signed advertisement");
+        let message = ProfileSyncPeerDiscoveryMessage::advertisement(advertisement.clone())
+            .expect("valid discovery message");
+        let bytes =
+            encode_profile_sync_peer_discovery_message(&message).expect("encode discovery message");
+
+        assert_eq!(
+            decode_profile_sync_peer_discovery_message(bytes.as_slice())
+                .expect("decode discovery message"),
+            message
+        );
+
+        let signing_payload = String::from_utf8(
+            advertisement
+                .signing_payload_bytes()
+                .expect("signing payload"),
+        )
+        .expect("utf8 signing payload");
+        assert!(signing_payload.contains("\"node_id\":\"node-a\""));
+        assert!(!signing_payload.contains("identity_signature"));
+        assert!(!signing_payload.contains("signature"));
     }
 
     #[test]

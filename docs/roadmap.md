@@ -1873,6 +1873,12 @@ Current baseline:
   `slate-settings.db`. The focused regression covers trusted, revoked, unknown,
   wrong-network, local-device, and wrong-capability advertisements without
   opening sockets or contacting external discovery.
+- Discovery advertisements now carry an optional signed identity envelope.
+  broadwebd keeps the envelope protocol-neutral and bounded while
+  `slate-profile-sync` signs the advertisement body with the local device
+  signer and rejects automatic trust for unsigned advertisements, tampered
+  advertisement bodies, or same-device advertisements signed by an unenrolled
+  replacement key. The focused regressions keep this local and socketless.
 - The `slate-profile-sync` crate is no longer a single source file. The first
   low-risk split extracts discovery trust filtering, shared object-id
   de-duplication helpers, root-id naming helpers, scheduler-facing health

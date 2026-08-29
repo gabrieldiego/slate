@@ -1,5 +1,11 @@
-use slate_broadwebd::{ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryResult};
-use slate_storage::{SlateProfileDatabase, StorageError};
+use core::fmt;
+use slate_broadwebd::{
+    BroadwebdError, ProfileSyncPeerAdvertisement, ProfileSyncPeerAdvertisementSignature,
+    ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryResult,
+};
+use slate_storage::{
+    ProfileSyncDeviceSigner, SignedSyncObject, SlateProfileDatabase, StorageError, SyncObjectError,
+};
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TrustedProfileSyncPeerDiscoveryReport {
@@ -38,6 +44,89 @@ pub enum ProfileSyncPeerDiscoveryTrustRejection {
     MissingProfileSyncServiceFrameCapability,
     UnknownDevicePublicKey,
     UntrustedDevicePublicKey,
+    MissingSignedIdentity,
+    SignatureDeviceMismatch,
+    SignaturePublicKeyMismatch,
+    InvalidSignature,
+}
+
+#[derive(Debug)]
+pub enum ProfileSyncPeerAdvertisementSignatureError {
+    Broadwebd(BroadwebdError),
+    SyncObject(SyncObjectError),
+    SignerNodeMismatch {
+        node_id: String,
+        signer_device_id: String,
+    },
+}
+
+impl fmt::Display for ProfileSyncPeerAdvertisementSignatureError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Broadwebd(error) => write!(
+                formatter,
+                "profile sync peer advertisement serialization failed: {error}"
+            ),
+            Self::SyncObject(error) => {
+                write!(
+                    formatter,
+                    "profile sync peer advertisement signing failed: {error}"
+                )
+            }
+            Self::SignerNodeMismatch {
+                node_id,
+                signer_device_id,
+            } => write!(
+                formatter,
+                "profile sync peer advertisement node {node_id} cannot be signed by device {signer_device_id}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ProfileSyncPeerAdvertisementSignatureError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Broadwebd(error) => Some(error),
+            Self::SyncObject(error) => Some(error),
+            Self::SignerNodeMismatch { .. } => None,
+        }
+    }
+}
+
+impl From<BroadwebdError> for ProfileSyncPeerAdvertisementSignatureError {
+    fn from(error: BroadwebdError) -> Self {
+        Self::Broadwebd(error)
+    }
+}
+
+impl From<SyncObjectError> for ProfileSyncPeerAdvertisementSignatureError {
+    fn from(error: SyncObjectError) -> Self {
+        Self::SyncObject(error)
+    }
+}
+
+pub fn sign_profile_sync_peer_advertisement(
+    advertisement: ProfileSyncPeerAdvertisement,
+    signer: &ProfileSyncDeviceSigner,
+) -> Result<ProfileSyncPeerAdvertisement, ProfileSyncPeerAdvertisementSignatureError> {
+    if advertisement.node_id != signer.device_id() {
+        return Err(
+            ProfileSyncPeerAdvertisementSignatureError::SignerNodeMismatch {
+                node_id: advertisement.node_id,
+                signer_device_id: signer.device_id().to_string(),
+            },
+        );
+    }
+
+    let payload = advertisement.signing_payload_bytes()?;
+    let signed = signer.sign(payload.as_slice())?;
+    let signature = ProfileSyncPeerAdvertisementSignature::ed25519(
+        signed.device_id,
+        signed.public_key,
+        signed.signature,
+    )?;
+    Ok(advertisement.with_identity_signature(signature)?)
 }
 
 pub fn filter_trusted_profile_sync_peer_discovery_results(
@@ -98,13 +187,47 @@ fn profile_sync_peer_discovery_trust_rejection(
             ProfileSyncPeerDiscoveryTrustRejection::UntrustedDevicePublicKey,
         ));
     }
+    let Some(signature) = advertisement.identity_signature.as_ref() else {
+        return Ok(Some(
+            ProfileSyncPeerDiscoveryTrustRejection::MissingSignedIdentity,
+        ));
+    };
+    if signature.device_id != advertisement.node_id {
+        return Ok(Some(
+            ProfileSyncPeerDiscoveryTrustRejection::SignatureDeviceMismatch,
+        ));
+    }
+    if signature.public_key != record.public_key.bytes {
+        return Ok(Some(
+            ProfileSyncPeerDiscoveryTrustRejection::SignaturePublicKeyMismatch,
+        ));
+    }
+
+    let Ok(payload) = advertisement.signing_payload_bytes() else {
+        return Ok(Some(
+            ProfileSyncPeerDiscoveryTrustRejection::InvalidSignature,
+        ));
+    };
+    let signed = SignedSyncObject {
+        version: signature.version,
+        device_id: signature.device_id.clone(),
+        public_key: signature.public_key.clone(),
+        payload,
+        signature: signature.signature.clone(),
+    };
+    if signed.verify_with(&record.public_key).is_err() {
+        return Ok(Some(
+            ProfileSyncPeerDiscoveryTrustRejection::InvalidSignature,
+        ));
+    }
     Ok(None)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        ProfileSyncPeerDiscoveryTrustRejection, filter_trusted_profile_sync_peer_discovery_results,
+        ProfileSyncPeerAdvertisementSignatureError, ProfileSyncPeerDiscoveryTrustRejection,
+        filter_trusted_profile_sync_peer_discovery_results, sign_profile_sync_peer_advertisement,
     };
     use slate_broadwebd::{
         ProfileSyncPeerAdvertisement, ProfileSyncPeerDiscoveryProtocol,
@@ -130,6 +253,8 @@ mod tests {
             ProfileSyncDeviceSigner::generate("peer-trust-remote").expect("trusted signer");
         let revoked_signer =
             ProfileSyncDeviceSigner::generate("peer-trust-revoked").expect("revoked signer");
+        let conflicting_key_signer = ProfileSyncDeviceSigner::generate(trusted_signer.device_id())
+            .expect("conflicting signer for trusted device id");
 
         for public_key in [
             trusted_signer.public_key().expect("trusted public key"),
@@ -148,10 +273,18 @@ mod tests {
             .expect("revoke remote peer public key")
             .expect("revoked remote peer public key");
 
+        let mut invalid_signature = test_signed_discovery_result(
+            network_id,
+            &trusted_signer,
+            "peer-trust-provider-g",
+            "/ip4/127.0.0.1/tcp/9407",
+        );
+        invalid_signature.advertisement.service_addr = "/ip4/127.0.0.1/tcp/9499".to_string();
+
         let candidates = vec![
-            test_discovery_result(
+            test_signed_discovery_result(
                 network_id,
-                trusted_signer.device_id(),
+                &trusted_signer,
                 "peer-trust-provider-a",
                 "/ip4/127.0.0.1/tcp/9401",
             ),
@@ -186,6 +319,19 @@ mod tests {
                 "/ip4/127.0.0.1/tcp/9406",
                 ["profile-sync/metadata-only"],
             ),
+            test_discovery_result(
+                network_id,
+                trusted_signer.device_id(),
+                "peer-trust-provider-g",
+                "/ip4/127.0.0.1/tcp/9407",
+            ),
+            invalid_signature,
+            test_signed_discovery_result(
+                network_id,
+                &conflicting_key_signer,
+                "peer-trust-provider-h",
+                "/ip4/127.0.0.1/tcp/9408",
+            ),
         ];
 
         let report = filter_trusted_profile_sync_peer_discovery_results(
@@ -199,7 +345,7 @@ mod tests {
             report.trusted_peers[0].advertisement.node_id.as_str(),
             trusted_signer.device_id()
         );
-        assert_eq!(report.rejected_peer_count(), 5);
+        assert_eq!(report.rejected_peer_count(), 8);
         assert_eq!(
             report
                 .rejected_peers
@@ -238,6 +384,21 @@ mod tests {
                     "peer-trust-provider-f",
                     ProfileSyncPeerDiscoveryTrustRejection::MissingProfileSyncServiceFrameCapability,
                 ),
+                (
+                    trusted_signer.device_id(),
+                    "peer-trust-provider-g",
+                    ProfileSyncPeerDiscoveryTrustRejection::MissingSignedIdentity,
+                ),
+                (
+                    trusted_signer.device_id(),
+                    "peer-trust-provider-g",
+                    ProfileSyncPeerDiscoveryTrustRejection::InvalidSignature,
+                ),
+                (
+                    trusted_signer.device_id(),
+                    "peer-trust-provider-h",
+                    ProfileSyncPeerDiscoveryTrustRejection::SignaturePublicKeyMismatch,
+                ),
             ]
         );
         assert!(
@@ -250,6 +411,33 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn profile_sync_peer_advertisement_signing_requires_matching_node_id() {
+        let signer =
+            ProfileSyncDeviceSigner::generate("peer-trust-signer").expect("generate signer");
+        let error = sign_profile_sync_peer_advertisement(
+            ProfileSyncPeerAdvertisement::new(
+                "peertrustnetwork",
+                "peer-trust-other-node",
+                "peer-trust-provider",
+                "/ip4/127.0.0.1/tcp/9401",
+                1,
+            )
+            .expect("advertisement"),
+            &signer,
+        )
+        .expect_err("mismatched node id should not be signed");
+
+        assert!(matches!(
+            error,
+            ProfileSyncPeerAdvertisementSignatureError::SignerNodeMismatch {
+                node_id,
+                signer_device_id,
+            } if node_id == "peer-trust-other-node"
+                && signer_device_id == signer.device_id()
+        ));
     }
 
     fn test_discovery_result(
@@ -286,6 +474,30 @@ mod tests {
                 1,
             )
             .expect("build profile-sync discovery test advertisement"),
+        }
+    }
+
+    fn test_signed_discovery_result(
+        network_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        provider_id: &str,
+        service_addr: &str,
+    ) -> ProfileSyncPeerDiscoveryResult {
+        ProfileSyncPeerDiscoveryResult {
+            protocol: ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
+            namespace: "slate-profile-sync".to_string(),
+            advertisement: sign_profile_sync_peer_advertisement(
+                ProfileSyncPeerAdvertisement::new(
+                    network_id,
+                    signer.device_id(),
+                    provider_id,
+                    service_addr,
+                    1,
+                )
+                .expect("build profile-sync discovery test advertisement"),
+                signer,
+            )
+            .expect("sign profile-sync discovery test advertisement"),
         }
     }
 

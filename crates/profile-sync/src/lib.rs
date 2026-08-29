@@ -68,8 +68,9 @@ mod object_ids;
 mod root_ids;
 
 pub use discovery_trust::{
-    ProfileSyncPeerDiscoveryTrustRejection, RejectedProfileSyncPeerDiscoveryCandidate,
-    TrustedProfileSyncPeerDiscoveryReport, filter_trusted_profile_sync_peer_discovery_results,
+    ProfileSyncPeerAdvertisementSignatureError, ProfileSyncPeerDiscoveryTrustRejection,
+    RejectedProfileSyncPeerDiscoveryCandidate, TrustedProfileSyncPeerDiscoveryReport,
+    filter_trusted_profile_sync_peer_discovery_results, sign_profile_sync_peer_advertisement,
 };
 pub use errors::{
     ProfileSyncCredentialError, ProfileSyncCycleError, ProfileSyncCycleWithHealthError,
