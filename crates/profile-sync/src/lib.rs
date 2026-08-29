@@ -10737,8 +10737,8 @@ mod tests {
         ProfileSyncCycleWithHealthError, ProfileSyncMembershipLog, ProfileSyncMembershipLogEntry,
         ProfileSyncMembershipLogPreviewStatus, ProfileSyncMembershipLogPublicationPlanStatus,
         ProfileSyncMembershipLogPullStatus, ProfileSyncMembershipRecordPullStatus,
-        ProfileSyncPolicyError, ProfileSyncPublishError, ProfileSyncReceiveError,
-        SettingsSyncCyclePolicy, SettingsSyncHealthIssueComponent,
+        ProfileSyncPeerDiscoveryTrustRejection, ProfileSyncPolicyError, ProfileSyncPublishError,
+        ProfileSyncReceiveError, SettingsSyncCyclePolicy, SettingsSyncHealthIssueComponent,
         SettingsSyncRetentionProviderHandle, SettingsSyncRootObjectProviderIssue,
         SettingsSyncRootObjectProviderIssueKind, SettingsSyncRuntimeSecrets,
         SettingsSyncScheduledMembershipCyclePlanAttemptCycle, SettingsSyncSchedulerConfig,
@@ -10750,7 +10750,8 @@ mod tests {
     };
     use slate_broadwebd::{
         BroadwebStatusSnapshot, BroadwebdClient, BroadwebdError,
-        DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE, DaemonHealth, DaemonLifecycle,
+        DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+        DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH, DaemonHealth, DaemonLifecycle,
         ProfileSyncPeerAdvertisement, ProfileSyncPeerDiscoveryProtocol,
         ProfileSyncPeerDiscoveryResult,
         ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
@@ -24115,6 +24116,8 @@ mod tests {
         let device_state_root = test_state_root("scheduler-trusted-discovery-device");
         let trusted_provider_state_root = test_state_root("scheduler-trusted-discovery-provider");
         let rejected_provider_state_root = test_state_root("scheduler-rejected-discovery-provider");
+        let future_epoch_provider_state_root =
+            test_state_root("scheduler-future-epoch-discovery-provider");
         let db_root = test_state_root("scheduler-trusted-discovery-db");
         let device_daemon = network
             .daemon_for_device(
@@ -24141,6 +24144,15 @@ mod tests {
                 "runtime-scheduler-rejected-discovery-pinner",
             )
             .expect("start in-process rejected discovery provider daemon");
+        let future_epoch_provider_id =
+            "local-fixture-availability-runtime-scheduler-future-epoch-discovery-pinner";
+        let future_epoch_provider_daemon = network
+            .daemon_for_availability_provider(
+                &future_epoch_provider_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-future-epoch-discovery-pinner",
+            )
+            .expect("start in-process future-epoch discovery provider daemon");
         let database = SlateProfileDatabase::open_resolved_with_device_id(
             db_root.join(DEFAULT_DATABASE_FILE_NAME),
             "runtime-scheduler-trusted-discovery-a",
@@ -24159,6 +24171,9 @@ mod tests {
         let rejected_discovery_signer =
             ProfileSyncDeviceSigner::generate("runtime-scheduler-rejected-discovery-peer")
                 .expect("generate rejected discovery signer");
+        let future_epoch_discovery_signer =
+            ProfileSyncDeviceSigner::generate("runtime-scheduler-future-epoch-discovery-peer")
+                .expect("generate future-epoch discovery signer");
         register_test_content_key_epoch(&database, profile);
         for public_key in [
             local_signer.public_key().expect("local public key"),
@@ -24174,6 +24189,15 @@ mod tests {
                 })
                 .expect("register trusted discovery public key");
         }
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: future_epoch_discovery_signer
+                    .public_key()
+                    .expect("future-epoch discovery public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH + 1,
+            })
+            .expect("register future-epoch discovery public key");
         database
             .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
             .expect("write trusted discovery scheduler setting");
@@ -24211,6 +24235,22 @@ mod tests {
                 )
                 .expect("sign rejected discovery advertisement"),
             },
+            ProfileSyncPeerDiscoveryResult {
+                protocol: ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
+                namespace: DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE.to_string(),
+                advertisement: sign_profile_sync_peer_advertisement(
+                    ProfileSyncPeerAdvertisement::new(
+                        network_id,
+                        future_epoch_discovery_signer.device_id(),
+                        future_epoch_provider_id,
+                        "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/future-epoch-profile-sync-peer",
+                        1,
+                    )
+                    .expect("future-epoch discovery advertisement"),
+                    &future_epoch_discovery_signer,
+                )
+                .expect("sign future-epoch discovery advertisement"),
+            },
         ];
         let discovery_report = filter_trusted_profile_sync_peer_discovery_results(
             &database,
@@ -24220,13 +24260,34 @@ mod tests {
         )
         .expect("filter trusted discovery results");
         assert_eq!(discovery_report.trusted_peer_count(), 1);
-        assert_eq!(discovery_report.rejected_peer_count(), 1);
+        assert_eq!(discovery_report.rejected_peer_count(), 2);
+        assert_eq!(
+            discovery_report
+                .rejected_peers
+                .iter()
+                .map(|rejection| { (rejection.provider_id.as_str(), rejection.reason,) })
+                .collect::<Vec<_>>(),
+            vec![
+                (
+                    rejected_provider_id,
+                    ProfileSyncPeerDiscoveryTrustRejection::UnknownDevicePublicKey,
+                ),
+                (
+                    future_epoch_provider_id,
+                    ProfileSyncPeerDiscoveryTrustRejection::SignerMembershipEpochTooNew,
+                ),
+            ]
+        );
 
         let retention_provider_handles = [
             SettingsSyncRetentionProviderHandle::new(trusted_provider_id, &trusted_provider_daemon),
             SettingsSyncRetentionProviderHandle::new(
                 rejected_provider_id,
                 &rejected_provider_daemon,
+            ),
+            SettingsSyncRetentionProviderHandle::new(
+                future_epoch_provider_id,
+                &future_epoch_provider_daemon,
             ),
         ];
         let config = SettingsSyncSchedulerConfig::new(
@@ -24273,6 +24334,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(trusted_provider_state_root);
         let _ = std::fs::remove_dir_all(rejected_provider_state_root);
+        let _ = std::fs::remove_dir_all(future_epoch_provider_state_root);
         let _ = std::fs::remove_dir_all(db_root);
     }
 

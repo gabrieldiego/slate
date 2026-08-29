@@ -1916,14 +1916,17 @@ Next:
 
 - Continue extending the protocol-neutral `profile-sync` application service
   toward real protocol-backed provider materialization.
-- Add signed discovery advertisements and wire the trust report into scheduler
-  peer selection before automatic sync accepts IPNS, libp2p, Iroh, mDNS, or
-  LAN-discovered providers.
+- Wire the trusted discovery execution helper into the runtime scheduler/UI
+  path that actively queries configured IPNS, libp2p, Iroh, mDNS, or LAN
+  discovery providers before a sync run. The signed trust report and
+  scheduler-side provider filtering are now covered locally, but automatic
+  discovery execution still needs a runtime orchestration path.
 - Add a libp2p rendezvous/Kademlia discovery adapter behind
   `ProfileSyncPeerDiscoveryProvider` if its dependency footprint remains
   acceptable under Slate's low-memory development profile.
-- Add signed peer advertisements and membership checks so LAN discovery cannot
-  inject arbitrary profile-sync providers into an enrolled account.
+- Update the opt-in LAN discovery smoke to produce and consume signed peer
+  advertisements with membership epochs before treating it as representative of
+  automatic enrolled-account discovery.
 - Continue splitting sync backends into discovery, connectivity, transfer,
   availability, and mutable-root implementations so different broadweb
   protocols can be combined behind the typed provider role records.
@@ -1931,8 +1934,6 @@ Next:
   equal-control account authority model: add epoch transition rules,
   multi-approval policy, recovery-file enrollment, and provider records with no
   profile write authority.
-- Add Kubo RPC-backed operations for encrypted object add, pin, unpin, pin
-  verification, IPNS publish, and IPNS resolve as the first IPFS/IPNS backend.
 - Implement the actual runtime sync loop that supplies a broadwebd-backed object
   source, trusted account keys loaded from `slate-settings.db`, and explicit
   sync policy checks to the storage pull-and-apply helper.
