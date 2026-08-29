@@ -180,8 +180,19 @@ Priority order:
 
 ## Profile Sync
 
-_Current focus: safe broadweb sync between Slate devices logged into the same
-account._
+_Current focus: fully validating safe profile sync locally before real-internet
+broadweb testing._
+
+Current goal:
+
+- Fully validate Slate distributed profile synchronization locally before
+  real-internet testing. Keep `slate-settings.db` as local-first encrypted
+  syncable state, implement the runtime paths needed for user-facing profile
+  sync, model chosen broadweb protocol behavior through local-only
+  deterministic fixtures that mirror real adapter boundaries, avoid live
+  network dependencies in automated tests, commit each small step, and
+  revalidate profile storage, rail app, chrome, broadwebd, and protocol
+  boundaries to prevent regressions.
 
 Architecture note:
 

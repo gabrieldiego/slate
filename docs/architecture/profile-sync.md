@@ -1,6 +1,6 @@
 # Profile Sync Over Broadweb Protocols
 
-Status: planning
+Status: local validation
 
 Slate profile sync should make profile state portable without turning
 `slate-settings.db` into an unsafe multi-writer database. The product goal is
@@ -13,6 +13,15 @@ retention, publishing, pinning where applicable, and provider health. Slate
 storage and browser-core own settings semantics, merge policy, account consent,
 and runtime application of updates. IPFS/IPNS is the first concrete backend
 under consideration, not a hard product dependency.
+
+The current implementation phase is to make this behavior fully testable
+without the real internet. Automated tests should use local-only deterministic
+fixtures that model broadweb protocol behavior behind the same adapter
+boundaries used by runtime code. Those fixtures are socket substitutes, not
+alternate protocol implementations: the production protocol clients should be
+written as if they were talking to real IPFS/IPNS, libp2p/Iroh, Tor, or future
+broadweb services, with fixture transports swapped in underneath for repeatable
+tests.
 
 ## Goals
 
