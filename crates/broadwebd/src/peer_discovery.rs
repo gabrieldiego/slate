@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 
 pub const DEFAULT_PROFILE_SYNC_PEER_DISCOVERY_MAX_BYTES: usize = 8 * 1024;
 pub const PROFILE_SYNC_PEER_ADVERTISEMENT_SCHEMA_VERSION: u8 = 1;
+pub const DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH: i64 = 1;
 pub const PROFILE_SYNC_PEER_ADVERTISEMENT_SIGNATURE_ALGORITHM_ED25519: &str = "ed25519";
 pub const PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY: &str = "profile-sync/service-frame-tcp";
 pub const PROFILE_SYNC_DISCOVERY_PROTOCOL_LIBP2P_RENDEZVOUS: &str = "libp2p-rendezvous";
@@ -27,6 +28,8 @@ pub struct ProfileSyncPeerAdvertisement {
     pub provider_id: String,
     pub service_addr: String,
     pub capabilities: Vec<String>,
+    #[serde(default = "default_profile_sync_peer_advertisement_membership_epoch")]
+    pub membership_epoch: i64,
     pub sequence: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub identity_signature: Option<ProfileSyncPeerAdvertisementSignature>,
@@ -73,11 +76,18 @@ impl ProfileSyncPeerAdvertisement {
             provider_id: provider_id.into(),
             service_addr: service_addr.into(),
             capabilities: capabilities.into_iter().map(Into::into).collect::<Vec<_>>(),
+            membership_epoch: DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH,
             sequence,
             identity_signature: None,
         };
         advertisement.validate()?;
         Ok(advertisement)
+    }
+
+    pub fn with_membership_epoch(mut self, membership_epoch: i64) -> Result<Self, BroadwebdError> {
+        self.membership_epoch = membership_epoch;
+        self.validate()?;
+        Ok(self)
     }
 
     pub fn with_identity_signature(
@@ -102,6 +112,12 @@ impl ProfileSyncPeerAdvertisement {
         for capability in &self.capabilities {
             validate_capability(capability)?;
         }
+        if self.membership_epoch < 1 {
+            return Err(BroadwebdError::Request(format!(
+                "profile-sync peer advertisement membership epoch must be positive, got {}",
+                self.membership_epoch
+            )));
+        }
         if let Some(signature) = &self.identity_signature {
             signature.validate_for_node(self.node_id.as_str())?;
         }
@@ -117,6 +133,7 @@ impl ProfileSyncPeerAdvertisement {
             provider_id: self.provider_id.as_str(),
             service_addr: self.service_addr.as_str(),
             capabilities: self.capabilities.as_slice(),
+            membership_epoch: self.membership_epoch,
             sequence: self.sequence,
         };
         serde_json::to_vec(&payload).map_err(|error| {
@@ -228,7 +245,12 @@ struct ProfileSyncPeerAdvertisementSigningPayload<'a> {
     provider_id: &'a str,
     service_addr: &'a str,
     capabilities: &'a [String],
+    membership_epoch: i64,
     sequence: u64,
+}
+
+fn default_profile_sync_peer_advertisement_membership_epoch() -> i64 {
+    DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -793,8 +815,24 @@ mod tests {
         )
         .expect("utf8 signing payload");
         assert!(signing_payload.contains("\"node_id\":\"node-a\""));
+        assert!(signing_payload.contains("\"membership_epoch\":1"));
         assert!(!signing_payload.contains("identity_signature"));
         assert!(!signing_payload.contains("signature"));
+    }
+
+    #[test]
+    fn peer_discovery_rejects_non_positive_membership_epoch() {
+        let error =
+            ProfileSyncPeerAdvertisement::new("local", "node-a", "provider-a", "0.0.0.0:9000", 7)
+                .expect("valid advertisement")
+                .with_membership_epoch(0)
+                .expect_err("zero membership epoch should be rejected");
+
+        assert!(matches!(
+            error,
+            BroadwebdError::Request(message)
+                if message.contains("membership epoch must be positive")
+        ));
     }
 
     #[test]

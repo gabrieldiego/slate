@@ -48,6 +48,7 @@ pub enum ProfileSyncPeerDiscoveryTrustRejection {
     MissingSignedIdentity,
     SignatureDeviceMismatch,
     SignaturePublicKeyMismatch,
+    SignerMembershipEpochTooNew,
     InvalidSignature,
 }
 
@@ -246,6 +247,11 @@ fn profile_sync_peer_discovery_trust_rejection(
             ProfileSyncPeerDiscoveryTrustRejection::UntrustedDevicePublicKey,
         ));
     }
+    if record.membership_epoch > advertisement.membership_epoch {
+        return Ok(Some(
+            ProfileSyncPeerDiscoveryTrustRejection::SignerMembershipEpochTooNew,
+        ));
+    }
     let Some(signature) = advertisement.identity_signature.as_ref() else {
         return Ok(Some(
             ProfileSyncPeerDiscoveryTrustRejection::MissingSignedIdentity,
@@ -290,7 +296,8 @@ mod tests {
         sign_profile_sync_peer_advertisement,
     };
     use slate_broadwebd::{
-        DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE, ProfileSyncPeerAdvertisement,
+        DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+        DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH, ProfileSyncPeerAdvertisement,
         ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryProvider,
         ProfileSyncPeerDiscoveryQuery, ProfileSyncPeerDiscoveryResult,
         test_fixtures::SimulatedProfileSyncPeerDiscoveryNetwork,
@@ -315,6 +322,8 @@ mod tests {
             ProfileSyncDeviceSigner::generate("peer-trust-remote").expect("trusted signer");
         let revoked_signer =
             ProfileSyncDeviceSigner::generate("peer-trust-revoked").expect("revoked signer");
+        let future_epoch_signer =
+            ProfileSyncDeviceSigner::generate("peer-trust-future-epoch").expect("future signer");
         let conflicting_key_signer = ProfileSyncDeviceSigner::generate(trusted_signer.device_id())
             .expect("conflicting signer for trusted device id");
 
@@ -330,6 +339,15 @@ mod tests {
                 })
                 .expect("register peer public key");
         }
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: future_epoch_signer
+                    .public_key()
+                    .expect("future-epoch public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH + 1,
+            })
+            .expect("register future-epoch peer public key");
         database
             .set_sync_device_public_key_trusted(profile, revoked_signer.device_id(), false)
             .expect("revoke remote peer public key")
@@ -394,6 +412,12 @@ mod tests {
                 "peer-trust-provider-h",
                 "/ip4/127.0.0.1/tcp/9408",
             ),
+            test_signed_discovery_result(
+                network_id,
+                &future_epoch_signer,
+                "peer-trust-provider-i",
+                "/ip4/127.0.0.1/tcp/9409",
+            ),
         ];
 
         let report = filter_trusted_profile_sync_peer_discovery_results(
@@ -407,7 +431,7 @@ mod tests {
             report.trusted_peers[0].advertisement.node_id.as_str(),
             trusted_signer.device_id()
         );
-        assert_eq!(report.rejected_peer_count(), 8);
+        assert_eq!(report.rejected_peer_count(), 9);
         assert_eq!(
             report
                 .rejected_peers
@@ -460,6 +484,11 @@ mod tests {
                     trusted_signer.device_id(),
                     "peer-trust-provider-h",
                     ProfileSyncPeerDiscoveryTrustRejection::SignaturePublicKeyMismatch,
+                ),
+                (
+                    future_epoch_signer.device_id(),
+                    "peer-trust-provider-i",
+                    ProfileSyncPeerDiscoveryTrustRejection::SignerMembershipEpochTooNew,
                 ),
             ]
         );

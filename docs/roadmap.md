@@ -1899,6 +1899,11 @@ Current baseline:
   local IPNS model aligned with the signed-discovery trust boundary without
   contacting public IPFS/IPNS, opening loopback services, or changing the
   production Kubo request builder.
+- Discovery advertisements now include a signed membership epoch. The
+  profile-sync trust filter rejects a discovered peer when the locally trusted
+  device key was introduced after the advertisement's claimed epoch, so local
+  fixtures can model stale or pre-authorization discovery data before any
+  automatic provider selection trusts it.
 - The `slate-profile-sync` crate is no longer a single source file. The first
   low-risk split extracts discovery trust filtering, shared object-id
   de-duplication helpers, root-id naming helpers, scheduler-facing health
