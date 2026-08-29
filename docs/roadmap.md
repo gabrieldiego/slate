@@ -1893,6 +1893,12 @@ Current baseline:
   regression publishes signed trusted and unknown advertisements through the
   socketless fixture provider and proves the unknown signer is rejected before
   provider selection.
+- The socketless IPNS/Kubo discovery fixture now carries the same signed
+  identity envelope through the production-shaped `add`, `pin/add`,
+  `name/publish`, `name/resolve`, and `cat` request sequence. This keeps the
+  local IPNS model aligned with the signed-discovery trust boundary without
+  contacting public IPFS/IPNS, opening loopback services, or changing the
+  production Kubo request builder.
 - The `slate-profile-sync` crate is no longer a single source file. The first
   low-risk split extracts discovery trust filtering, shared object-id
   de-duplication helpers, root-id naming helpers, scheduler-facing health

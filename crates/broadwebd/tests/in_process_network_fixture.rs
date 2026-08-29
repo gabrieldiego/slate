@@ -4,15 +4,16 @@
 use slate_broadwebd::{
     BroadwebDaemon, BroadwebdError, DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE, HttpFetchRequest,
     HttpHeader, IpnsProfileSyncPeerDiscoveryProvider, PluginRegistry, ProfileSyncObjectRequest,
-    ProfileSyncPeerAdvertisement, ProfileSyncPeerDiscoveryProtocol,
-    ProfileSyncPeerDiscoveryProvider, ProfileSyncPeerDiscoveryQuery, ProfileSyncPutObjectRequest,
-    ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate,
-    ResourceBudget,
+    ProfileSyncPeerAdvertisement, ProfileSyncPeerAdvertisementSignature,
+    ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryProvider,
+    ProfileSyncPeerDiscoveryQuery, ProfileSyncPutObjectRequest, ProfileSyncRequest,
+    ProfileSyncResponse, ProfileSyncRootRequest, ProfileSyncRootUpdate, ResourceBudget,
     test_fixtures::{
         InProcessBroadwebNetwork, InternalFixtureHttpResponse, InternalKuboRpcResponse,
         InternalKuboRpcTransportShim, ProfileSyncFixtureCapacity,
     },
 };
+use slate_storage::ProfileSyncDeviceSigner;
 
 #[test]
 fn daemon_fetches_fixture_http_without_loopback_transport() {
@@ -277,19 +278,25 @@ fn ipns_profile_sync_peer_discovery_round_trips_through_kubo_model_without_socke
     )
     .with_publish_key_id("device-a")
     .with_resolve_name("device-a");
+    let signer = ProfileSyncDeviceSigner::generate("device-a")
+        .expect("generate IPNS discovery advertisement signer");
 
     provider
         .publish_profile_sync_peer(
             ProfileSyncPeerDiscoveryProtocol::Ipns,
             DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
-            ProfileSyncPeerAdvertisement::new(
-                "profile-a",
-                "device-a",
-                "provider-a",
-                "/dnsaddr/rendezvous.slate.test/tcp/443/wss/p2p/12D3KooWDeviceA",
-                1,
+            sign_test_profile_sync_peer_advertisement(
+                ProfileSyncPeerAdvertisement::new(
+                    "profile-a",
+                    "device-a",
+                    "provider-a",
+                    "/dnsaddr/rendezvous.slate.test/tcp/443/wss/p2p/12D3KooWDeviceA",
+                    1,
+                )
+                .expect("IPNS-discovered advertisement"),
+                &signer,
             )
-            .expect("IPNS-discovered advertisement"),
+            .expect("signed IPNS-discovered advertisement"),
         )
         .expect("publish IPNS discovery record through Kubo fixture");
 
@@ -311,6 +318,7 @@ fn ipns_profile_sync_peer_discovery_round_trips_through_kubo_model_without_socke
     );
     assert_eq!(discovered[0].advertisement.node_id, "device-a");
     assert_eq!(discovered[0].advertisement.provider_id, "provider-a");
+    assert!(discovered[0].advertisement.identity_signature.is_some());
     assert!(discovered[0].advertisement.has_multiaddr_service_endpoint());
     let requests = kubo.finish();
     assert_eq!(requests.len(), 5);
@@ -338,6 +346,22 @@ fn ipns_profile_sync_peer_discovery_round_trips_through_kubo_model_without_socke
         requests[4],
         format!("POST /api/v0/cat?arg=%2Fipfs%2F{object_id} HTTP/1.1")
     );
+}
+
+fn sign_test_profile_sync_peer_advertisement(
+    advertisement: ProfileSyncPeerAdvertisement,
+    signer: &ProfileSyncDeviceSigner,
+) -> Result<ProfileSyncPeerAdvertisement, BroadwebdError> {
+    let payload = advertisement.signing_payload_bytes()?;
+    let signed = signer
+        .sign(payload.as_slice())
+        .map_err(|error| BroadwebdError::Request(error.to_string()))?;
+    let signature = ProfileSyncPeerAdvertisementSignature::ed25519(
+        signed.device_id,
+        signed.public_key,
+        signed.signature,
+    )?;
+    advertisement.with_identity_signature(signature)
 }
 
 #[test]
