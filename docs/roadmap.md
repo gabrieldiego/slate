@@ -1886,6 +1886,12 @@ Current baseline:
   regression keeps the whole path local: two fixture providers exist, only one
   signed/trusted advertisement is accepted, and only that provider retains the
   published settings objects.
+- The settings sync scheduler can now also query a
+  `ProfileSyncPeerDiscoveryProvider` directly, apply the local signed trust
+  filter, preserve the trusted/rejected discovery report for diagnostics, and
+  then run the existing retention-provider selection path. The regression uses
+  the socketless discovery provider and verifies unknown and future-epoch peers
+  are excluded before provider handles are selected.
 - `slate-profile-sync` now owns a discovery execution helper over broadwebd's
   `ProfileSyncPeerDiscoveryProvider` trait. It asks the provider for protocol
   candidates, then immediately applies the signed local trust filter before
@@ -1916,11 +1922,9 @@ Next:
 
 - Continue extending the protocol-neutral `profile-sync` application service
   toward real protocol-backed provider materialization.
-- Wire the trusted discovery execution helper into the runtime scheduler/UI
-  path that actively queries configured IPNS, libp2p, Iroh, mDNS, or LAN
-  discovery providers before a sync run. The signed trust report and
-  scheduler-side provider filtering are now covered locally, but automatic
-  discovery execution still needs a runtime orchestration path.
+- Wire the scheduler's trusted-discovery plan/run path into Settings/UI cadence
+  control so configured IPNS, libp2p, Iroh, mDNS, or LAN discovery providers
+  can be queried before a user-facing sync run.
 - Add a libp2p rendezvous/Kademlia discovery adapter behind
   `ProfileSyncPeerDiscoveryProvider` if its dependency footprint remains
   acceptable under Slate's low-memory development profile.

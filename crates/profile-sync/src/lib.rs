@@ -9,6 +9,7 @@ use slate_broadwebd::test_fixtures::LocalProfileSyncFixture;
 use slate_broadwebd::{
     BroadwebdClient, BroadwebdError, IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
     ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
+    ProfileSyncPeerDiscoveryProvider, ProfileSyncPeerDiscoveryQuery,
     ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
     ProfileSyncProviderHealth as BroadwebdProfileSyncProviderHealth,
     ProfileSyncProviderRecord as BroadwebdProfileSyncProviderRecord,
@@ -1597,6 +1598,26 @@ impl SettingsSyncScheduledCycleRun {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncTrustedDiscoveryCycleRun {
+    pub discovery_report: TrustedProfileSyncPeerDiscoveryReport,
+    pub cycle: SettingsSyncScheduledCycleRun,
+}
+
+impl SettingsSyncTrustedDiscoveryCycleRun {
+    pub fn trusted_peer_count(&self) -> usize {
+        self.discovery_report.trusted_peer_count()
+    }
+
+    pub fn rejected_peer_count(&self) -> usize {
+        self.discovery_report.rejected_peer_count()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.cycle.selected_retention_provider_count()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SettingsSyncScheduledCompactionRun {
     pub preflight: SettingsSyncCyclePreflight,
     pub selected_retention_provider_ids: Vec<String>,
@@ -1808,6 +1829,26 @@ impl SettingsSyncScheduledCyclePlan {
 
     pub fn degraded_before(&self) -> bool {
         self.preflight.before_health.degraded()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SettingsSyncTrustedDiscoveryCyclePlan {
+    pub discovery_report: TrustedProfileSyncPeerDiscoveryReport,
+    pub cycle: SettingsSyncScheduledCyclePlan,
+}
+
+impl SettingsSyncTrustedDiscoveryCyclePlan {
+    pub fn trusted_peer_count(&self) -> usize {
+        self.discovery_report.trusted_peer_count()
+    }
+
+    pub fn rejected_peer_count(&self) -> usize {
+        self.discovery_report.rejected_peer_count()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.cycle.selected_retention_provider_count()
     }
 }
 
@@ -4819,6 +4860,19 @@ fn trusted_discovered_settings_sync_retention_provider_handles<'a>(
         .collect()
 }
 
+fn profile_sync_peer_discovery_error_to_cycle_with_health(
+    error: ProfileSyncPeerDiscoveryError,
+) -> ProfileSyncCycleWithHealthError {
+    match error {
+        ProfileSyncPeerDiscoveryError::Broadwebd(error) => {
+            ProfileSyncCycleWithHealthError::Health(error)
+        }
+        ProfileSyncPeerDiscoveryError::Storage(error) => ProfileSyncCycleWithHealthError::Cycle(
+            ProfileSyncCycleError::Credentials(ProfileSyncCredentialError::Storage(error)),
+        ),
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct StoredRetentionProviderSelection {
     stored_provider_count: usize,
@@ -6530,6 +6584,36 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         self.plan_once_selecting_retention_providers(database, config, signer, &trusted_handles)
     }
 
+    pub fn plan_once_discovering_trusted_retention_providers<'provider>(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        signer: &ProfileSyncDeviceSigner,
+        discovery_provider: &(impl ProfileSyncPeerDiscoveryProvider + ?Sized),
+        discovery_query: &ProfileSyncPeerDiscoveryQuery,
+        retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'provider>],
+    ) -> Result<SettingsSyncTrustedDiscoveryCyclePlan, ProfileSyncCycleWithHealthError> {
+        let discovery_report = discover_trusted_profile_sync_peers(
+            database,
+            config.profile.as_str(),
+            discovery_provider,
+            discovery_query,
+        )
+        .map_err(profile_sync_peer_discovery_error_to_cycle_with_health)?;
+        let cycle = self.plan_once_selecting_trusted_discovered_retention_providers(
+            database,
+            config,
+            signer,
+            &discovery_report,
+            retention_provider_handles,
+        )?;
+
+        Ok(SettingsSyncTrustedDiscoveryCyclePlan {
+            discovery_report,
+            cycle,
+        })
+    }
+
     pub fn plan_once_with_stored_retention_providers(
         &self,
         database: &SlateProfileDatabase,
@@ -6799,6 +6883,36 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             retention_provider_handles,
         );
         self.run_once_selecting_retention_providers(database, config, secrets, &trusted_handles)
+    }
+
+    pub fn run_once_discovering_trusted_retention_providers<'provider>(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        discovery_provider: &(impl ProfileSyncPeerDiscoveryProvider + ?Sized),
+        discovery_query: &ProfileSyncPeerDiscoveryQuery,
+        retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'provider>],
+    ) -> Result<SettingsSyncTrustedDiscoveryCycleRun, ProfileSyncCycleWithHealthError> {
+        let discovery_report = discover_trusted_profile_sync_peers(
+            database,
+            config.profile.as_str(),
+            discovery_provider,
+            discovery_query,
+        )
+        .map_err(profile_sync_peer_discovery_error_to_cycle_with_health)?;
+        let cycle = self.run_once_selecting_trusted_discovered_retention_providers(
+            database,
+            config,
+            secrets,
+            &discovery_report,
+            retention_provider_handles,
+        )?;
+
+        Ok(SettingsSyncTrustedDiscoveryCycleRun {
+            discovery_report,
+            cycle,
+        })
     }
 
     pub fn compact_once_selecting_retention_providers(
@@ -10753,6 +10867,7 @@ mod tests {
         DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
         DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH, DaemonHealth, DaemonLifecycle,
         ProfileSyncPeerAdvertisement, ProfileSyncPeerDiscoveryProtocol,
+        ProfileSyncPeerDiscoveryProvider, ProfileSyncPeerDiscoveryQuery,
         ProfileSyncPeerDiscoveryResult,
         ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
         ProfileSyncProviderHealth as BroadwebdProfileSyncProviderHealth,
@@ -24252,6 +24367,16 @@ mod tests {
                 .expect("sign future-epoch discovery advertisement"),
             },
         ];
+        let discovery_provider = network.profile_sync_peer_discovery_provider();
+        for candidate in &discovery_candidates {
+            discovery_provider
+                .publish_profile_sync_peer(
+                    candidate.protocol,
+                    candidate.namespace.as_str(),
+                    candidate.advertisement.clone(),
+                )
+                .expect("publish scheduler discovery candidate");
+        }
         let discovery_report = filter_trusted_profile_sync_peer_discovery_results(
             &database,
             profile,
@@ -24296,6 +24421,30 @@ mod tests {
             SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
         );
         let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+        let discovery_query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
+            network_id,
+            local_signer.device_id(),
+            [ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous],
+            8,
+        )
+        .expect("build scheduler discovery query");
+        let discovered_plan = scheduler
+            .plan_once_discovering_trusted_retention_providers(
+                &database,
+                &config,
+                &local_signer,
+                &discovery_provider,
+                &discovery_query,
+                &retention_provider_handles,
+            )
+            .expect("plan after discovering trusted provider handles");
+
+        assert_eq!(discovered_plan.trusted_peer_count(), 1);
+        assert_eq!(discovered_plan.rejected_peer_count(), 2);
+        assert_eq!(
+            discovered_plan.cycle.selected_retention_provider_ids,
+            vec![trusted_provider_id.to_string()]
+        );
         let plan = scheduler
             .plan_once_selecting_trusted_discovered_retention_providers(
                 &database,
@@ -24314,22 +24463,25 @@ mod tests {
         assert_eq!(plan.retention_provider_selection_issue_count(), 0);
 
         let run = scheduler
-            .run_once_selecting_trusted_discovered_retention_providers(
+            .run_once_discovering_trusted_retention_providers(
                 &database,
                 &config,
                 SettingsSyncRuntimeSecrets::new(&content_key, &local_signer),
-                &discovery_report,
+                &discovery_provider,
+                &discovery_query,
                 &retention_provider_handles,
             )
-            .expect("run with trusted discovered provider handles");
+            .expect("run after discovering trusted provider handles");
 
+        assert_eq!(run.trusted_peer_count(), 1);
+        assert_eq!(run.rejected_peer_count(), 2);
         assert_eq!(
-            run.selected_retention_provider_ids,
+            run.cycle.selected_retention_provider_ids,
             vec![trusted_provider_id.to_string()]
         );
         assert_eq!(run.selected_retention_provider_count(), 1);
-        assert_eq!(run.retained_provider_count(), 1);
-        assert!(!run.degraded_after());
+        assert_eq!(run.cycle.retained_provider_count(), 1);
+        assert!(!run.cycle.degraded_after());
 
         let _ = std::fs::remove_dir_all(device_state_root);
         let _ = std::fs::remove_dir_all(trusted_provider_state_root);
