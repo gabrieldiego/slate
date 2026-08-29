@@ -1,7 +1,8 @@
 use core::fmt;
 use slate_broadwebd::{
     BroadwebdError, ProfileSyncPeerAdvertisement, ProfileSyncPeerAdvertisementSignature,
-    ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryResult,
+    ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryProvider,
+    ProfileSyncPeerDiscoveryQuery, ProfileSyncPeerDiscoveryResult,
 };
 use slate_storage::{
     ProfileSyncDeviceSigner, SignedSyncObject, SlateProfileDatabase, StorageError, SyncObjectError,
@@ -58,6 +59,49 @@ pub enum ProfileSyncPeerAdvertisementSignatureError {
         node_id: String,
         signer_device_id: String,
     },
+}
+
+#[derive(Debug)]
+pub enum ProfileSyncPeerDiscoveryError {
+    Broadwebd(BroadwebdError),
+    Storage(StorageError),
+}
+
+impl fmt::Display for ProfileSyncPeerDiscoveryError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Broadwebd(error) => {
+                write!(formatter, "profile sync peer discovery failed: {error}")
+            }
+            Self::Storage(error) => {
+                write!(
+                    formatter,
+                    "profile sync peer discovery trust failed: {error}"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProfileSyncPeerDiscoveryError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Broadwebd(error) => Some(error),
+            Self::Storage(error) => Some(error),
+        }
+    }
+}
+
+impl From<BroadwebdError> for ProfileSyncPeerDiscoveryError {
+    fn from(error: BroadwebdError) -> Self {
+        Self::Broadwebd(error)
+    }
+}
+
+impl From<StorageError> for ProfileSyncPeerDiscoveryError {
+    fn from(error: StorageError) -> Self {
+        Self::Storage(error)
+    }
 }
 
 impl fmt::Display for ProfileSyncPeerAdvertisementSignatureError {
@@ -157,6 +201,21 @@ pub fn filter_trusted_profile_sync_peer_discovery_results(
     Ok(report)
 }
 
+pub fn discover_trusted_profile_sync_peers(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    provider: &(impl ProfileSyncPeerDiscoveryProvider + ?Sized),
+    query: &ProfileSyncPeerDiscoveryQuery,
+) -> Result<TrustedProfileSyncPeerDiscoveryReport, ProfileSyncPeerDiscoveryError> {
+    let candidates = provider.discover_profile_sync_peers(query)?;
+    Ok(filter_trusted_profile_sync_peer_discovery_results(
+        database,
+        profile,
+        query.network_id.as_str(),
+        candidates,
+    )?)
+}
+
 fn profile_sync_peer_discovery_trust_rejection(
     database: &SlateProfileDatabase,
     profile: &str,
@@ -227,11 +286,14 @@ fn profile_sync_peer_discovery_trust_rejection(
 mod tests {
     use super::{
         ProfileSyncPeerAdvertisementSignatureError, ProfileSyncPeerDiscoveryTrustRejection,
-        filter_trusted_profile_sync_peer_discovery_results, sign_profile_sync_peer_advertisement,
+        discover_trusted_profile_sync_peers, filter_trusted_profile_sync_peer_discovery_results,
+        sign_profile_sync_peer_advertisement,
     };
     use slate_broadwebd::{
-        ProfileSyncPeerAdvertisement, ProfileSyncPeerDiscoveryProtocol,
-        ProfileSyncPeerDiscoveryResult,
+        DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE, ProfileSyncPeerAdvertisement,
+        ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryProvider,
+        ProfileSyncPeerDiscoveryQuery, ProfileSyncPeerDiscoveryResult,
+        test_fixtures::SimulatedProfileSyncPeerDiscoveryNetwork,
     };
     use slate_storage::{
         DEFAULT_DATABASE_FILE_NAME, DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH, ProfileSyncDeviceSigner,
@@ -438,6 +500,91 @@ mod tests {
             } if node_id == "peer-trust-other-node"
                 && signer_device_id == signer.device_id()
         ));
+    }
+
+    #[test]
+    fn trusted_profile_sync_peer_discovery_runs_provider_then_filters_signed_results() {
+        let db_root = test_state_root("trusted-peer-discovery-provider-db");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "peer-trust-provider-local-device",
+        )
+        .expect("open peer discovery provider database");
+        let profile = "peertrustproviderprofile";
+        let network_id = "peertrustprovidernetwork";
+        let trusted_signer =
+            ProfileSyncDeviceSigner::generate("peer-trust-provider-remote").expect("trusted");
+        let unknown_signer =
+            ProfileSyncDeviceSigner::generate("peer-trust-provider-unknown").expect("unknown");
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: trusted_signer.public_key().expect("trusted public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register trusted discovery signer");
+
+        let network = SimulatedProfileSyncPeerDiscoveryNetwork::new();
+        let provider = network.provider();
+        provider
+            .publish_profile_sync_peer(
+                ProfileSyncPeerDiscoveryProtocol::IrohRendezvous,
+                DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+                sign_profile_sync_peer_advertisement(
+                    ProfileSyncPeerAdvertisement::new(
+                        network_id,
+                        trusted_signer.device_id(),
+                        "peer-trust-provider-retention-a",
+                        "/dnsaddr/iroh-rendezvous.local/tcp/443/wss/p2p/trusted-peer",
+                        1,
+                    )
+                    .expect("trusted advertisement"),
+                    &trusted_signer,
+                )
+                .expect("sign trusted advertisement"),
+            )
+            .expect("publish trusted advertisement");
+        provider
+            .publish_profile_sync_peer(
+                ProfileSyncPeerDiscoveryProtocol::IrohRendezvous,
+                DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+                sign_profile_sync_peer_advertisement(
+                    ProfileSyncPeerAdvertisement::new(
+                        network_id,
+                        unknown_signer.device_id(),
+                        "peer-trust-provider-retention-b",
+                        "/dnsaddr/iroh-rendezvous.local/tcp/443/wss/p2p/unknown-peer",
+                        1,
+                    )
+                    .expect("unknown advertisement"),
+                    &unknown_signer,
+                )
+                .expect("sign unknown advertisement"),
+            )
+            .expect("publish unknown advertisement");
+
+        let query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
+            network_id,
+            "peer-trust-provider-local-device",
+            [ProfileSyncPeerDiscoveryProtocol::IrohRendezvous],
+            8,
+        )
+        .expect("discovery query");
+        let report = discover_trusted_profile_sync_peers(&database, profile, &provider, &query)
+            .expect("discover and filter trusted peers");
+
+        assert_eq!(report.trusted_peer_count(), 1);
+        assert_eq!(report.rejected_peer_count(), 1);
+        assert_eq!(
+            report.trusted_peers[0].advertisement.provider_id,
+            "peer-trust-provider-retention-a"
+        );
+        assert_eq!(
+            report.rejected_peers[0].reason,
+            ProfileSyncPeerDiscoveryTrustRejection::UnknownDevicePublicKey
+        );
+
+        let _ = std::fs::remove_dir_all(db_root);
     }
 
     fn test_discovery_result(

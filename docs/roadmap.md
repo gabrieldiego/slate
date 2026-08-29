@@ -1886,6 +1886,13 @@ Current baseline:
   regression keeps the whole path local: two fixture providers exist, only one
   signed/trusted advertisement is accepted, and only that provider retains the
   published settings objects.
+- `slate-profile-sync` now owns a discovery execution helper over broadwebd's
+  `ProfileSyncPeerDiscoveryProvider` trait. It asks the provider for protocol
+  candidates, then immediately applies the signed local trust filter before
+  returning a report to schedulers or UI code. The simulated Iroh-rendezvous
+  regression publishes signed trusted and unknown advertisements through the
+  socketless fixture provider and proves the unknown signer is rejected before
+  provider selection.
 - The `slate-profile-sync` crate is no longer a single source file. The first
   low-risk split extracts discovery trust filtering, shared object-id
   de-duplication helpers, root-id naming helpers, scheduler-facing health
