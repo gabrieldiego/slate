@@ -1879,6 +1879,13 @@ Current baseline:
   signer and rejects automatic trust for unsigned advertisements, tampered
   advertisement bodies, or same-device advertisements signed by an unenrolled
   replacement key. The focused regressions keep this local and socketless.
+- The settings sync scheduler can now take a trusted signed discovery report
+  and select retention provider handles only for trusted discovered provider
+  ids. Rejected, unknown, unsigned, or tampered discovery candidates never get
+  passed into the existing selected-provider policy path. The in-process
+  regression keeps the whole path local: two fixture providers exist, only one
+  signed/trusted advertisement is accepted, and only that provider retains the
+  published settings objects.
 - The `slate-profile-sync` crate is no longer a single source file. The first
   low-risk split extracts discovery trust filtering, shared object-id
   de-duplication helpers, root-id naming helpers, scheduler-facing health
