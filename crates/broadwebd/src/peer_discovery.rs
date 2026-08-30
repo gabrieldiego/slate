@@ -368,6 +368,104 @@ pub trait ProfileSyncPeerDiscoveryProvider: Send + Sync {
     ) -> Result<Vec<ProfileSyncPeerDiscoveryResult>, BroadwebdError>;
 }
 
+pub struct CompositeProfileSyncPeerDiscoveryProvider<'a> {
+    providers: Vec<&'a dyn ProfileSyncPeerDiscoveryProvider>,
+}
+
+impl<'a> CompositeProfileSyncPeerDiscoveryProvider<'a> {
+    pub fn new(
+        providers: impl IntoIterator<Item = &'a dyn ProfileSyncPeerDiscoveryProvider>,
+    ) -> Self {
+        Self {
+            providers: providers.into_iter().collect(),
+        }
+    }
+
+    pub fn provider_count(&self) -> usize {
+        self.providers.len()
+    }
+}
+
+impl ProfileSyncPeerDiscoveryProvider for CompositeProfileSyncPeerDiscoveryProvider<'_> {
+    fn publish_profile_sync_peer(
+        &self,
+        protocol: ProfileSyncPeerDiscoveryProtocol,
+        namespace: &str,
+        advertisement: ProfileSyncPeerAdvertisement,
+    ) -> Result<ProfileSyncPeerDiscoveryPublication, BroadwebdError> {
+        validate_namespace(namespace)?;
+        advertisement.validate()?;
+        if self.providers.is_empty() {
+            return Err(BroadwebdError::UnsupportedRequest(
+                "profile-sync peer discovery composite has no providers".to_string(),
+            ));
+        }
+
+        let mut first_publication = None;
+        let mut last_unsupported = None;
+        for provider in &self.providers {
+            match provider.publish_profile_sync_peer(protocol, namespace, advertisement.clone()) {
+                Ok(publication) => {
+                    if first_publication.is_none() {
+                        first_publication = Some(publication);
+                    }
+                }
+                Err(BroadwebdError::UnsupportedRequest(error)) => {
+                    last_unsupported = Some(error);
+                }
+                Err(error) => return Err(error),
+            }
+        }
+
+        first_publication.ok_or_else(|| {
+            BroadwebdError::UnsupportedRequest(last_unsupported.unwrap_or_else(|| {
+                format!(
+                    "profile-sync peer discovery composite cannot publish {} records",
+                    protocol.as_str()
+                )
+            }))
+        })
+    }
+
+    fn discover_profile_sync_peers(
+        &self,
+        query: &ProfileSyncPeerDiscoveryQuery,
+    ) -> Result<Vec<ProfileSyncPeerDiscoveryResult>, BroadwebdError> {
+        query.validate()?;
+        let mut results = Vec::new();
+        let mut seen = BTreeSet::new();
+        for protocol in &query.protocols {
+            let protocol_query = ProfileSyncPeerDiscoveryQuery::new(
+                query.network_id.as_str(),
+                query.requester_node_id.as_str(),
+                query.namespace.as_str(),
+                [*protocol],
+                query.max_peers,
+            )?;
+            for provider in &self.providers {
+                for result in provider.discover_profile_sync_peers(&protocol_query)? {
+                    if results.len() >= query.max_peers {
+                        return Ok(results);
+                    }
+                    if result.protocol != *protocol {
+                        continue;
+                    }
+                    let seen_key = (
+                        result.protocol,
+                        result.namespace.clone(),
+                        result.advertisement.node_id.clone(),
+                        result.advertisement.provider_id.clone(),
+                    );
+                    if seen.insert(seen_key) {
+                        results.push(result);
+                    }
+                }
+            }
+        }
+        Ok(results)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DiscoveredProfileSyncPeer {
     pub advertisement: ProfileSyncPeerAdvertisement,
@@ -985,6 +1083,159 @@ mod tests {
         );
         assert_eq!(discovered[0].advertisement.node_id, "node-a");
         assert_eq!(discovered[1].advertisement.node_id, "node-b");
+    }
+
+    #[test]
+    fn composite_peer_discovery_queries_socketless_providers_in_protocol_order() {
+        let libp2p_network = SimulatedProfileSyncPeerDiscoveryNetwork::new();
+        let libp2p_provider = libp2p_network.provider();
+        let rendezvous_network = SimulatedProfileSyncPeerDiscoveryNetwork::new();
+        let rendezvous_provider = rendezvous_network.provider();
+        libp2p_provider
+            .publish_profile_sync_peer(
+                ProfileSyncPeerDiscoveryProtocol::Libp2pKademlia,
+                DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+                ProfileSyncPeerAdvertisement::new(
+                    "account-a",
+                    "node-libp2p",
+                    "provider-shared",
+                    "/p2p/node-libp2p/x/slate-profile-sync",
+                    1,
+                )
+                .expect("libp2p advertisement"),
+            )
+            .expect("publish libp2p advertisement");
+        rendezvous_provider
+            .publish_profile_sync_peer(
+                ProfileSyncPeerDiscoveryProtocol::IrohRendezvous,
+                DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+                ProfileSyncPeerAdvertisement::new(
+                    "account-a",
+                    "node-iroh",
+                    "provider-iroh",
+                    "/iroh/node-iroh/x/slate-profile-sync",
+                    1,
+                )
+                .expect("iroh advertisement"),
+            )
+            .expect("publish iroh advertisement");
+        rendezvous_provider
+            .publish_profile_sync_peer(
+                ProfileSyncPeerDiscoveryProtocol::Libp2pKademlia,
+                DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+                ProfileSyncPeerAdvertisement::new(
+                    "account-a",
+                    "node-libp2p",
+                    "provider-shared",
+                    "/p2p/node-libp2p/x/stale-duplicate",
+                    1,
+                )
+                .expect("duplicate libp2p advertisement"),
+            )
+            .expect("publish duplicate libp2p advertisement");
+        let composite = CompositeProfileSyncPeerDiscoveryProvider::new([
+            &libp2p_provider as &dyn ProfileSyncPeerDiscoveryProvider,
+            &rendezvous_provider as &dyn ProfileSyncPeerDiscoveryProvider,
+        ]);
+
+        let query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
+            "account-a",
+            "node-local",
+            [
+                ProfileSyncPeerDiscoveryProtocol::IrohRendezvous,
+                ProfileSyncPeerDiscoveryProtocol::Libp2pKademlia,
+            ],
+            8,
+        )
+        .expect("composite query");
+        let discovered = composite
+            .discover_profile_sync_peers(&query)
+            .expect("composite discovery");
+
+        assert_eq!(composite.provider_count(), 2);
+        assert_eq!(discovered.len(), 2);
+        assert_eq!(
+            discovered
+                .iter()
+                .map(|peer| peer.protocol)
+                .collect::<Vec<_>>(),
+            vec![
+                ProfileSyncPeerDiscoveryProtocol::IrohRendezvous,
+                ProfileSyncPeerDiscoveryProtocol::Libp2pKademlia,
+            ]
+        );
+        assert_eq!(discovered[0].advertisement.node_id, "node-iroh");
+        assert_eq!(discovered[1].advertisement.node_id, "node-libp2p");
+
+        let limited_query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
+            "account-a",
+            "node-local",
+            [
+                ProfileSyncPeerDiscoveryProtocol::IrohRendezvous,
+                ProfileSyncPeerDiscoveryProtocol::Libp2pKademlia,
+            ],
+            1,
+        )
+        .expect("limited composite query");
+        let limited = composite
+            .discover_profile_sync_peers(&limited_query)
+            .expect("limited composite discovery");
+
+        assert_eq!(limited.len(), 1);
+        assert_eq!(
+            limited[0].protocol,
+            ProfileSyncPeerDiscoveryProtocol::IrohRendezvous
+        );
+    }
+
+    #[test]
+    fn composite_peer_discovery_publishes_to_socketless_providers() {
+        let network_a = SimulatedProfileSyncPeerDiscoveryNetwork::new();
+        let provider_a = network_a.provider();
+        let network_b = SimulatedProfileSyncPeerDiscoveryNetwork::new();
+        let provider_b = network_b.provider();
+        let composite = CompositeProfileSyncPeerDiscoveryProvider::new([
+            &provider_a as &dyn ProfileSyncPeerDiscoveryProvider,
+            &provider_b as &dyn ProfileSyncPeerDiscoveryProvider,
+        ]);
+
+        let publication = composite
+            .publish_profile_sync_peer(
+                ProfileSyncPeerDiscoveryProtocol::Ipns,
+                DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+                ProfileSyncPeerAdvertisement::new(
+                    "account-a",
+                    "node-ipns",
+                    "provider-ipns",
+                    "/ipns/k51qzi5uqu5dh-example-profile-sync-root",
+                    1,
+                )
+                .expect("ipns advertisement"),
+            )
+            .expect("composite publish");
+        let query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
+            "account-a",
+            "node-local",
+            [ProfileSyncPeerDiscoveryProtocol::Ipns],
+            8,
+        )
+        .expect("ipns query");
+
+        assert_eq!(publication.protocol, ProfileSyncPeerDiscoveryProtocol::Ipns);
+        assert_eq!(
+            provider_a
+                .discover_profile_sync_peers(&query)
+                .expect("discover from first provider")
+                .len(),
+            1
+        );
+        assert_eq!(
+            provider_b
+                .discover_profile_sync_peers(&query)
+                .expect("discover from second provider")
+                .len(),
+            1
+        );
     }
 
     #[test]

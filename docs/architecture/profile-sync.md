@@ -1239,6 +1239,9 @@ IPFS/IPNS model:
   branch.
 - Kubo-like endpoint materialization as a separate step, including missing,
   unsupported, and fail-closed endpoint states.
+- Composite discovery can query several provider implementations behind the
+  same trait while preserving protocol-priority order, de-duplicating repeated
+  peer advertisements, and enforcing one global result limit.
 
 Iroh-like model:
 

@@ -1862,6 +1862,10 @@ Current baseline:
   real libp2p Kademlia/rendezvous, IPNS/IPFS, Iroh, mDNS, relay, or delegated
   routing adapters should plug into the same `ProfileSyncPeerDiscoveryProvider`
   trait instead of adding profile-sync-specific socket discovery paths.
+- broadwebd also has a protocol-neutral composite discovery provider that can
+  query several provider implementations as one socketless source while
+  preserving the caller's protocol-priority order, de-duplicating repeated
+  node/provider advertisements, and enforcing a global peer limit.
 - The first concrete discovery adapter is now Kubo/IPNS-shaped:
   `IpnsProfileSyncPeerDiscoveryProvider` publishes a bounded peer
   advertisement record through Kubo `add`, `pin/add`, and `name/publish`, then
