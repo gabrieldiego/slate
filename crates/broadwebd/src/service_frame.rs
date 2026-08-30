@@ -95,6 +95,10 @@ pub trait ServiceFrameConnector {
     fn connect(&self, codec: ServiceFrameCodec) -> Result<Self::Stream, BroadwebdError>;
 }
 
+pub trait ServiceFrameIoStream: Read + Write {}
+
+impl<T: Read + Write> ServiceFrameIoStream for T {}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ServiceFrameConnectorKind {
     Tcp,
@@ -195,6 +199,20 @@ impl ServiceFrameConnector for DeferredServiceFrameConnector {
             self.endpoint
         )))
     }
+}
+
+pub trait ServiceFrameEndpointTransport {
+    fn connector_kind(&self) -> ServiceFrameConnectorKind;
+
+    fn supports_endpoint(&self, _endpoint: &str, kind: ServiceFrameConnectorKind) -> bool {
+        kind == self.connector_kind()
+    }
+
+    fn connect_endpoint(
+        &self,
+        endpoint: &str,
+        codec: ServiceFrameCodec,
+    ) -> Result<Box<dyn ServiceFrameIoStream>, BroadwebdError>;
 }
 
 pub fn service_frame_tcp_socket_addr_from_endpoint(
@@ -403,6 +421,7 @@ impl<'a> InProcessServiceFrameEndpointRegistry<'a> {
 
 pub struct ServiceFrameEndpointConnectorFactory<'registry, 'handler> {
     registry: Option<&'registry InProcessServiceFrameEndpointRegistry<'handler>>,
+    transports: Vec<&'registry dyn ServiceFrameEndpointTransport>,
     tcp_timeout: Duration,
 }
 
@@ -410,6 +429,7 @@ impl<'registry, 'handler> ServiceFrameEndpointConnectorFactory<'registry, 'handl
     pub fn new() -> Self {
         Self {
             registry: None,
+            transports: Vec::new(),
             tcp_timeout: Duration::from_secs(12),
         }
     }
@@ -419,8 +439,17 @@ impl<'registry, 'handler> ServiceFrameEndpointConnectorFactory<'registry, 'handl
     ) -> Self {
         Self {
             registry: Some(registry),
+            transports: Vec::new(),
             tcp_timeout: Duration::from_secs(12),
         }
+    }
+
+    pub fn with_transport(
+        mut self,
+        transport: &'registry dyn ServiceFrameEndpointTransport,
+    ) -> Self {
+        self.transports.push(transport);
+        self
     }
 
     pub fn with_tcp_timeout(mut self, timeout: Duration) -> Self {
@@ -448,6 +477,19 @@ impl<'registry, 'handler> ServiceFrameEndpointConnectorFactory<'registry, 'handl
             }
         }
 
+        if let Some(transport) = self
+            .transports
+            .iter()
+            .copied()
+            .find(|transport| transport.supports_endpoint(endpoint.as_str(), kind))
+        {
+            return Ok(ServiceFrameEndpointConnector::Transport {
+                endpoint,
+                kind,
+                transport,
+            });
+        }
+
         Ok(ServiceFrameEndpointConnector::Deferred(
             DeferredServiceFrameConnector::new(endpoint)?,
         ))
@@ -464,6 +506,11 @@ pub enum ServiceFrameEndpointConnector<'registry, 'handler> {
     Tcp(TcpServiceFrameConnector),
     Deferred(DeferredServiceFrameConnector),
     InProcess(InProcessServiceFrameEndpointConnector<'registry, 'handler>),
+    Transport {
+        endpoint: String,
+        kind: ServiceFrameConnectorKind,
+        transport: &'registry dyn ServiceFrameEndpointTransport,
+    },
 }
 
 impl<'registry, 'handler> ServiceFrameEndpointConnector<'registry, 'handler> {
@@ -472,6 +519,7 @@ impl<'registry, 'handler> ServiceFrameEndpointConnector<'registry, 'handler> {
             Self::Tcp(connector) => connector.address(),
             Self::Deferred(connector) => connector.endpoint(),
             Self::InProcess(connector) => connector.endpoint(),
+            Self::Transport { endpoint, .. } => endpoint,
         }
     }
 
@@ -480,6 +528,7 @@ impl<'registry, 'handler> ServiceFrameEndpointConnector<'registry, 'handler> {
             Self::Tcp(_) => Ok(ServiceFrameConnectorKind::Tcp),
             Self::Deferred(connector) => Ok(connector.kind()),
             Self::InProcess(connector) => connector.kind(),
+            Self::Transport { kind, .. } => Ok(*kind),
         }
     }
 }
@@ -488,6 +537,7 @@ pub enum ServiceFrameEndpointStream<'handler> {
     Tcp(TcpStream),
     Deferred(Cursor<Vec<u8>>),
     InProcess(InProcessServiceFrameStream<'handler>),
+    Transport(Box<dyn ServiceFrameIoStream>),
 }
 
 impl Read for ServiceFrameEndpointStream<'_> {
@@ -496,6 +546,7 @@ impl Read for ServiceFrameEndpointStream<'_> {
             Self::Tcp(stream) => stream.read(buffer),
             Self::Deferred(stream) => stream.read(buffer),
             Self::InProcess(stream) => stream.read(buffer),
+            Self::Transport(stream) => stream.read(buffer),
         }
     }
 }
@@ -506,6 +557,7 @@ impl Write for ServiceFrameEndpointStream<'_> {
             Self::Tcp(stream) => stream.write(buffer),
             Self::Deferred(stream) => stream.write(buffer),
             Self::InProcess(stream) => stream.write(buffer),
+            Self::Transport(stream) => stream.write(buffer),
         }
     }
 
@@ -514,6 +566,7 @@ impl Write for ServiceFrameEndpointStream<'_> {
             Self::Tcp(stream) => stream.flush(),
             Self::Deferred(stream) => stream.flush(),
             Self::InProcess(stream) => stream.flush(),
+            Self::Transport(stream) => stream.flush(),
         }
     }
 }
@@ -532,6 +585,13 @@ impl<'handler> ServiceFrameConnector for ServiceFrameEndpointConnector<'_, 'hand
             Self::InProcess(connector) => connector
                 .connect(codec)
                 .map(ServiceFrameEndpointStream::InProcess),
+            Self::Transport {
+                endpoint,
+                transport,
+                ..
+            } => transport
+                .connect_endpoint(endpoint.as_str(), codec)
+                .map(ServiceFrameEndpointStream::Transport),
         }
     }
 }
@@ -1448,6 +1508,102 @@ mod tests {
             error
                 .to_string()
                 .contains("service-frame libp2p connector is not implemented yet")
+        );
+    }
+
+    #[test]
+    fn service_frame_endpoint_connector_factory_uses_registered_transport_adapter() {
+        struct EchoClient;
+
+        impl BroadwebdClient for EchoClient {
+            fn health(&self) -> DaemonHealth {
+                DaemonHealth {
+                    lifecycle: DaemonLifecycle::Ready,
+                    plugins: Vec::new(),
+                }
+            }
+
+            fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+                BroadwebStatusSnapshot::idle()
+            }
+
+            fn dispatch_service_request(
+                &self,
+                request: ServiceRequest,
+            ) -> Result<ServiceResponse, BroadwebdError> {
+                assert_eq!(
+                    request,
+                    ServiceRequest::ProfileSync(ProfileSyncRequest::DiscoverProviders(
+                        ProfileSyncProfileRequest::new("default")
+                    ))
+                );
+                Ok(ServiceResponse::ProfileSync(
+                    ProfileSyncResponse::RetainedObjects {
+                        object_ids: vec!["transport-adapter-object".to_string()],
+                    },
+                ))
+            }
+
+            fn temporary_downloads(
+                &self,
+                _profile: &str,
+            ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+                Ok(Vec::new())
+            }
+
+            fn downloads(
+                &self,
+                _profile: &str,
+            ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+                Ok(Vec::new())
+            }
+        }
+
+        static HANDLER: EchoClient = EchoClient;
+
+        struct IrohAdapter;
+
+        impl ServiceFrameEndpointTransport for IrohAdapter {
+            fn connector_kind(&self) -> ServiceFrameConnectorKind {
+                ServiceFrameConnectorKind::Iroh
+            }
+
+            fn connect_endpoint(
+                &self,
+                endpoint: &str,
+                codec: ServiceFrameCodec,
+            ) -> Result<Box<dyn ServiceFrameIoStream>, BroadwebdError> {
+                assert_eq!(endpoint, "iroh-node:adapter-node-a");
+                Ok(Box::new(InProcessServiceFrameStream::new(&HANDLER, codec)))
+            }
+        }
+
+        let adapter = IrohAdapter;
+        let factory = ServiceFrameEndpointConnectorFactory::new().with_transport(&adapter);
+        let connector = factory
+            .connector("iroh-node:adapter-node-a")
+            .expect("factory selects registered Iroh adapter");
+        assert_eq!(connector.endpoint(), "iroh-node:adapter-node-a");
+        assert_eq!(
+            connector.kind().expect("transport adapter kind"),
+            ServiceFrameConnectorKind::Iroh
+        );
+        let client = ConnectorServiceFrameBroadwebdClient::with_codec(
+            connector,
+            ServiceFrameCodec::new(4096),
+        );
+
+        let response = client
+            .profile_sync(ProfileSyncRequest::DiscoverProviders(
+                ProfileSyncProfileRequest::new("default"),
+            ))
+            .expect("exchange request through registered transport adapter");
+
+        assert_eq!(
+            response,
+            ProfileSyncResponse::RetainedObjects {
+                object_ids: vec!["transport-adapter-object".to_string()],
+            }
         );
     }
 

@@ -235,6 +235,14 @@ require_text \
     'broadwebd must prove the endpoint connector factory can select socketless deferred endpoints.'
 require_text \
     crates/broadwebd/src/service_frame.rs \
+    'pub trait ServiceFrameEndpointTransport' \
+    'broadwebd must expose a service-frame transport adapter trait for future live broadweb connectors.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'service_frame_endpoint_connector_factory_uses_registered_transport_adapter' \
+    'broadwebd must prove the endpoint connector factory can select a registered transport adapter.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
     'in_process_service_frame_endpoint_registry_models_deferred_connectors_without_sockets' \
     'broadwebd must prove deferred p2p/IPNS/Iroh service-frame endpoints can be modeled without sockets.'
 require_text \
@@ -915,9 +923,17 @@ require_text \
     'endpoint connector factory is the shared selection point' \
     'Profile-sync architecture must document the service-frame endpoint connector factory boundary.'
 require_text \
+    docs/architecture/profile-sync.md \
+    '`ServiceFrameEndpointTransport` implementations' \
+    'Profile-sync architecture must document the service-frame transport adapter swap-in boundary.'
+require_text \
     docs/roadmap.md \
     'service-frame endpoint connector factory' \
     'Roadmap must record the service-frame endpoint connector factory boundary.'
+require_text \
+    docs/roadmap.md \
+    '`ServiceFrameEndpointTransport` implementations' \
+    'Roadmap must record the service-frame transport adapter swap-in boundary.'
 require_text \
     docs/architecture/profile-sync.md \
     '`ProfileSyncObjectSource` trait over broadwebd'\''s `BroadwebdClient` boundary' \

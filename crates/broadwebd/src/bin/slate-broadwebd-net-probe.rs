@@ -6,7 +6,7 @@ use slate_broadwebd::{
     ProfileSyncPeerAdvertisement, ProfileSyncProfileRequest, ProfileSyncPutObjectRequest,
     ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootHealthRequest, ProfileSyncRootRequest,
     ProfileSyncRootUpdate, ProfileSyncRuntimeConfig, ResourceBudget, ServiceFrameCodec,
-    ServiceFrameConnector, ServiceFrameConnectorKind, ServiceFrameEndpointConnectorFactory,
+    ServiceFrameConnectorKind, ServiceFrameEndpointConnectorFactory,
     default_session_status_reporter, discover_profile_sync_peers,
     respond_to_profile_sync_peer_solicit, serve_one_service_frame_request_over_stream,
     service_frame_connector_kind_for_endpoint,
@@ -928,6 +928,7 @@ fn usage() -> String {
 mod tests {
     use super::*;
     use slate_broadwebd::ProfileSyncPeerAdvertisementSignature;
+    use slate_broadwebd::ServiceFrameConnector;
 
     #[test]
     fn server_args_accept_signed_discovery_controls() {

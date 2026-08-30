@@ -1905,7 +1905,9 @@ Current baseline:
   TCP for literal socket endpoints, selects the socketless registry for
   registered deferred endpoint refs, and leaves unregistered libp2p/IPNS/Iroh
   refs on the same fail-closed deferred connector path that future live
-  adapters must replace.
+  adapters must replace. The factory also accepts
+  `ServiceFrameEndpointTransport` implementations as the swap-in point for live
+  adapters and local socketless simulations of those adapters.
 - `slate-profile-sync` materializer coverage now also consumes a provider
   client built from that socketless endpoint registry, proving selected
   deferred endpoint refs can become framed `BroadwebdClient` handles without

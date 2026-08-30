@@ -1335,7 +1335,10 @@ is selected. The endpoint connector factory is the shared selection point:
 literal TCP endpoints become opt-in TCP clients, registered deferred endpoints
 become socketless framed clients in deterministic tests, and unregistered
 deferred endpoints keep returning the same fail-closed connector until a live
-libp2p, Iroh, IPNS, or future broadweb transport adapter is installed.
+libp2p, Iroh, IPNS, or future broadweb transport adapter is installed. The
+factory also accepts `ServiceFrameEndpointTransport` implementations, which are
+the intended swap-in point for live transport adapters and for socketless tests
+that need to model a live adapter without opening operating-system sockets.
 
 `slate-broadwebd-net-probe` is the current manual harness binary:
 
