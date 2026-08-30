@@ -1922,6 +1922,13 @@ Current baseline:
   fixture discovery path also retain the highest positive sequence for
   duplicate provider records, so local tests can exercise replay/stale
   discovery behavior without loopback sockets or external networks.
+- Trusted discovery selection now also binds externally comparable
+  endpoint-bearing retention handles to the signed discovery `service_addr`.
+  A provider id match is not enough when a handle claims the same socket or
+  multiaddr-shaped endpoint address space as discovery; stale endpoint handles
+  are ignored before scheduler selection. Synthetic in-process fixture refs
+  remain local materialization shims and are not advertised as discovery
+  service addresses.
 - The `slate-profile-sync` crate is no longer a single source file. The first
   low-risk split extracts discovery trust filtering, shared object-id
   de-duplication helpers, root-id naming helpers, scheduler-facing health

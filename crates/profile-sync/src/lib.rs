@@ -5,9 +5,9 @@ use core::fmt;
 #[cfg(feature = "local-preview-fixtures")]
 use slate_broadwebd::BroadwebDaemon;
 #[cfg(feature = "local-preview-fixtures")]
-use slate_broadwebd::test_fixtures::{
-    LocalProfileSyncFixture, SimulatedProfileSyncPeerDiscoveryNetwork,
-};
+use slate_broadwebd::test_fixtures::LocalProfileSyncFixture;
+#[cfg(feature = "local-preview-fixtures")]
+use slate_broadwebd::test_fixtures::SimulatedProfileSyncPeerDiscoveryNetwork;
 use slate_broadwebd::{
     BroadwebdClient, BroadwebdError, IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
     ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
@@ -4956,16 +4956,23 @@ fn trusted_discovered_settings_sync_retention_provider_handles<'a>(
     discovery_report: &TrustedProfileSyncPeerDiscoveryReport,
     retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'a>],
 ) -> Vec<SettingsSyncRetentionProviderHandle<'a>> {
-    let trusted_provider_ids = discovery_report
-        .trusted_peers
-        .iter()
-        .map(|peer| peer.advertisement.provider_id.as_str())
-        .collect::<BTreeSet<_>>();
+    let mut trusted_provider_endpoint_refs: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for peer in &discovery_report.trusted_peers {
+        trusted_provider_endpoint_refs
+            .entry(peer.advertisement.provider_id.as_str())
+            .or_default()
+            .insert(peer.advertisement.service_addr.as_str());
+    }
 
     retention_provider_handles
         .iter()
         .filter_map(|handle| {
-            if trusted_provider_ids.contains(handle.provider_id) {
+            let trusted_endpoint_refs = trusted_provider_endpoint_refs.get(handle.provider_id)?;
+            let endpoint_matches = trusted_discovered_endpoint_matches_handle_endpoint_ref(
+                trusted_endpoint_refs,
+                handle.endpoint_ref,
+            );
+            if endpoint_matches {
                 Some(SettingsSyncRetentionProviderHandle {
                     provider_id: handle.provider_id,
                     endpoint_ref: handle.endpoint_ref,
@@ -4976,6 +4983,24 @@ fn trusted_discovered_settings_sync_retention_provider_handles<'a>(
             }
         })
         .collect()
+}
+
+fn trusted_discovered_endpoint_matches_handle_endpoint_ref(
+    trusted_endpoint_refs: &BTreeSet<&str>,
+    handle_endpoint_ref: Option<&str>,
+) -> bool {
+    match handle_endpoint_ref {
+        None => true,
+        Some(endpoint_ref) if is_discovery_service_addr_comparable(endpoint_ref) => {
+            trusted_endpoint_refs.contains(endpoint_ref)
+        }
+        Some(_) => true,
+    }
+}
+
+fn is_discovery_service_addr_comparable(endpoint_ref: &str) -> bool {
+    endpoint_ref.parse::<std::net::SocketAddr>().is_ok()
+        || Multiaddr::parse(endpoint_ref).is_ok_and(|multiaddr| multiaddr.segments().count() >= 2)
 }
 
 fn profile_sync_peer_discovery_error_to_cycle_with_health(
@@ -24570,6 +24595,10 @@ mod tests {
             .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
             .expect("write trusted discovery scheduler setting");
 
+        let trusted_provider_endpoint_ref =
+            "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/trusted-profile-sync-peer";
+        let stale_trusted_provider_endpoint_ref =
+            "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/stale-trusted-profile-sync-peer";
         let discovery_candidates = vec![
             ProfileSyncPeerDiscoveryResult {
                 protocol: ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
@@ -24579,7 +24608,7 @@ mod tests {
                         network_id,
                         trusted_discovery_signer.device_id(),
                         trusted_provider_id,
-                        "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/trusted-profile-sync-peer",
+                        trusted_provider_endpoint_ref,
                         1,
                     )
                     .expect("trusted discovery advertisement"),
@@ -24658,7 +24687,16 @@ mod tests {
         );
 
         let retention_provider_handles = [
-            SettingsSyncRetentionProviderHandle::new(trusted_provider_id, &trusted_provider_daemon),
+            SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                trusted_provider_id,
+                stale_trusted_provider_endpoint_ref,
+                &trusted_provider_daemon,
+            ),
+            SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+                trusted_provider_id,
+                trusted_provider_endpoint_ref,
+                &trusted_provider_daemon,
+            ),
             SettingsSyncRetentionProviderHandle::new(
                 rejected_provider_id,
                 &rejected_provider_daemon,
