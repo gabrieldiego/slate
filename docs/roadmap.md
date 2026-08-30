@@ -1909,9 +1909,9 @@ Current baseline:
   `ServiceFrameEndpointTransport` implementations as the swap-in point for live
   adapters and local socketless simulations of those adapters.
 - `slate-profile-sync` materializer coverage now also consumes a provider
-  client built from that socketless endpoint registry, proving selected
-  deferred endpoint refs can become framed `BroadwebdClient` handles without
-  bypassing the connector boundary.
+  client built from a socketless `ServiceFrameEndpointTransport`, proving
+  selected deferred endpoint refs can become framed `BroadwebdClient` handles
+  without bypassing the live-adapter-shaped connector boundary.
 - The manual `slate-broadwebd-net-probe discover` harness now reports the
   selected connector kind and can capture deferred p2p/IPNS/Iroh service
   advertisements without connecting. The `probe` and `discover-probe` paths now

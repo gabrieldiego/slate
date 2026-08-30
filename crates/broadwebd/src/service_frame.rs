@@ -11,6 +11,7 @@ use slate_routing::Multiaddr;
 use std::collections::BTreeMap;
 use std::io::{self, Cursor, Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
+use std::rc::Rc;
 use std::time::Duration;
 
 pub const DEFAULT_SERVICE_FRAME_MAX_BYTES: usize = 32 * 1024 * 1024;
@@ -202,11 +203,7 @@ impl ServiceFrameConnector for DeferredServiceFrameConnector {
 }
 
 pub trait ServiceFrameEndpointTransport {
-    fn connector_kind(&self) -> ServiceFrameConnectorKind;
-
-    fn supports_endpoint(&self, _endpoint: &str, kind: ServiceFrameConnectorKind) -> bool {
-        kind == self.connector_kind()
-    }
+    fn supports_endpoint(&self, endpoint: &str, kind: ServiceFrameConnectorKind) -> bool;
 
     fn connect_endpoint(
         &self,
@@ -345,6 +342,74 @@ impl<'a> ServiceFrameConnector for InProcessServiceFrameConnector<'a> {
     }
 }
 
+pub struct OwnedInProcessServiceFrameStream {
+    handler: Rc<dyn BroadwebdClient>,
+    codec: ServiceFrameCodec,
+    request_bytes: Vec<u8>,
+    response_bytes: Cursor<Vec<u8>>,
+    response_ready: bool,
+}
+
+impl OwnedInProcessServiceFrameStream {
+    pub fn new(handler: Rc<dyn BroadwebdClient>, codec: ServiceFrameCodec) -> Self {
+        Self {
+            handler,
+            codec,
+            request_bytes: Vec::new(),
+            response_bytes: Cursor::new(Vec::new()),
+            response_ready: false,
+        }
+    }
+
+    fn prepare_response(&mut self) -> io::Result<()> {
+        if self.response_ready {
+            return Ok(());
+        }
+
+        let mut request_reader = Cursor::new(self.request_bytes.as_slice());
+        let request = self
+            .codec
+            .read_request(&mut request_reader)
+            .map_err(service_frame_io_error)?;
+        let response = self
+            .handler
+            .dispatch_service_request(request)
+            .map_err(service_frame_io_error)?;
+        let mut response_bytes = Vec::new();
+        self.codec
+            .write_response(&mut response_bytes, &response)
+            .map_err(service_frame_io_error)?;
+        self.response_bytes = Cursor::new(response_bytes);
+        self.response_ready = true;
+        Ok(())
+    }
+}
+
+impl Read for OwnedInProcessServiceFrameStream {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.prepare_response()?;
+        self.response_bytes.read(buffer)
+    }
+}
+
+impl Write for OwnedInProcessServiceFrameStream {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        if self.response_ready {
+            return Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "owned in-process service-frame stream is one request per connection",
+            ));
+        }
+
+        self.request_bytes.extend_from_slice(buffer);
+        Ok(buffer.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.prepare_response()
+    }
+}
+
 #[derive(Default)]
 pub struct InProcessServiceFrameEndpointRegistry<'a> {
     endpoints: BTreeMap<String, InProcessServiceFrameEndpoint<'a>>,
@@ -416,6 +481,98 @@ impl<'a> InProcessServiceFrameEndpointRegistry<'a> {
                 "unregistered in-process service-frame endpoint: {endpoint}"
             ))
         })
+    }
+}
+
+#[derive(Clone)]
+pub struct InProcessServiceFrameEndpointTransport {
+    endpoints: BTreeMap<String, InProcessServiceFrameTransportEndpoint>,
+}
+
+#[derive(Clone)]
+struct InProcessServiceFrameTransportEndpoint {
+    handler: Rc<dyn BroadwebdClient>,
+    kind: ServiceFrameConnectorKind,
+}
+
+impl InProcessServiceFrameEndpointTransport {
+    pub fn new() -> Self {
+        Self {
+            endpoints: BTreeMap::new(),
+        }
+    }
+
+    pub fn register(
+        &mut self,
+        endpoint: impl Into<String>,
+        handler: Rc<dyn BroadwebdClient>,
+    ) -> Result<(), BroadwebdError> {
+        let endpoint = endpoint.into();
+        let kind = service_frame_connector_kind_for_endpoint(endpoint.as_str())?;
+        if !kind.is_deferred() {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "in-process service-frame endpoint transport does not model TCP endpoint {endpoint}; use TcpServiceFrameConnector for TCP"
+            )));
+        }
+        if self.endpoints.contains_key(endpoint.as_str()) {
+            return Err(BroadwebdError::Request(format!(
+                "in-process service-frame transport endpoint is already registered: {endpoint}"
+            )));
+        }
+
+        self.endpoints.insert(
+            endpoint,
+            InProcessServiceFrameTransportEndpoint { handler, kind },
+        );
+        Ok(())
+    }
+
+    pub fn contains_endpoint(&self, endpoint: &str) -> bool {
+        self.endpoints.contains_key(endpoint)
+    }
+
+    fn endpoint(
+        &self,
+        endpoint: &str,
+    ) -> Result<&InProcessServiceFrameTransportEndpoint, BroadwebdError> {
+        let kind = service_frame_connector_kind_for_endpoint(endpoint)?;
+        if !kind.is_deferred() {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "in-process service-frame endpoint transport cannot connect TCP endpoint {endpoint}; use TcpServiceFrameConnector for TCP"
+            )));
+        }
+
+        self.endpoints.get(endpoint).ok_or_else(|| {
+            BroadwebdError::UnsupportedRequest(format!(
+                "unregistered in-process service-frame transport endpoint: {endpoint}"
+            ))
+        })
+    }
+}
+
+impl Default for InProcessServiceFrameEndpointTransport {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ServiceFrameEndpointTransport for InProcessServiceFrameEndpointTransport {
+    fn supports_endpoint(&self, endpoint: &str, kind: ServiceFrameConnectorKind) -> bool {
+        self.endpoints
+            .get(endpoint)
+            .is_some_and(|entry| entry.kind == kind)
+    }
+
+    fn connect_endpoint(
+        &self,
+        endpoint: &str,
+        codec: ServiceFrameCodec,
+    ) -> Result<Box<dyn ServiceFrameIoStream>, BroadwebdError> {
+        let endpoint = self.endpoint(endpoint)?;
+        Ok(Box::new(OwnedInProcessServiceFrameStream::new(
+            Rc::clone(&endpoint.handler),
+            codec,
+        )))
     }
 }
 
@@ -1559,27 +1716,11 @@ mod tests {
             }
         }
 
-        static HANDLER: EchoClient = EchoClient;
-
-        struct IrohAdapter;
-
-        impl ServiceFrameEndpointTransport for IrohAdapter {
-            fn connector_kind(&self) -> ServiceFrameConnectorKind {
-                ServiceFrameConnectorKind::Iroh
-            }
-
-            fn connect_endpoint(
-                &self,
-                endpoint: &str,
-                codec: ServiceFrameCodec,
-            ) -> Result<Box<dyn ServiceFrameIoStream>, BroadwebdError> {
-                assert_eq!(endpoint, "iroh-node:adapter-node-a");
-                Ok(Box::new(InProcessServiceFrameStream::new(&HANDLER, codec)))
-            }
-        }
-
-        let adapter = IrohAdapter;
-        let factory = ServiceFrameEndpointConnectorFactory::new().with_transport(&adapter);
+        let mut transport = InProcessServiceFrameEndpointTransport::new();
+        transport
+            .register("iroh-node:adapter-node-a", Rc::new(EchoClient))
+            .expect("register socketless Iroh transport endpoint");
+        let factory = ServiceFrameEndpointConnectorFactory::new().with_transport(&transport);
         let connector = factory
             .connector("iroh-node:adapter-node-a")
             .expect("factory selects registered Iroh adapter");

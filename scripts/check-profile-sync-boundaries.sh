@@ -952,16 +952,16 @@ require_text \
     'Roadmap must record envelope-only profile-sync bridge coverage.'
 require_text \
     crates/profile-sync/src/lib.rs \
-    'protocol_provider_materializer_accepts_registry_backed_framed_deferred_endpoint' \
-    'profile-sync must prove selected deferred provider endpoint refs can materialize through registry-backed framed clients.'
+    'protocol_provider_materializer_accepts_transport_backed_framed_deferred_endpoint' \
+    'profile-sync must prove selected deferred provider endpoint refs can materialize through transport-backed framed clients.'
 require_text \
     docs/architecture/profile-sync.md \
-    'framed provider client from the socketless service-frame endpoint registry' \
-    'Profile-sync architecture must document registry-backed framed provider materialization.'
+    'framed provider client from a socketless `ServiceFrameEndpointTransport`' \
+    'Profile-sync architecture must document transport-backed framed provider materialization.'
 require_text \
     docs/roadmap.md \
-    'client built from that socketless endpoint registry' \
-    'Roadmap must record registry-backed framed provider materialization.'
+    'client built from a socketless `ServiceFrameEndpointTransport`' \
+    'Roadmap must record transport-backed framed provider materialization.'
 require_text \
     docs/architecture/profile-sync.md \
     'checks the chrome synced-settings watcher wiring' \

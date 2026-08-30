@@ -11250,7 +11250,7 @@ mod tests {
         BroadwebStatusSnapshot, BroadwebdClient, BroadwebdError,
         ConnectorServiceFrameBroadwebdClient, DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
         DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH, DaemonHealth, DaemonLifecycle,
-        InProcessServiceFrameEndpointRegistry, PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+        InProcessServiceFrameEndpointTransport, PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
         PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
         PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER, ProfileSyncPeerAdvertisement,
         ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryProvider,
@@ -11303,6 +11303,7 @@ mod tests {
     };
     use std::cell::RefCell;
     use std::collections::{BTreeMap, BTreeSet};
+    use std::rc::Rc;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     const TEST_CONTENT_KEY_ID: &str = "content-key-epoch-1";
@@ -12024,29 +12025,31 @@ mod tests {
     }
 
     #[test]
-    fn protocol_provider_materializer_accepts_registry_backed_framed_deferred_endpoint() {
+    fn protocol_provider_materializer_accepts_transport_backed_framed_deferred_endpoint() {
         let network = InProcessBroadwebNetwork::new();
-        let provider_state_root = test_state_root("protocol-materializer-endpoint-registry");
-        let provider_id = "registry-iroh-provider";
-        let provider_endpoint_ref = "iroh-node:registry-profile-sync-node";
-        let provider_daemon = network
-            .daemon_for_provider_with_roles(
-                &provider_state_root,
-                ResourceBudget::default(),
-                provider_id,
-                "socketless-registry-provider",
-                BroadwebdProfileSyncProviderRoles::availability_provider(),
-            )
-            .expect("start socketless registry provider daemon");
+        let provider_state_root = test_state_root("protocol-materializer-endpoint-transport");
+        let provider_id = "transport-iroh-provider";
+        let provider_endpoint_ref = "iroh-node:transport-profile-sync-node";
+        let provider_daemon: Rc<dyn BroadwebdClient> = Rc::new(
+            network
+                .daemon_for_provider_with_roles(
+                    &provider_state_root,
+                    ResourceBudget::default(),
+                    provider_id,
+                    "socketless-transport-provider",
+                    BroadwebdProfileSyncProviderRoles::availability_provider(),
+                )
+                .expect("start socketless transport provider daemon"),
+        );
 
-        let mut endpoint_registry = InProcessServiceFrameEndpointRegistry::new();
-        endpoint_registry
-            .register(provider_endpoint_ref, &provider_daemon)
-            .expect("register deferred endpoint with socketless frame registry");
-        let provider_connector =
-            ServiceFrameEndpointConnectorFactory::with_in_process_registry(&endpoint_registry)
-                .connector(provider_endpoint_ref)
-                .expect("build endpoint-registry connector through factory");
+        let mut endpoint_transport = InProcessServiceFrameEndpointTransport::new();
+        endpoint_transport
+            .register(provider_endpoint_ref, Rc::clone(&provider_daemon))
+            .expect("register deferred endpoint with socketless frame transport");
+        let provider_connector = ServiceFrameEndpointConnectorFactory::new()
+            .with_transport(&endpoint_transport)
+            .connector(provider_endpoint_ref)
+            .expect("build endpoint transport connector through factory");
         let provider_client = ConnectorServiceFrameBroadwebdClient::with_codec(
             provider_connector,
             ServiceFrameCodec::new(4096),
@@ -12056,7 +12059,7 @@ mod tests {
                 super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
                     provider_id: provider_id.to_string(),
                     protocol: super::PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL.to_string(),
-                    target: "registry-profile-sync-node".to_string(),
+                    target: "transport-profile-sync-node".to_string(),
                 },
             ],
             ..super::SettingsSyncSelectedProtocolMaterializationPlan::default()
@@ -12095,7 +12098,7 @@ mod tests {
             .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
                 BroadwebdProfileSyncProfileRequest::new(DEFAULT_PROFILE_ID),
             ))
-            .expect("list retained objects through registry-backed framed client");
+            .expect("list retained objects through transport-backed framed client");
         assert_eq!(
             retained,
             BroadwebdProfileSyncResponse::RetainedObjects {
