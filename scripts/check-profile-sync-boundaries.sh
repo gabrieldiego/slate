@@ -921,8 +921,12 @@ require_text \
     'Slate settings page must call the enrollment-key export route.'
 require_text \
     resources/resource_protocol/slate-settings.html \
+    'slateDownloadUrl' \
+    'Slate settings page must route enrollment-key exports through the internal download handler.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
     'download: "1"' \
-    'Slate settings page must use the direct attachment download route for enrollment keys.'
+    'Slate settings page must keep the internal enrollment-key export route marked as a download target.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'key/import' \
@@ -934,7 +938,7 @@ require_text \
 reject_protocol_model_leak \
     resources/resource_protocol/slate-settings.html \
     'createObjectURL|data:application/json|key_export_text|profile-sync-handoff-file|profile-sync-handoff-download|profile-sync-handoff-import|PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES' \
-    'Slate settings page must use the direct enrollment-key attachment/import path instead of stale handoff or generated Blob download UI.'
+    'Slate settings page must use the internal enrollment-key download/import path instead of stale handoff or generated Blob download UI.'
 require_text \
     crates/chrome/src/desktop/settings_watcher.rs \
     'AppSyncDomainWatcher::new' \
@@ -1111,6 +1115,10 @@ require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
     'settings/profile-sync/key/export' \
     'Slate settings must keep an explicit profile-sync enrollment-key export route.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'profile_sync_key_download_filename_from_url' \
+    'Slate downloads must support the narrow internal profile-sync enrollment-key export target.'
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
     'settings/profile-sync/key/import' \

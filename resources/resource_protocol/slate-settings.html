@@ -899,6 +899,15 @@
         "slate-profile-enrollment-key.json";
     }
 
+    function slateDownloadUrl(url, filename) {
+      const query = new URLSearchParams();
+      query.set("url", url);
+      if (filename) {
+        query.set("filename", filename);
+      }
+      return `slate://download?${query.toString()}`;
+    }
+
     function profileSyncText(value, fallback) {
       if (value === null || value === undefined || value === "") {
         return fallback;
@@ -1531,12 +1540,8 @@
     }
 
     function triggerProfileSyncEnrollmentKeyDownload(state) {
-      const link = document.createElement("a");
-      link.download = enrollmentKeyFilename(state);
-      link.href = profileSyncUrl("key/export", { download: "1" });
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const targetUrl = profileSyncUrl("key/export", { download: "1" });
+      window.location.href = slateDownloadUrl(targetUrl, enrollmentKeyFilename(state));
     }
 
     function downloadProfileSyncEnrollmentKey() {

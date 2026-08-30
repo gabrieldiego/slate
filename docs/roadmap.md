@@ -1805,8 +1805,9 @@ Current baseline:
   enrollment key file. First-use download creates and activates a local key when
   no sync metadata exists yet, while metadata-only devices fail closed because
   the root secret is intentionally not stored in `slate-settings.db`. Download
-  now uses the `key/export?download=1` attachment path instead of a generated
-  Blob/data URL. The file remains sensitive login material. The lower-level
+  now routes the internal `key/export?download=1` target through Slate's
+  download handler so the key is saved and appears beside other local
+  downloads. The file remains sensitive login material. The lower-level
   target-specific handoff, device-request, and non-secret enrollment-bundle
   primitives remain for deterministic fixture logic and future QR/unbound
   onboarding design, but they are not the ordinary Settings UI.

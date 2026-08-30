@@ -18,8 +18,9 @@ use servo::protocol_handler::{
     ResourceFetchTiming, Response, ResponseBody,
 };
 use slate_broadwebd::{
-    FetchDisposition, HttpFetchRequest, IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX, StateRoot,
-    TemporaryDownloadRecord, default_session_state_root,
+    DownloadRecord, FetchDisposition, HttpFetchRequest, HttpFetchResponse,
+    IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX, StateRoot, TemporaryDownloadRecord,
+    default_session_state_root,
 };
 use slate_profile_sync::{
     LocalSettingsSyncCurrentCycleReport, LocalSettingsSyncPreviewCycleReport,
@@ -180,7 +181,7 @@ impl ProtocolHandler for SlateProtocolHandler {
         }
 
         if is_slate_download_request_url(url.as_url()) {
-            return download_url_response(request);
+            return self.download_url_response(request);
         }
 
         if is_slate_settings_preview_url(url.as_url()) {
@@ -240,6 +241,183 @@ impl ProtocolHandler for SlateProtocolHandler {
 }
 
 impl SlateProtocolHandler {
+    fn download_url_response(
+        &self,
+        request: &Request,
+    ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
+        let request_url = request.current_url();
+        let timing = ResourceFetchTiming::new(request.timing_type());
+        let response = match profile_sync_key_download_filename_from_url(request_url.as_url()) {
+            Ok(Some(filename)) => {
+                self.profile_sync_key_download_response(request_url, timing, filename.as_str())
+            }
+            Ok(None) => match download_request_from_url(request_url.as_url()) {
+                Ok(fetch_request) => match fetch_with_default_broadwebd(fetch_request) {
+                    Ok(fetch_response) => {
+                        download_fetch_response(request_url, timing, fetch_response)
+                    }
+                    Err(error) => slate_download_error_response(
+                        request_url,
+                        timing,
+                        "Download Failed",
+                        &error.to_string(),
+                        502,
+                    ),
+                },
+                Err(error) => slate_download_error_response(
+                    request_url,
+                    timing,
+                    "Invalid Download Request",
+                    &error,
+                    400,
+                ),
+            },
+            Err(error) => slate_download_error_response(
+                request_url,
+                timing,
+                "Invalid Download Request",
+                &error,
+                400,
+            ),
+        };
+        Box::pin(std::future::ready(response))
+    }
+
+    fn profile_sync_key_download_response(
+        &self,
+        request_url: ServoUrl,
+        timing: ResourceFetchTiming,
+        filename: &str,
+    ) -> Response {
+        let export = match self.profile_sync_key_export() {
+            Ok(export) => export,
+            Err((status_code, error)) => {
+                return slate_download_error_response(
+                    request_url,
+                    timing,
+                    "Download Failed",
+                    &error,
+                    status_code,
+                );
+            }
+        };
+        let body = match export.to_bytes() {
+            Ok(body) => body,
+            Err(error) => {
+                let mut state = self.profile_sync_preview.lock().unwrap();
+                state.last_error = Some(error.to_string());
+                return slate_download_error_response(
+                    request_url,
+                    timing,
+                    "Download Failed",
+                    &error.to_string(),
+                    500,
+                );
+            }
+        };
+        let state_root = match StateRoot::prepare(default_session_state_root()) {
+            Ok(state_root) => state_root,
+            Err(error) => {
+                let mut state = self.profile_sync_preview.lock().unwrap();
+                state.last_error = Some(error.to_string());
+                return slate_download_error_response(
+                    request_url,
+                    timing,
+                    "Download Failed",
+                    &error.to_string(),
+                    500,
+                );
+            }
+        };
+        let path = match state_root.store_download(DEFAULT_PROFILE_ID, filename, body.as_slice()) {
+            Ok(path) => path,
+            Err(error) => {
+                let mut state = self.profile_sync_preview.lock().unwrap();
+                state.last_error = Some(error.to_string());
+                return slate_download_error_response(
+                    request_url,
+                    timing,
+                    "Download Failed",
+                    &error.to_string(),
+                    500,
+                );
+            }
+        };
+        let saved_filename = path
+            .file_name()
+            .and_then(|filename| filename.to_str())
+            .unwrap_or(filename)
+            .to_string();
+        let download = DownloadRecord::new(
+            DEFAULT_PROFILE_ID,
+            saved_filename,
+            path,
+            body.len(),
+            Some("application/json".to_string()),
+        );
+        let fetch_response = HttpFetchResponse::new(
+            "slate://settings/profile-sync/key/export",
+            200,
+            Some("application/json".to_string()),
+            Vec::new(),
+            body,
+        )
+        .with_download_disposition(filename)
+        .with_download(download);
+        let mut state = self.profile_sync_preview.lock().unwrap();
+        state.last_error = None;
+        download_fetch_response(request_url, timing, fetch_response)
+    }
+
+    fn profile_sync_key_export(&self) -> Result<SlateSyncSecretExport, (u16, String)> {
+        let mut state = self.profile_sync_preview.lock().unwrap();
+        self.refresh_profile_sync_preview_metadata(&mut state);
+        match state.active_export.clone() {
+            Some(export) => {
+                state.last_error = None;
+                Ok(export)
+            }
+            None if !state.metadata_ready => {
+                let created = state.create_secret_export_for_unenrolled_profile(
+                    DEFAULT_PROFILE_ID,
+                    unix_time_seconds(),
+                );
+                let (sync_secret, export) = match created {
+                    Ok(created) => created,
+                    Err(error) => {
+                        let message = error.to_string();
+                        state.last_error = Some(message.clone());
+                        return Err((500, message));
+                    }
+                };
+                match self.activate_profile_sync_preview_from_secret(&sync_secret) {
+                    Ok(Some(activation)) => {
+                        state.mark_secret_activation_ready(&activation);
+                        state.last_error = None;
+                        Ok(export)
+                    }
+                    Ok(None) => {
+                        let message = "settings database is not available".to_string();
+                        state.last_error = Some(message.clone());
+                        Err((500, message))
+                    }
+                    Err(error) => {
+                        let message = error.to_string();
+                        state.last_error = Some(message.clone());
+                        Err((500, message))
+                    }
+                }
+            }
+            None => {
+                let message =
+                    "profile enrollment key is not loaded on this device; import it before downloading it again"
+                        .to_string();
+                state.last_error = Some(message.clone());
+                Err((400, message))
+            }
+        }
+    }
+
     fn persist_chrome_element_zoom_setting(&self, zoom: f32) {
         if let Some(database) = &self.database {
             if let Err(error) = database.set_setting_f32(CHROME_ELEMENT_ZOOM_SETTING_KEY, zoom) {
@@ -359,51 +537,12 @@ impl SlateProtocolHandler {
         request: &Request,
         url: &Url,
     ) -> Pin<Box<dyn Future<Output = Response> + Send>> {
-        let export = {
-            let mut state = self.profile_sync_preview.lock().unwrap();
-            self.refresh_profile_sync_preview_metadata(&mut state);
-            match state.active_export.clone() {
-                Some(export) => export,
-                None if !state.metadata_ready => {
-                    let (sync_secret, export) = match state
-                        .create_secret_export_for_unenrolled_profile(
-                            DEFAULT_PROFILE_ID,
-                            unix_time_seconds(),
-                        ) {
-                        Ok((sync_secret, export)) => (sync_secret, export),
-                        Err(error) => {
-                            state.last_error = Some(error.to_string());
-                            let readiness =
-                                self.profile_sync_local_readiness_report().ok().flatten();
-                            return json_response(request, 500, state.to_json(readiness.as_ref()));
-                        }
-                    };
-                    match self.activate_profile_sync_preview_from_secret(&sync_secret) {
-                        Ok(Some(activation)) => {
-                            state.mark_secret_activation_ready(&activation);
-                            export
-                        }
-                        Ok(None) => {
-                            state.last_error =
-                                Some("settings database is not available".to_string());
-                            return json_response(request, 500, state.to_json(None));
-                        }
-                        Err(error) => {
-                            state.last_error = Some(error.to_string());
-                            let readiness =
-                                self.profile_sync_local_readiness_report().ok().flatten();
-                            return json_response(request, 500, state.to_json(readiness.as_ref()));
-                        }
-                    }
-                }
-                None => {
-                    state.last_error = Some(
-                        "profile enrollment key is not loaded on this device; import it before downloading it again"
-                            .to_string(),
-                    );
-                    let readiness = self.profile_sync_local_readiness_report().ok().flatten();
-                    return json_response(request, 400, state.to_json(readiness.as_ref()));
-                }
+        let export = match self.profile_sync_key_export() {
+            Ok(export) => export,
+            Err((status_code, _)) => {
+                let mut state = self.profile_sync_preview.lock().unwrap();
+                let readiness = self.profile_sync_local_readiness_report().ok().flatten();
+                return json_response(request, status_code, state.to_json(readiness.as_ref()));
             }
         };
         let mut state = self.profile_sync_preview.lock().unwrap();
@@ -1571,6 +1710,40 @@ fn download_request_from_url(url: &Url) -> Result<HttpFetchRequest, String> {
     Ok(HttpFetchRequest::default_profile(target).download_as(filename))
 }
 
+fn profile_sync_key_download_filename_from_url(url: &Url) -> Result<Option<String>, String> {
+    if !is_slate_download_request_url(url) {
+        return Ok(None);
+    }
+
+    let target = url
+        .query_pairs()
+        .find(|(name, _)| name == "url")
+        .map(|(_, value)| value.into_owned())
+        .ok_or_else(|| "missing url query parameter".to_string())?;
+    let target_url =
+        Url::parse(&target).map_err(|error| format!("invalid download URL: {error}"))?;
+    if target_url.scheme() != "slate" {
+        return Ok(None);
+    }
+    if !is_slate_settings_profile_sync_key_export_url(&target_url) {
+        return Err(format!(
+            "unsupported internal download target: slate://{}{}",
+            target_url.host_str().unwrap_or_default(),
+            target_url.path()
+        ));
+    }
+    if !profile_sync_download_requested(&target_url) {
+        return Err("profile sync key export download flag is required".to_string());
+    }
+
+    let filename = url
+        .query_pairs()
+        .find(|(name, _)| name == "filename")
+        .and_then(|(_, value)| non_empty_download_filename(&value))
+        .unwrap_or_else(|| profile_sync_key_filename(DEFAULT_PROFILE_ID));
+    Ok(Some(filename))
+}
+
 fn non_empty_download_filename(value: &str) -> Option<String> {
     let value = value.trim();
     (!value.is_empty()).then(|| value.to_string())
@@ -1861,7 +2034,8 @@ mod tests {
         is_slate_settings_profile_sync_run_current_url, is_slate_settings_profile_sync_state_url,
         is_slate_settings_save_url, is_slate_settings_url, is_slate_web_url,
         profile_sync_download_requested, profile_sync_handoff_bundle_text_from_url,
-        profile_sync_handoff_target_device_id_from_url, profile_sync_key_filename,
+        profile_sync_handoff_target_device_id_from_url,
+        profile_sync_key_download_filename_from_url, profile_sync_key_filename,
         profile_sync_key_text_from_url, slate_download_error_html,
     };
     use crate::desktop::key_bindings::{
@@ -2034,6 +2208,50 @@ mod tests {
             request.suggested_download_filename.as_deref(),
             Some("file.zip")
         );
+    }
+
+    #[test]
+    fn slate_download_request_recognizes_profile_sync_key_export() {
+        let filename = profile_sync_key_download_filename_from_url(
+            &Url::parse(
+                "slate://download?url=slate%3A%2F%2Fsettings%2Fprofile-sync%2Fkey%2Fexport%3Fdownload%3D1&filename=key.json",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(filename.as_deref(), Some("key.json"));
+        assert_eq!(
+            profile_sync_key_download_filename_from_url(
+                &Url::parse(
+                    "slate://download?url=https%3A%2F%2Fexample.com%2Freleases%2Fslate.tar.gz",
+                )
+                .unwrap(),
+            )
+            .unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn slate_download_request_rejects_other_internal_targets() {
+        let missing_flag = profile_sync_key_download_filename_from_url(
+            &Url::parse(
+                "slate://download?url=slate%3A%2F%2Fsettings%2Fprofile-sync%2Fkey%2Fexport",
+            )
+            .unwrap(),
+        )
+        .unwrap_err();
+        let wrong_page = profile_sync_key_download_filename_from_url(
+            &Url::parse("slate://download?url=slate%3A%2F%2Fsettings").unwrap(),
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            missing_flag,
+            "profile sync key export download flag is required"
+        );
+        assert!(wrong_page.contains("unsupported internal download target"));
     }
 
     #[test]
@@ -2601,6 +2819,8 @@ mod tests {
         assert!(settings_page.contains("Download enrollment key"));
         assert!(settings_page.contains("Import enrollment key"));
         assert!(settings_page.contains("triggerProfileSyncEnrollmentKeyDownload"));
+        assert!(settings_page.contains("slateDownloadUrl(targetUrl"));
+        assert!(settings_page.contains("window.location.href = slateDownloadUrl"));
         assert!(settings_page.contains("download: \"1\""));
         assert!(settings_page.contains("chooseProfileSyncEnrollmentKey"));
         assert!(settings_page.contains("profileSyncEnrollmentKeyFile.click()"));
