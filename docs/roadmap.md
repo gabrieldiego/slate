@@ -1886,6 +1886,12 @@ Current baseline:
   TCP multiaddr shape for manual harnesses, and fails closed for hostnames,
   `/dnsaddr`, or p2p-shaped multiaddrs until those transports have explicit
   connector implementations and leak policy.
+- broadwebd now classifies service-frame endpoint refs before connector
+  selection. Literal TCP endpoints select the TCP connector, while
+  libp2p-shaped, IPNS-shaped, Iroh-shaped, and dnsaddr-shaped refs can be
+  represented as deferred connector stubs that fail closed until their real
+  protocol transports are implemented. This keeps local fixture modeling and
+  future broadweb discovery records on the same adapter boundary.
 - The Settings Profile Sync Preview now separates sync health from issue
   details. After the current-settings or local trial action, the page reports
   whether the latest local fixture run is healthy, still degraded, or recovered

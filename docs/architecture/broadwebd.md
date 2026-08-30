@@ -446,6 +446,13 @@ request/response exchange over it. The in-process connector is used for
 socketless fixtures; the TCP connector is only a manual network harness. Future
 libp2p, Iroh, IPFS, or OS-local IPC clients should plug in at this connector
 boundary so profile-sync scheduling and trust policy do not learn about sockets.
+`ServiceFrameConnectorKind` classifies endpoint references before connector
+selection. Literal `ip:port` endpoints and literal `/ip4|/ip6/.../tcp/...`
+multiaddrs map to TCP. `/dnsaddr/.../p2p/...` and `/ip4|/ip6/.../p2p/...`
+multiaddrs map to a deferred libp2p connector, `/ipns/...` maps to IPNS, and
+`iroh-node:...` or `/iroh-node/...` maps to Iroh. `DeferredServiceFrameConnector`
+is a fail-closed stub for those endpoint families until the real protocol
+connectors exist.
 The codec now also has length-prefixed read/write helpers and an opt-in
 `TcpServiceFrameBroadwebdClient` for manual LAN smoke tests. This TCP client is
 not the default Slate-to-broadwebd IPC design and accepts only literal socket

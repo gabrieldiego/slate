@@ -207,6 +207,14 @@ require_text \
     'broadwebd must expose a connector boundary so socketless fixtures and future p2p transports can swap in below service frames.'
 require_text \
     crates/broadwebd/src/service_frame.rs \
+    'pub enum ServiceFrameConnectorKind' \
+    'broadwebd must classify service-frame endpoints before selecting a connector.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'pub struct DeferredServiceFrameConnector' \
+    'broadwebd must expose a fail-closed stub for p2p/IPNS/Iroh service-frame endpoints before real connectors land.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
     'pub struct ConnectorServiceFrameBroadwebdClient' \
     'broadwebd must expose a generic service-frame client over swappable connectors.'
 require_text \
@@ -223,8 +231,16 @@ require_text \
     'broadwebd must parse manual TCP service-frame endpoints without implicit DNS resolution.'
 require_text \
     crates/broadwebd/src/service_frame.rs \
+    'pub fn service_frame_connector_kind_for_endpoint' \
+    'broadwebd must expose service-frame endpoint classification for manual and future p2p harnesses.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
     'service_frame_tcp_endpoint_rejects_dns_and_p2p_multiaddrs_without_connector' \
     'broadwebd must fail closed when the TCP connector sees DNS or p2p-shaped multiaddrs.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'deferred_service_frame_connector_fails_closed_until_transport_exists' \
+    'broadwebd must test p2p-shaped connector stubs as fail-closed until protocol transports are implemented.'
 require_text \
     crates/broadwebd/src/peer_discovery.rs \
     'peer_discovery_connect_endpoint_preserves_literal_ip_tcp_multiaddr' \

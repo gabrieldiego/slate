@@ -94,6 +94,31 @@ pub trait ServiceFrameConnector {
     fn connect(&self, codec: ServiceFrameCodec) -> Result<Self::Stream, BroadwebdError>;
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ServiceFrameConnectorKind {
+    Tcp,
+    Libp2p,
+    Iroh,
+    Ipns,
+    Dnsaddr,
+}
+
+impl ServiceFrameConnectorKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Tcp => "tcp",
+            Self::Libp2p => "libp2p",
+            Self::Iroh => "iroh",
+            Self::Ipns => "ipns",
+            Self::Dnsaddr => "dnsaddr",
+        }
+    }
+
+    pub fn is_deferred(self) -> bool {
+        self != Self::Tcp
+    }
+}
+
 pub fn dispatch_service_frame_request_with_connector<C: ServiceFrameConnector>(
     codec: ServiceFrameCodec,
     connector: &C,
@@ -101,6 +126,74 @@ pub fn dispatch_service_frame_request_with_connector<C: ServiceFrameConnector>(
 ) -> Result<ServiceResponse, BroadwebdError> {
     let mut stream = connector.connect(codec)?;
     dispatch_service_frame_request_over_stream(codec, &mut stream, request)
+}
+
+pub fn service_frame_connector_kind_for_endpoint(
+    endpoint: &str,
+) -> Result<ServiceFrameConnectorKind, BroadwebdError> {
+    let endpoint = endpoint.trim();
+    if endpoint.is_empty() {
+        return Err(BroadwebdError::Request(
+            "service-frame endpoint is empty".to_string(),
+        ));
+    }
+    if endpoint.parse::<SocketAddr>().is_ok() {
+        return Ok(ServiceFrameConnectorKind::Tcp);
+    }
+    if let Some(target) = endpoint.strip_prefix("iroh-node:") {
+        validate_deferred_service_frame_endpoint_target("iroh-node", target)?;
+        return Ok(ServiceFrameConnectorKind::Iroh);
+    }
+    if let Some(target) = endpoint.strip_prefix("ipns:") {
+        validate_deferred_service_frame_endpoint_target("ipns", target)?;
+        return Ok(ServiceFrameConnectorKind::Ipns);
+    }
+
+    let multiaddr = Multiaddr::parse(endpoint).map_err(|error| {
+        BroadwebdError::Request(format!(
+            "service-frame endpoint must be a literal socket address, deferred protocol endpoint, or multiaddr: {error}"
+        ))
+    })?;
+    service_frame_connector_kind_for_multiaddr(&multiaddr)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeferredServiceFrameConnector {
+    endpoint: String,
+    kind: ServiceFrameConnectorKind,
+}
+
+impl DeferredServiceFrameConnector {
+    pub fn new(endpoint: impl Into<String>) -> Result<Self, BroadwebdError> {
+        let endpoint = endpoint.into();
+        let kind = service_frame_connector_kind_for_endpoint(endpoint.as_str())?;
+        if !kind.is_deferred() {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "deferred service-frame connector cannot be created for TCP endpoint {endpoint}"
+            )));
+        }
+        Ok(Self { endpoint, kind })
+    }
+
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
+
+    pub fn kind(&self) -> ServiceFrameConnectorKind {
+        self.kind
+    }
+}
+
+impl ServiceFrameConnector for DeferredServiceFrameConnector {
+    type Stream = Cursor<Vec<u8>>;
+
+    fn connect(&self, _codec: ServiceFrameCodec) -> Result<Self::Stream, BroadwebdError> {
+        Err(BroadwebdError::UnsupportedRequest(format!(
+            "service-frame {} connector is not implemented yet for endpoint {}; enable a protocol-specific connector before using this endpoint",
+            self.kind.as_str(),
+            self.endpoint
+        )))
+    }
 }
 
 pub fn service_frame_tcp_socket_addr_from_endpoint(
@@ -526,6 +619,32 @@ fn read_len_prefixed_frame(
     Ok(frame)
 }
 
+fn service_frame_connector_kind_for_multiaddr(
+    endpoint: &Multiaddr,
+) -> Result<ServiceFrameConnectorKind, BroadwebdError> {
+    let segments = endpoint.segments().collect::<Vec<_>>();
+    if service_frame_tcp_socket_addr_from_multiaddr(endpoint).is_ok() {
+        return Ok(ServiceFrameConnectorKind::Tcp);
+    }
+    if segments.first() == Some(&"ipns") && segments.len() >= 2 {
+        return Ok(ServiceFrameConnectorKind::Ipns);
+    }
+    if segments.iter().any(|segment| *segment == "p2p") {
+        return Ok(ServiceFrameConnectorKind::Libp2p);
+    }
+    if segments.first() == Some(&"dnsaddr") && segments.len() >= 2 {
+        return Ok(ServiceFrameConnectorKind::Dnsaddr);
+    }
+    if matches!(segments.first().copied(), Some("iroh" | "iroh-node")) && segments.len() >= 2 {
+        return Ok(ServiceFrameConnectorKind::Iroh);
+    }
+
+    Err(BroadwebdError::UnsupportedRequest(format!(
+        "service-frame endpoint {} needs an explicit protocol connector",
+        endpoint.as_str()
+    )))
+}
+
 fn service_frame_tcp_socket_addr_from_multiaddr(
     endpoint: &Multiaddr,
 ) -> Result<SocketAddr, BroadwebdError> {
@@ -588,6 +707,25 @@ fn service_frame_tcp_socket_addr_from_multiaddr(
         ))
     })?;
     Ok(SocketAddr::new(ip, port))
+}
+
+fn validate_deferred_service_frame_endpoint_target(
+    protocol: &str,
+    target: &str,
+) -> Result<(), BroadwebdError> {
+    if !target.is_empty()
+        && target.len() <= 512
+        && target.chars().all(|character| {
+            character.is_ascii_alphanumeric()
+                || matches!(character, '-' | '_' | '.' | ':' | '~' | '%' | '+' | '=')
+        })
+    {
+        return Ok(());
+    }
+
+    Err(BroadwebdError::Request(format!(
+        "invalid service-frame {protocol} endpoint target: {target:?}"
+    )))
 }
 
 fn service_frame_tcp_multiaddr_from_socket_addr(socket_addr: SocketAddr) -> String {
@@ -728,6 +866,73 @@ mod tests {
             service_frame_tcp_endpoint_for_source("/ip4/0.0.0.0/tcp/9443", source_addr)
                 .expect("rewrite unspecified /ip4 multiaddr"),
             "/ip4/192.168.50.55/tcp/9443"
+        );
+    }
+
+    #[test]
+    fn service_frame_endpoint_classifier_separates_tcp_and_deferred_connectors() {
+        assert_eq!(
+            service_frame_connector_kind_for_endpoint("127.0.0.1:9443")
+                .expect("literal TCP endpoint"),
+            ServiceFrameConnectorKind::Tcp
+        );
+        assert_eq!(
+            service_frame_connector_kind_for_endpoint("/ip4/127.0.0.1/tcp/9443")
+                .expect("literal TCP multiaddr endpoint"),
+            ServiceFrameConnectorKind::Tcp
+        );
+        assert_eq!(
+            service_frame_connector_kind_for_endpoint("/ip4/127.0.0.1/tcp/9443/p2p/peer-a")
+                .expect("libp2p multiaddr endpoint"),
+            ServiceFrameConnectorKind::Libp2p
+        );
+        assert_eq!(
+            service_frame_connector_kind_for_endpoint("/dnsaddr/bootstrap.libp2p.io/tcp/443")
+                .expect("dnsaddr endpoint"),
+            ServiceFrameConnectorKind::Dnsaddr
+        );
+        assert_eq!(
+            service_frame_connector_kind_for_endpoint("/dnsaddr/bootstrap.libp2p.io/p2p/peer-a")
+                .expect("dnsaddr p2p endpoint"),
+            ServiceFrameConnectorKind::Libp2p
+        );
+        assert_eq!(
+            service_frame_connector_kind_for_endpoint("/ipns/k51-profile-root")
+                .expect("IPNS endpoint"),
+            ServiceFrameConnectorKind::Ipns
+        );
+        assert_eq!(
+            service_frame_connector_kind_for_endpoint("iroh-node:node-a")
+                .expect("Iroh node endpoint"),
+            ServiceFrameConnectorKind::Iroh
+        );
+    }
+
+    #[test]
+    fn deferred_service_frame_connector_fails_closed_until_transport_exists() {
+        let connector =
+            DeferredServiceFrameConnector::new("/dnsaddr/bootstrap.libp2p.io/p2p/peer-a")
+                .expect("deferred p2p connector");
+        assert_eq!(connector.kind(), ServiceFrameConnectorKind::Libp2p);
+        assert_eq!(
+            connector.endpoint(),
+            "/dnsaddr/bootstrap.libp2p.io/p2p/peer-a"
+        );
+
+        let error = connector
+            .connect(ServiceFrameCodec::new(4096))
+            .expect_err("deferred connector must not open sockets");
+        assert!(
+            error
+                .to_string()
+                .contains("service-frame libp2p connector is not implemented yet")
+        );
+
+        let tcp = DeferredServiceFrameConnector::new("/ip4/127.0.0.1/tcp/9443")
+            .expect_err("TCP endpoints must use the TCP connector");
+        assert!(
+            tcp.to_string()
+                .contains("cannot be created for TCP endpoint")
         );
     }
 
