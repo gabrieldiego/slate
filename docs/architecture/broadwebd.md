@@ -448,10 +448,14 @@ libp2p, Iroh, IPFS, or OS-local IPC clients should plug in at this connector
 boundary so profile-sync scheduling and trust policy do not learn about sockets.
 The codec now also has length-prefixed read/write helpers and an opt-in
 `TcpServiceFrameBroadwebdClient` for manual LAN smoke tests. This TCP client is
-not the default Slate-to-broadwebd IPC design and does not provide daemon
-authentication, streaming, cancellation, or backpressure yet; it exists so the
-same bounded service envelopes can be exercised across a real network link
-while the production OS-local IPC remains undecided.
+not the default Slate-to-broadwebd IPC design and accepts only literal socket
+addresses or literal `/ip4|/ip6/.../tcp/...` multiaddrs. It intentionally does
+not resolve hostnames or `/dnsaddr` records; those endpoints need a future
+DNS-aware or p2p-aware connector with explicit leak policy. The TCP harness
+also does not provide daemon authentication, streaming, cancellation, or
+backpressure yet; it exists so the same bounded service envelopes can be
+exercised across a real network link while the production OS-local IPC remains
+undecided.
 
 The first peer-discovery slice adds bounded UDP profile-sync solicit and
 advertisement messages. A peer advertisement carries a network id, node id,

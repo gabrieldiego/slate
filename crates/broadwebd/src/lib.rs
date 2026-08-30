@@ -155,6 +155,7 @@ pub use service_frame::{
     ServiceFrameCodec, ServiceFrameConnector, TcpServiceFrameBroadwebdClient,
     TcpServiceFrameConnector, dispatch_service_frame_request_over_stream,
     dispatch_service_frame_request_with_connector, serve_one_service_frame_request_over_stream,
+    service_frame_tcp_endpoint_for_source, service_frame_tcp_socket_addr_from_endpoint,
 };
 pub use services::{
     http_fetch::HttpFetchService,

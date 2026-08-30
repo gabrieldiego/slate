@@ -214,7 +214,7 @@ impl ProbeArgs {
 
         let connect = connect.ok_or_else(|| {
             format!(
-                "probe requires --connect with a host:port endpoint\n\n{}",
+                "probe requires --connect with a literal ip:port endpoint or /ip4|/ip6/.../tcp/... multiaddr\n\n{}",
                 usage()
             )
         })?;
@@ -886,7 +886,7 @@ fn is_udp_timeout_error(error: &slate_broadwebd::BroadwebdError) -> bool {
 fn usage() -> String {
     "usage:
   slate-broadwebd-net-probe serve --state-root <dir> [--bind <addr:port>] [--ready-file <path>] [--max-requests <n>] [--frame-max-bytes <bytes>] [--runtime-profile-sync] [--discovery-bind <addr:port>] [--discovery-ready-file <path>] [--discovery-network <id>] [--discovery-node <id>] [--discovery-provider <id>] [--discovery-membership-epoch <n>] [--discovery-advertisement-file <path>] [--discovery-multicast <ipv4>]
-  slate-broadwebd-net-probe probe --connect <host:port> [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>]
+  slate-broadwebd-net-probe probe --connect <ip:port|/ip4/.../tcp/...|/ip6/.../tcp/...> [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>]
   slate-broadwebd-net-probe discover --discovery-target <host:port> [--network-id <id>] [--node-id <id>] [--timeout-ms <ms>] [--require-signed-discovery] [--advertisement-output <path>] [--connect-output <path>]
   slate-broadwebd-net-probe discover-probe --discovery-target <host:port> [--network-id <id>] [--node-id <id>] [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>] [--timeout-ms <ms>] [--require-signed-discovery]"
         .to_string()

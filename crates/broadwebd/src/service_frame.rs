@@ -7,8 +7,9 @@ use crate::{
     status::BroadwebStatusSnapshot,
 };
 use serde::{Serialize, de::DeserializeOwned};
+use slate_routing::Multiaddr;
 use std::io::{self, Cursor, Read, Write};
-use std::net::{TcpStream, ToSocketAddrs};
+use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::time::Duration;
 
 pub const DEFAULT_SERVICE_FRAME_MAX_BYTES: usize = 32 * 1024 * 1024;
@@ -100,6 +101,39 @@ pub fn dispatch_service_frame_request_with_connector<C: ServiceFrameConnector>(
 ) -> Result<ServiceResponse, BroadwebdError> {
     let mut stream = connector.connect(codec)?;
     dispatch_service_frame_request_over_stream(codec, &mut stream, request)
+}
+
+pub fn service_frame_tcp_socket_addr_from_endpoint(
+    endpoint: &str,
+) -> Result<SocketAddr, BroadwebdError> {
+    if let Ok(socket_addr) = endpoint.parse::<SocketAddr>() {
+        return Ok(socket_addr);
+    }
+
+    let multiaddr = Multiaddr::parse(endpoint).map_err(|error| {
+        BroadwebdError::Request(format!(
+            "service-frame TCP endpoint must be a literal socket address or /ip4|/ip6/.../tcp/... multiaddr: {error}"
+        ))
+    })?;
+    service_frame_tcp_socket_addr_from_multiaddr(&multiaddr)
+}
+
+pub fn service_frame_tcp_endpoint_for_source(
+    endpoint: &str,
+    source_addr: SocketAddr,
+) -> Result<String, BroadwebdError> {
+    let socket_addr = service_frame_tcp_socket_addr_from_endpoint(endpoint)?;
+    let ip = match socket_addr.ip() {
+        IpAddr::V4(ip) if ip.is_unspecified() => source_addr.ip(),
+        IpAddr::V6(ip) if ip.is_unspecified() => source_addr.ip(),
+        ip => ip,
+    };
+    let socket_addr = SocketAddr::new(ip, socket_addr.port());
+    if endpoint.trim_start().starts_with('/') {
+        Ok(service_frame_tcp_multiaddr_from_socket_addr(socket_addr))
+    } else {
+        Ok(socket_addr.to_string())
+    }
 }
 
 pub fn serve_one_service_frame_request_over_stream<S: Read + Write>(
@@ -338,13 +372,7 @@ impl ServiceFrameConnector for TcpServiceFrameConnector {
     type Stream = TcpStream;
 
     fn connect(&self, _codec: ServiceFrameCodec) -> Result<Self::Stream, BroadwebdError> {
-        let mut addresses = self.address.to_socket_addrs()?;
-        let address = addresses.next().ok_or_else(|| {
-            BroadwebdError::Request(format!(
-                "TCP service-frame endpoint resolved no socket addresses: {}",
-                self.address
-            ))
-        })?;
+        let address = service_frame_tcp_socket_addr_from_endpoint(self.address.as_str())?;
         let stream = TcpStream::connect_timeout(&address, self.timeout)?;
         stream.set_read_timeout(Some(self.timeout))?;
         stream.set_write_timeout(Some(self.timeout))?;
@@ -498,6 +526,77 @@ fn read_len_prefixed_frame(
     Ok(frame)
 }
 
+fn service_frame_tcp_socket_addr_from_multiaddr(
+    endpoint: &Multiaddr,
+) -> Result<SocketAddr, BroadwebdError> {
+    let segments = endpoint.segments().collect::<Vec<_>>();
+    let [network, host, transport, port] = segments.as_slice() else {
+        return Err(BroadwebdError::UnsupportedRequest(format!(
+            "service-frame TCP connector cannot open multiaddr endpoint {}; use a connector for its transport stack",
+            endpoint.as_str()
+        )));
+    };
+    if *transport != "tcp" {
+        return Err(BroadwebdError::UnsupportedRequest(format!(
+            "service-frame TCP connector cannot open non-TCP multiaddr endpoint {}",
+            endpoint.as_str()
+        )));
+    }
+
+    let ip = match *network {
+        "ip4" => {
+            let ip = host.parse::<IpAddr>().map_err(|error| {
+                BroadwebdError::Request(format!(
+                    "invalid service-frame TCP /ip4 endpoint {}: {error}",
+                    endpoint.as_str()
+                ))
+            })?;
+            if !ip.is_ipv4() {
+                return Err(BroadwebdError::Request(format!(
+                    "service-frame TCP /ip4 endpoint contains non-IPv4 address: {}",
+                    endpoint.as_str()
+                )));
+            }
+            ip
+        }
+        "ip6" => {
+            let ip = host.parse::<IpAddr>().map_err(|error| {
+                BroadwebdError::Request(format!(
+                    "invalid service-frame TCP /ip6 endpoint {}: {error}",
+                    endpoint.as_str()
+                ))
+            })?;
+            if !ip.is_ipv6() {
+                return Err(BroadwebdError::Request(format!(
+                    "service-frame TCP /ip6 endpoint contains non-IPv6 address: {}",
+                    endpoint.as_str()
+                )));
+            }
+            ip
+        }
+        _ => {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "service-frame TCP connector requires literal /ip4 or /ip6 multiaddr endpoint: {}",
+                endpoint.as_str()
+            )));
+        }
+    };
+    let port = port.parse::<u16>().map_err(|error| {
+        BroadwebdError::Request(format!(
+            "invalid service-frame TCP port in multiaddr endpoint {}: {error}",
+            endpoint.as_str()
+        ))
+    })?;
+    Ok(SocketAddr::new(ip, port))
+}
+
+fn service_frame_tcp_multiaddr_from_socket_addr(socket_addr: SocketAddr) -> String {
+    match socket_addr.ip() {
+        IpAddr::V4(ip) => format!("/ip4/{ip}/tcp/{}", socket_addr.port()),
+        IpAddr::V6(ip) => format!("/ip6/{ip}/tcp/{}", socket_addr.port()),
+    }
+}
+
 fn service_frame_io_error(error: BroadwebdError) -> io::Error {
     io::Error::other(error)
 }
@@ -603,6 +702,58 @@ mod tests {
                 actual: 3,
             }
         );
+    }
+
+    #[test]
+    fn service_frame_tcp_endpoint_accepts_literal_ip_socket_and_multiaddr() {
+        let source_addr = "192.168.50.55:47883"
+            .parse::<SocketAddr>()
+            .expect("source socket");
+
+        assert_eq!(
+            service_frame_tcp_socket_addr_from_endpoint("127.0.0.1:9443").expect("literal socket"),
+            "127.0.0.1:9443".parse::<SocketAddr>().unwrap()
+        );
+        assert_eq!(
+            service_frame_tcp_socket_addr_from_endpoint("/ip4/127.0.0.1/tcp/9443")
+                .expect("literal /ip4 tcp multiaddr"),
+            "127.0.0.1:9443".parse::<SocketAddr>().unwrap()
+        );
+        assert_eq!(
+            service_frame_tcp_endpoint_for_source("0.0.0.0:9443", source_addr)
+                .expect("rewrite unspecified socket address"),
+            "192.168.50.55:9443"
+        );
+        assert_eq!(
+            service_frame_tcp_endpoint_for_source("/ip4/0.0.0.0/tcp/9443", source_addr)
+                .expect("rewrite unspecified /ip4 multiaddr"),
+            "/ip4/192.168.50.55/tcp/9443"
+        );
+    }
+
+    #[test]
+    fn service_frame_tcp_endpoint_rejects_dns_and_p2p_multiaddrs_without_connector() {
+        let hostname = service_frame_tcp_socket_addr_from_endpoint("localhost:9443")
+            .expect_err("TCP connector must not perform DNS resolution");
+        assert!(
+            hostname
+                .to_string()
+                .contains("literal socket address or /ip4|/ip6")
+        );
+
+        let dns_multiaddr =
+            service_frame_tcp_socket_addr_from_endpoint("/dnsaddr/bootstrap.libp2p.io/tcp/443")
+                .expect_err("TCP connector must not resolve dnsaddr multiaddrs");
+        assert!(
+            dns_multiaddr
+                .to_string()
+                .contains("requires literal /ip4 or /ip6")
+        );
+
+        let p2p_multiaddr =
+            service_frame_tcp_socket_addr_from_endpoint("/ip4/127.0.0.1/tcp/9443/p2p/peer")
+                .expect_err("TCP connector must not consume p2p multiaddrs");
+        assert!(p2p_multiaddr.to_string().contains("use a connector"));
     }
 
     #[test]

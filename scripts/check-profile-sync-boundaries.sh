@@ -219,6 +219,18 @@ require_text \
     'broadwebd must keep TCP as an opt-in connector, not as the only service-frame client transport.'
 require_text \
     crates/broadwebd/src/service_frame.rs \
+    'pub fn service_frame_tcp_socket_addr_from_endpoint' \
+    'broadwebd must parse manual TCP service-frame endpoints without implicit DNS resolution.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'service_frame_tcp_endpoint_rejects_dns_and_p2p_multiaddrs_without_connector' \
+    'broadwebd must fail closed when the TCP connector sees DNS or p2p-shaped multiaddrs.'
+require_text \
+    crates/broadwebd/src/peer_discovery.rs \
+    'peer_discovery_connect_endpoint_preserves_literal_ip_tcp_multiaddr' \
+    'Peer discovery must preserve literal IP/TCP multiaddr endpoints for manual harnesses.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
     'connector_service_frame_client_uses_swappable_stream_boundary' \
     'broadwebd must test the generic connector client over a socketless in-process stream.'
 require_text \

@@ -1,10 +1,10 @@
-use crate::BroadwebdError;
+use crate::{BroadwebdError, service_frame::service_frame_tcp_endpoint_for_source};
 use serde::{Deserialize, Serialize};
 use slate_routing::Multiaddr;
 #[cfg(any(test, feature = "test-fixtures"))]
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::net::{IpAddr, SocketAddr, ToSocketAddrs, UdpSocket};
+use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 #[cfg(any(test, feature = "test-fixtures"))]
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -179,13 +179,7 @@ impl ProfileSyncPeerAdvertisement {
         &self,
         source_addr: SocketAddr,
     ) -> Result<String, BroadwebdError> {
-        let service_addr = self.service_socket_addr()?;
-        let ip = match service_addr.ip() {
-            IpAddr::V4(ip) if ip.is_unspecified() => source_addr.ip(),
-            IpAddr::V6(ip) if ip.is_unspecified() => source_addr.ip(),
-            ip => ip,
-        };
-        Ok(SocketAddr::new(ip, service_addr.port()).to_string())
+        service_frame_tcp_endpoint_for_source(self.service_addr.as_str(), source_addr)
     }
 
     pub fn has_capability(&self, capability: &str) -> bool {
@@ -1077,6 +1071,26 @@ mod tests {
                 .connect_addr_for_source(source_addr)
                 .expect("connect address"),
             "192.0.2.55:9000"
+        );
+    }
+
+    #[test]
+    fn peer_discovery_connect_endpoint_preserves_literal_ip_tcp_multiaddr() {
+        let advertisement = ProfileSyncPeerAdvertisement::new(
+            "local",
+            "node-a",
+            "provider-a",
+            "/ip4/0.0.0.0/tcp/9000",
+            1,
+        )
+        .expect("valid multiaddr advertisement");
+        let source_addr = "192.0.2.55:41000".parse().expect("source addr");
+
+        assert_eq!(
+            advertisement
+                .connect_addr_for_source(source_addr)
+                .expect("connect multiaddr"),
+            "/ip4/192.0.2.55/tcp/9000"
         );
     }
 

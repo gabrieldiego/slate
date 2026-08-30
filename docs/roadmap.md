@@ -1880,6 +1880,12 @@ Current baseline:
   in-process `Read + Write` stream, the manual LAN harness can provide a TCP
   stream, and future libp2p/Iroh/IPFS or OS-local IPC integrations can plug in
   without teaching profile-sync scheduling about sockets or live network setup.
+- The manual TCP service-frame connector now accepts literal socket endpoints
+  and literal `/ip4|/ip6/.../tcp/...` multiaddrs only. It rewrites unspecified
+  discovered endpoints with the discovery sender address, preserves literal
+  TCP multiaddr shape for manual harnesses, and fails closed for hostnames,
+  `/dnsaddr`, or p2p-shaped multiaddrs until those transports have explicit
+  connector implementations and leak policy.
 - The Settings Profile Sync Preview now separates sync health from issue
   details. After the current-settings or local trial action, the page reports
   whether the latest local fixture run is healthy, still degraded, or recovered
