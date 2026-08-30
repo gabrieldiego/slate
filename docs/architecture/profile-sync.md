@@ -968,6 +968,13 @@ sockets. A stored provider scheduler tick can then run only against
 already-materialized daemon handles supplied by runtime code. Stored selected
 providers without a matching handle are reported as unmaterialized, and only
 materialized selected providers count toward the retaining-provider quorum.
+Trusted discovery plans can now follow the same materialization boundary
+without first saving provider rows in `slate-settings.db`: a trusted signed
+advertisement contributes a provider id and service address candidate, selected
+multiaddr service addresses become protocol materialization requests, and a
+caller-supplied materializer turns them into normal retention-provider handles.
+Raw socket service addresses remain fail-closed in this path until Slate has a
+runtime adapter and user-visible policy for directly reachable peer endpoints.
 Protocol-materialized stored-provider ticks can now use the same
 `SlateSyncSecret` entry point: the scheduler derives the active content key
 after stored-provider preflight, then hands selected multiaddr endpoints to the

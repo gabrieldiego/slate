@@ -1929,6 +1929,14 @@ Current baseline:
   are ignored before scheduler selection. Synthetic in-process fixture refs
   remain local materialization shims and are not advertised as discovery
   service addresses.
+- The settings sync scheduler can now plan directly from trusted discovery
+  endpoints and hand selected multiaddr advertisements to the normal protocol
+  provider materializer. A socketless regression publishes a signed trusted
+  libp2p-rendezvous-style advertisement, materializes the discovered multiaddr
+  through a local deterministic provider daemon, and completes one settings
+  sync cycle without pre-supplied retention handles. Raw socket discovery
+  addresses remain fail-closed until a runtime adapter and user policy surface
+  exist for them.
 - The `slate-profile-sync` crate is no longer a single source file. The first
   low-risk split extracts discovery trust filtering, shared object-id
   de-duplication helpers, root-id naming helpers, scheduler-facing health

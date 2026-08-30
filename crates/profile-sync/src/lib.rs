@@ -1733,6 +1733,77 @@ impl SettingsSyncTrustedDiscoveryCycleRun {
     pub fn selected_retention_provider_count(&self) -> usize {
         self.cycle.selected_retention_provider_count()
     }
+
+    pub fn selected_endpoint_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedEndpointMaterializationPlan {
+        trusted_discovered_settings_sync_selected_endpoint_materialization_plan(
+            &self.discovery_report,
+            self.cycle.selected_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.selected_endpoint_materialization_plan()
+            .protocol_materialization_plan()
+    }
+}
+
+pub struct SettingsSyncTrustedDiscoveryProtocolProviderRun<'a> {
+    pub discovery_plan: SettingsSyncTrustedDiscoveryCyclePlan,
+    pub protocol_materialization: SettingsSyncProtocolProviderMaterialization<'a>,
+    pub run: SettingsSyncScheduledCycleRun,
+}
+
+impl SettingsSyncTrustedDiscoveryProtocolProviderRun<'_> {
+    pub fn trusted_peer_count(&self) -> usize {
+        self.discovery_plan.trusted_peer_count()
+    }
+
+    pub fn rejected_peer_count(&self) -> usize {
+        self.discovery_plan.rejected_peer_count()
+    }
+
+    pub fn discovered_retention_provider_count(&self) -> usize {
+        self.discovery_plan.selected_retention_provider_count()
+    }
+
+    pub fn selected_retention_provider_count(&self) -> usize {
+        self.run.selected_retention_provider_count()
+    }
+
+    pub fn retained_provider_count(&self) -> usize {
+        self.run.retained_provider_count()
+    }
+
+    pub fn protocol_materialization_report(
+        &self,
+    ) -> SettingsSyncProtocolProviderMaterializationReport {
+        self.protocol_materialization.report()
+    }
+
+    pub fn protocol_materialized_provider_count(&self) -> usize {
+        self.protocol_materialization_report()
+            .materialized_provider_count()
+    }
+
+    pub fn protocol_blocked_provider_count(&self) -> usize {
+        self.protocol_materialization_report()
+            .blocked_provider_count()
+    }
+
+    pub fn all_protocol_providers_materialized(&self) -> bool {
+        self.protocol_materialization_report()
+            .all_providers_materialized()
+    }
+
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.discovery_plan.selected_protocol_materialization_plan()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1967,6 +2038,22 @@ impl SettingsSyncTrustedDiscoveryCyclePlan {
 
     pub fn selected_retention_provider_count(&self) -> usize {
         self.cycle.selected_retention_provider_count()
+    }
+
+    pub fn selected_endpoint_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedEndpointMaterializationPlan {
+        trusted_discovered_settings_sync_selected_endpoint_materialization_plan(
+            &self.discovery_report,
+            self.cycle.selected_retention_provider_ids.as_slice(),
+        )
+    }
+
+    pub fn selected_protocol_materialization_plan(
+        &self,
+    ) -> SettingsSyncSelectedProtocolMaterializationPlan {
+        self.selected_endpoint_materialization_plan()
+            .protocol_materialization_plan()
     }
 }
 
@@ -4956,13 +5043,8 @@ fn trusted_discovered_settings_sync_retention_provider_handles<'a>(
     discovery_report: &TrustedProfileSyncPeerDiscoveryReport,
     retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'a>],
 ) -> Vec<SettingsSyncRetentionProviderHandle<'a>> {
-    let mut trusted_provider_endpoint_refs: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
-    for peer in &discovery_report.trusted_peers {
-        trusted_provider_endpoint_refs
-            .entry(peer.advertisement.provider_id.as_str())
-            .or_default()
-            .insert(peer.advertisement.service_addr.as_str());
-    }
+    let trusted_provider_endpoint_refs =
+        trusted_discovered_settings_sync_retention_provider_endpoint_refs(discovery_report);
 
     retention_provider_handles
         .iter()
@@ -4983,6 +5065,70 @@ fn trusted_discovered_settings_sync_retention_provider_handles<'a>(
             }
         })
         .collect()
+}
+
+fn trusted_discovered_settings_sync_retention_provider_ids(
+    discovery_report: &TrustedProfileSyncPeerDiscoveryReport,
+) -> Vec<String> {
+    let mut seen_provider_ids = BTreeSet::new();
+    discovery_report
+        .trusted_peers
+        .iter()
+        .filter_map(|peer| {
+            let provider_id = peer.advertisement.provider_id.as_str();
+            if seen_provider_ids.insert(provider_id) {
+                Some(provider_id.to_string())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn trusted_discovered_settings_sync_retention_provider_endpoint_refs<'a>(
+    discovery_report: &'a TrustedProfileSyncPeerDiscoveryReport,
+) -> BTreeMap<&'a str, BTreeSet<&'a str>> {
+    let mut trusted_provider_endpoint_refs = BTreeMap::new();
+    for peer in &discovery_report.trusted_peers {
+        trusted_provider_endpoint_refs
+            .entry(peer.advertisement.provider_id.as_str())
+            .or_insert_with(BTreeSet::new)
+            .insert(peer.advertisement.service_addr.as_str());
+    }
+    trusted_provider_endpoint_refs
+}
+
+fn trusted_discovered_settings_sync_retention_provider_endpoints(
+    discovery_report: &TrustedProfileSyncPeerDiscoveryReport,
+) -> Vec<SettingsSyncStoredRetentionProviderEndpoint> {
+    let mut seen_provider_ids = BTreeSet::new();
+    discovery_report
+        .trusted_peers
+        .iter()
+        .filter_map(|peer| {
+            let provider_id = peer.advertisement.provider_id.as_str();
+            if !seen_provider_ids.insert(provider_id) {
+                return None;
+            }
+            let endpoint_ref = peer.advertisement.service_addr.trim();
+            Some(SettingsSyncStoredRetentionProviderEndpoint {
+                provider_id: provider_id.to_string(),
+                endpoint_ref: Some(endpoint_ref.to_string()),
+                endpoint_status: classify_profile_sync_provider_endpoint(
+                    provider_id,
+                    Some(endpoint_ref),
+                ),
+            })
+        })
+        .collect()
+}
+
+fn trusted_discovered_settings_sync_selected_endpoint_materialization_plan(
+    discovery_report: &TrustedProfileSyncPeerDiscoveryReport,
+    selected_provider_ids: &[String],
+) -> SettingsSyncSelectedEndpointMaterializationPlan {
+    let endpoints = trusted_discovered_settings_sync_retention_provider_endpoints(discovery_report);
+    selected_endpoint_materialization_plan(endpoints.as_slice(), selected_provider_ids)
 }
 
 fn trusted_discovered_endpoint_matches_handle_endpoint_ref(
@@ -5444,6 +5590,13 @@ fn stored_provider_endpoint_matches_handle(
 }
 
 fn classify_stored_provider_endpoint(
+    provider_id: &str,
+    endpoint_ref: Option<&str>,
+) -> SettingsSyncStoredProviderEndpointStatus {
+    classify_profile_sync_provider_endpoint(provider_id, endpoint_ref)
+}
+
+fn classify_profile_sync_provider_endpoint(
     provider_id: &str,
     endpoint_ref: Option<&str>,
 ) -> SettingsSyncStoredProviderEndpointStatus {
@@ -6712,6 +6865,31 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         )
     }
 
+    pub fn plan_once_selecting_trusted_discovered_retention_provider_endpoints(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        signer: &ProfileSyncDeviceSigner,
+        discovery_report: &TrustedProfileSyncPeerDiscoveryReport,
+    ) -> Result<SettingsSyncTrustedDiscoveryCyclePlan, ProfileSyncCycleWithHealthError> {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let preflight = runner.settings_sync_cycle_preflight_with_active_key_policy(
+            database,
+            config.profile.as_str(),
+            config.settings_root_id.as_str(),
+            signer,
+            &config.policy,
+        )?;
+        let provider_ids =
+            trusted_discovered_settings_sync_retention_provider_ids(discovery_report);
+        let cycle = select_settings_sync_retention_provider_ids(preflight, &provider_ids);
+
+        Ok(SettingsSyncTrustedDiscoveryCyclePlan {
+            discovery_report: discovery_report.clone(),
+            cycle,
+        })
+    }
+
     pub fn plan_once_selecting_trusted_discovered_retention_providers<'provider>(
         &self,
         database: &SlateProfileDatabase,
@@ -6725,6 +6903,29 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             retention_provider_handles,
         );
         self.plan_once_selecting_retention_providers(database, config, signer, &trusted_handles)
+    }
+
+    pub fn plan_once_discovering_trusted_retention_provider_endpoints(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        signer: &ProfileSyncDeviceSigner,
+        discovery_provider: &(impl ProfileSyncPeerDiscoveryProvider + ?Sized),
+        discovery_query: &ProfileSyncPeerDiscoveryQuery,
+    ) -> Result<SettingsSyncTrustedDiscoveryCyclePlan, ProfileSyncCycleWithHealthError> {
+        let discovery_report = discover_trusted_profile_sync_peers(
+            database,
+            config.profile.as_str(),
+            discovery_provider,
+            discovery_query,
+        )
+        .map_err(profile_sync_peer_discovery_error_to_cycle_with_health)?;
+        self.plan_once_selecting_trusted_discovered_retention_provider_endpoints(
+            database,
+            config,
+            signer,
+            &discovery_report,
+        )
     }
 
     pub fn plan_once_discovering_trusted_retention_providers<'provider>(
@@ -7028,6 +7229,93 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         self.run_once_selecting_retention_providers(database, config, secrets, &trusted_handles)
     }
 
+    pub fn run_once_selecting_trusted_discovered_protocol_retention_providers<
+        'provider,
+        Materializer,
+    >(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        discovery_report: &TrustedProfileSyncPeerDiscoveryReport,
+        materializer: &Materializer,
+    ) -> Result<
+        SettingsSyncTrustedDiscoveryProtocolProviderRun<'provider>,
+        ProfileSyncCycleWithHealthError,
+    >
+    where
+        Materializer: SettingsSyncProtocolProviderMaterializer<'provider>,
+    {
+        let runner = BroadwebdSettingsSyncRunner::new(self.daemon);
+        let discovery_plan = self
+            .plan_once_selecting_trusted_discovered_retention_provider_endpoints(
+                database,
+                config,
+                secrets.signer,
+                discovery_report,
+            )?;
+        config.policy.check_selected_retention_provider_freshness(
+            discovery_plan.cycle.stale_retention_provider_count(),
+            discovery_plan.cycle.offline_retention_provider_count(),
+            &discovery_plan.cycle.preflight.before_health,
+        )?;
+        config.policy.check_selected_retention_provider_roles(
+            discovery_plan.cycle.ineligible_retention_provider_count(),
+            &discovery_plan.cycle.preflight.before_health,
+        )?;
+
+        let protocol_materialization = materializer.materialize_protocol_providers(
+            &discovery_plan.selected_protocol_materialization_plan(),
+        );
+        let run = {
+            let retention_provider_handles = protocol_materialization.retention_provider_handles();
+            let selection = select_settings_sync_retention_provider_handles(
+                discovery_plan.cycle.preflight.clone(),
+                retention_provider_handles.as_slice(),
+            );
+            let plan = selection.plan;
+            config.policy.check_selected_retention_provider_freshness(
+                plan.stale_retention_provider_count(),
+                plan.offline_retention_provider_count(),
+                &plan.preflight.before_health,
+            )?;
+            config.policy.check_selected_retention_provider_roles(
+                plan.ineligible_retention_provider_count(),
+                &plan.preflight.before_health,
+            )?;
+            config.policy.check_selected_retention_provider_count(
+                plan.selected_retention_provider_count(),
+                &plan.preflight.before_health,
+            )?;
+            let cycle = runner
+                .run_settings_sync_cycle_with_active_key_policy_shared_root_candidates_and_retention_providers_after_preflight(
+                    database,
+                    secrets.content_key,
+                    secrets.signer,
+                    &config.policy,
+                    selection.daemons.as_slice(),
+                    &plan.preflight,
+                )?;
+
+            SettingsSyncScheduledCycleRun {
+                preflight: plan.preflight,
+                selected_retention_provider_ids: plan.selected_retention_provider_ids,
+                stale_retention_provider_ids: plan.stale_retention_provider_ids,
+                offline_retention_provider_ids: plan.offline_retention_provider_ids,
+                ineligible_retention_provider_ids: plan.ineligible_retention_provider_ids,
+                undiscovered_retention_provider_ids: plan.undiscovered_retention_provider_ids,
+                duplicate_retention_provider_ids: plan.duplicate_retention_provider_ids,
+                cycle,
+            }
+        };
+
+        Ok(SettingsSyncTrustedDiscoveryProtocolProviderRun {
+            discovery_plan,
+            protocol_materialization,
+            run,
+        })
+    }
+
     pub fn run_once_discovering_trusted_retention_providers<'provider>(
         &self,
         database: &SlateProfileDatabase,
@@ -7056,6 +7344,37 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
             discovery_report,
             cycle,
         })
+    }
+
+    pub fn run_once_discovering_trusted_protocol_retention_providers<'provider, Materializer>(
+        &self,
+        database: &SlateProfileDatabase,
+        config: &SettingsSyncSchedulerConfig,
+        secrets: SettingsSyncRuntimeSecrets<'_>,
+        discovery_provider: &(impl ProfileSyncPeerDiscoveryProvider + ?Sized),
+        discovery_query: &ProfileSyncPeerDiscoveryQuery,
+        materializer: &Materializer,
+    ) -> Result<
+        SettingsSyncTrustedDiscoveryProtocolProviderRun<'provider>,
+        ProfileSyncCycleWithHealthError,
+    >
+    where
+        Materializer: SettingsSyncProtocolProviderMaterializer<'provider>,
+    {
+        let discovery_report = discover_trusted_profile_sync_peers(
+            database,
+            config.profile.as_str(),
+            discovery_provider,
+            discovery_query,
+        )
+        .map_err(profile_sync_peer_discovery_error_to_cycle_with_health)?;
+        self.run_once_selecting_trusted_discovered_protocol_retention_providers(
+            database,
+            config,
+            secrets,
+            &discovery_report,
+            materializer,
+        )
     }
 
     pub fn compact_once_selecting_retention_providers(
@@ -24779,6 +25098,207 @@ mod tests {
         let _ = std::fs::remove_dir_all(rejected_provider_state_root);
         let _ = std::fs::remove_dir_all(future_epoch_provider_state_root);
         let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn broadwebd_settings_sync_scheduler_materializes_trusted_discovered_multiaddr_provider() {
+        let network = InProcessBroadwebNetwork::new();
+        let device_state_root = test_state_root("scheduler-discovered-protocol-device");
+        let provider_state_root = test_state_root("scheduler-discovered-protocol-provider");
+        let db_root = test_state_root("scheduler-discovered-protocol-db");
+        let device_daemon = network
+            .daemon_for_device(
+                &device_state_root,
+                ResourceBudget::default(),
+                "runtime-scheduler-discovered-protocol-device",
+            )
+            .expect("start discovered protocol scheduler device daemon");
+        let provider_id = "discovered-protocol-provider";
+        let provider_endpoint =
+            "/dnsaddr/discovered-protocol-provider.example.test/p2p/materialized";
+        let provider_daemon = network
+            .daemon_for_provider_with_roles(
+                &provider_state_root,
+                ResourceBudget::default(),
+                provider_id,
+                "socketless-discovered-protocol-provider",
+                BroadwebdProfileSyncProviderRoles::availability_provider(),
+            )
+            .expect("start socketless discovered protocol provider daemon");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "runtime-scheduler-discovered-protocol-device",
+        )
+        .expect("open discovered protocol scheduler settings database");
+        let profile = "schedulerdiscoveredprotocolprofile";
+        let settings_root_id = "settings/latest";
+        let network_id = "schedulerdiscoveredprotocolnetwork";
+        let content_key = ProfileSyncContentKey::from_bytes([106; PROFILE_SYNC_CONTENT_KEY_BYTES]);
+        let local_signer =
+            ProfileSyncDeviceSigner::generate("runtime-scheduler-discovered-protocol-device")
+                .expect("generate discovered protocol local signer");
+        let provider_signer =
+            ProfileSyncDeviceSigner::generate("runtime-scheduler-discovered-protocol-peer")
+                .expect("generate discovered protocol provider signer");
+        register_test_content_key_epoch(&database, profile);
+        for public_key in [
+            local_signer.public_key().expect("local public key"),
+            provider_signer
+                .public_key()
+                .expect("discovered protocol provider public key"),
+        ] {
+            database
+                .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                    profile: profile.to_string(),
+                    public_key,
+                    membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+                })
+                .expect("register discovered protocol trusted key");
+        }
+        database
+            .set_sync_setting_text(profile, SYNC_DOMAIN_SETTINGS, "ui.theme", "teal")
+            .expect("write discovered protocol local setting");
+
+        let discovery_provider = network.profile_sync_peer_discovery_provider();
+        let advertisement = sign_profile_sync_peer_advertisement(
+            ProfileSyncPeerAdvertisement::new(
+                network_id,
+                provider_signer.device_id(),
+                provider_id,
+                provider_endpoint,
+                1,
+            )
+            .expect("trusted discovered protocol advertisement"),
+            &provider_signer,
+        )
+        .expect("sign discovered protocol advertisement");
+        discovery_provider
+            .publish_profile_sync_peer(
+                ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
+                DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+                advertisement,
+            )
+            .expect("publish trusted discovered protocol provider");
+        let discovery_query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
+            network_id,
+            local_signer.device_id(),
+            [ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous],
+            8,
+        )
+        .expect("build discovered protocol query");
+        let config = SettingsSyncSchedulerConfig::new(
+            profile,
+            settings_root_id,
+            SettingsSyncCyclePolicy::new(ProfileSyncRetentionPolicy::default(), 4, 4, 2),
+        );
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::new(true, Vec::new()),
+            vec![super::SettingsSyncProtocolProviderDaemon::new(
+                provider_id,
+                provider_endpoint,
+                &provider_daemon,
+            )],
+        );
+        let scheduler = BroadwebdSettingsSyncScheduler::new(&device_daemon);
+        let plan = scheduler
+            .plan_once_discovering_trusted_retention_provider_endpoints(
+                &database,
+                &config,
+                &local_signer,
+                &discovery_provider,
+                &discovery_query,
+            )
+            .expect("plan trusted discovered protocol endpoint");
+        assert_eq!(plan.trusted_peer_count(), 1);
+        assert_eq!(plan.rejected_peer_count(), 0);
+        assert_eq!(plan.selected_retention_provider_count(), 1);
+        assert_eq!(
+            plan.selected_protocol_materialization_plan()
+                .multiaddr_requests,
+            vec![super::SettingsSyncSelectedMultiaddrMaterializationRequest {
+                provider_id: provider_id.to_string(),
+                endpoint: slate_routing::Multiaddr::parse(provider_endpoint)
+                    .expect("trusted discovery protocol endpoint multiaddr"),
+            }]
+        );
+
+        let run = scheduler
+            .run_once_discovering_trusted_protocol_retention_providers(
+                &database,
+                &config,
+                SettingsSyncRuntimeSecrets::new(&content_key, &local_signer),
+                &discovery_provider,
+                &discovery_query,
+                &materializer,
+            )
+            .expect("run through trusted discovered protocol materializer");
+
+        assert_eq!(run.trusted_peer_count(), 1);
+        assert_eq!(run.rejected_peer_count(), 0);
+        assert_eq!(run.discovered_retention_provider_count(), 1);
+        assert_eq!(run.selected_retention_provider_count(), 1);
+        assert_eq!(run.protocol_materialized_provider_count(), 1);
+        assert_eq!(run.protocol_blocked_provider_count(), 0);
+        assert!(run.all_protocol_providers_materialized());
+        assert_eq!(
+            run.protocol_materialization_report(),
+            super::SettingsSyncProtocolProviderMaterializationReport {
+                materialized_provider_ids: vec![provider_id.to_string()],
+                missing_provider_ids: Vec::new(),
+                endpoint_mismatch_provider_ids: Vec::new(),
+                duplicate_provider_ids: Vec::new(),
+                unsupported_provider_ids: Vec::new(),
+                capacity_exceeded_provider_ids: Vec::new(),
+            }
+        );
+        assert_eq!(run.run.cycle.cycle.published_step_count(), 1);
+        assert_eq!(run.retained_provider_count(), 1);
+        assert!(!run.run.cycle.degraded_after());
+
+        let _ = std::fs::remove_dir_all(device_state_root);
+        let _ = std::fs::remove_dir_all(provider_state_root);
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
+    fn trusted_discovery_endpoint_materialization_keeps_socket_addresses_fail_closed() {
+        let provider_id = "socket-discovered-provider";
+        let discovery_report = super::TrustedProfileSyncPeerDiscoveryReport {
+            trusted_peers: vec![ProfileSyncPeerDiscoveryResult {
+                protocol: ProfileSyncPeerDiscoveryProtocol::Libp2pKademlia,
+                namespace: DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE.to_string(),
+                advertisement: ProfileSyncPeerAdvertisement::new(
+                    "socket-discovery-network",
+                    "socket-discovery-peer",
+                    provider_id,
+                    "127.0.0.1:49001",
+                    1,
+                )
+                .expect("socket-shaped discovery advertisement"),
+            }],
+            rejected_peers: Vec::new(),
+        };
+        let selected_provider_ids = vec![provider_id.to_string()];
+
+        let endpoint_plan =
+            super::trusted_discovered_settings_sync_selected_endpoint_materialization_plan(
+                &discovery_report,
+                selected_provider_ids.as_slice(),
+            );
+
+        assert_eq!(
+            endpoint_plan.fail_closed_provider_ids(),
+            vec![provider_id.to_string()]
+        );
+        assert_eq!(
+            endpoint_plan.protocol_materialization_plan(),
+            super::SettingsSyncSelectedProtocolMaterializationPlan {
+                multiaddr_requests: Vec::new(),
+                deferred_protocol_requests: Vec::new(),
+                missing_endpoint_provider_ids: Vec::new(),
+                fail_closed_provider_ids: vec![provider_id.to_string()],
+            }
+        );
     }
 
     #[test]
