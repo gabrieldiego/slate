@@ -1341,8 +1341,11 @@ libp2p, Iroh, IPNS, or future broadweb transport adapter is installed.
 
 - `serve` starts a temporary broadwebd service-frame server with an explicit
   state root and optional peer-discovery responder.
-- `probe` connects to a supplied `host:port` and exercises provider discovery,
-  object put/get, mutable-root publish/resolve, retention, and root health.
+- `probe` selects a service-frame connector for a supplied endpoint and
+  exercises provider discovery, object put/get, mutable-root publish/resolve,
+  retention, and root health. The current live-completing path is TCP, while
+  deferred p2p/IPNS/Iroh endpoint refs route through the shared fail-closed
+  connector until a real adapter is installed.
 - `discover-probe` sends the local peer-discovery solicit message first, then
   runs the same service-frame probe against the discovered endpoint.
 

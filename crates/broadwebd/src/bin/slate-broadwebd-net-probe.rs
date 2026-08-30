@@ -1,12 +1,13 @@
 #![forbid(unsafe_code)]
 
 use slate_broadwebd::{
-    BroadwebDaemon, BroadwebdClient, DiscoveredProfileSyncPeer, IpfsConfig, PluginRegistry,
-    ProfileSyncObjectRequest, ProfileSyncPeerAdvertisement, ProfileSyncProfileRequest,
-    ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
-    ProfileSyncRootHealthRequest, ProfileSyncRootRequest, ProfileSyncRootUpdate,
-    ProfileSyncRuntimeConfig, ResourceBudget, ServiceFrameCodec, ServiceFrameConnectorKind,
-    TcpServiceFrameBroadwebdClient, default_session_status_reporter, discover_profile_sync_peers,
+    BroadwebDaemon, BroadwebdClient, ConnectorServiceFrameBroadwebdClient,
+    DiscoveredProfileSyncPeer, IpfsConfig, PluginRegistry, ProfileSyncObjectRequest,
+    ProfileSyncPeerAdvertisement, ProfileSyncProfileRequest, ProfileSyncPutObjectRequest,
+    ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootHealthRequest, ProfileSyncRootRequest,
+    ProfileSyncRootUpdate, ProfileSyncRuntimeConfig, ResourceBudget, ServiceFrameCodec,
+    ServiceFrameConnector, ServiceFrameConnectorKind, ServiceFrameEndpointConnectorFactory,
+    default_session_status_reporter, discover_profile_sync_peers,
     respond_to_profile_sync_peer_solicit, serve_one_service_frame_request_over_stream,
     service_frame_connector_kind_for_endpoint,
 };
@@ -215,7 +216,7 @@ impl ProbeArgs {
 
         let connect = connect.ok_or_else(|| {
             format!(
-                "probe requires --connect with a literal ip:port endpoint or /ip4|/ip6/.../tcp/... multiaddr\n\n{}",
+                "probe requires --connect with a service-frame endpoint such as ip:port, /ip4|/ip6/.../tcp/..., /dnsaddr/.../p2p/..., /ipns/..., or iroh-node:...\n\n{}",
                 usage()
             )
         })?;
@@ -494,8 +495,12 @@ fn handle_connection(
 
 fn run_probe(args: ProbeArgs) -> Result<(), String> {
     let codec = ServiceFrameCodec::new(args.frame_max_bytes);
-    let client = TcpServiceFrameBroadwebdClient::with_codec(args.connect.clone(), codec)
-        .with_timeout(Duration::from_secs(12));
+    let factory =
+        ServiceFrameEndpointConnectorFactory::new().with_tcp_timeout(Duration::from_secs(12));
+    let connector = factory
+        .connector(args.connect.clone())
+        .map_err(|error| format!("select service-frame endpoint connector: {error}"))?;
+    let client = ConnectorServiceFrameBroadwebdClient::with_codec(connector, codec);
     run_profile_sync_probe(
         &client,
         &args.profile,
@@ -543,7 +548,7 @@ fn run_discover_probe(args: DiscoverProbeArgs) -> Result<(), String> {
     )
     .map_err(|error| format!("discover profile-sync peers: {error}"))?;
     let peer = select_discovered_peer(peers, args.require_signed_discovery)?;
-    let endpoint = tcp_discovered_peer_endpoint(&peer)?;
+    let endpoint = discovered_peer_endpoint(&peer)?;
     println!(
         "DISCOVERED_PROFILE_SYNC_PEER node_id={} provider_id={} membership_epoch={} signed={} source={} connector={} connect={}",
         peer.advertisement.node_id,
@@ -554,11 +559,15 @@ fn run_discover_probe(args: DiscoverProbeArgs) -> Result<(), String> {
         endpoint.connector_kind.as_str(),
         endpoint.endpoint
     );
-    let client = TcpServiceFrameBroadwebdClient::with_codec(
-        endpoint.endpoint,
+    let factory =
+        ServiceFrameEndpointConnectorFactory::new().with_tcp_timeout(Duration::from_secs(12));
+    let connector = factory
+        .connector(endpoint.endpoint)
+        .map_err(|error| format!("select service-frame endpoint connector: {error}"))?;
+    let client = ConnectorServiceFrameBroadwebdClient::with_codec(
+        connector,
         ServiceFrameCodec::new(args.frame_max_bytes),
-    )
-    .with_timeout(Duration::from_secs(12));
+    );
     run_profile_sync_probe(
         &client,
         &args.profile,
@@ -634,21 +643,6 @@ fn discovered_peer_endpoint(
     })
 }
 
-fn tcp_discovered_peer_endpoint(
-    peer: &DiscoveredProfileSyncPeer,
-) -> Result<DiscoveredPeerEndpoint, String> {
-    let endpoint = discovered_peer_endpoint(peer)?;
-    if endpoint.connector_kind == ServiceFrameConnectorKind::Tcp {
-        return Ok(endpoint);
-    }
-
-    Err(format!(
-        "discover-probe selected a {} service-frame endpoint {}; only TCP probing is implemented in this harness",
-        endpoint.connector_kind.as_str(),
-        endpoint.endpoint
-    ))
-}
-
 fn server_discovery_advertisement(
     args: &ServerArgs,
     local_addr: SocketAddr,
@@ -688,7 +682,7 @@ fn load_discovery_advertisement(path: &PathBuf) -> Result<ProfileSyncPeerAdverti
 }
 
 fn run_profile_sync_probe(
-    client: &TcpServiceFrameBroadwebdClient,
+    client: &dyn BroadwebdClient,
     profile: &str,
     root_id: &str,
     payload: Vec<u8>,
@@ -924,7 +918,7 @@ fn is_udp_timeout_error(error: &slate_broadwebd::BroadwebdError) -> bool {
 fn usage() -> String {
     "usage:
   slate-broadwebd-net-probe serve --state-root <dir> [--bind <addr:port>] [--ready-file <path>] [--max-requests <n>] [--frame-max-bytes <bytes>] [--runtime-profile-sync] [--discovery-bind <addr:port>] [--discovery-ready-file <path>] [--discovery-network <id>] [--discovery-node <id>] [--discovery-provider <id>] [--discovery-membership-epoch <n>] [--discovery-advertisement-file <path>] [--discovery-multicast <ipv4>]
-  slate-broadwebd-net-probe probe --connect <ip:port|/ip4/.../tcp/...|/ip6/.../tcp/...> [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>]
+  slate-broadwebd-net-probe probe --connect <service-frame-endpoint> [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>]
   slate-broadwebd-net-probe discover --discovery-target <host:port> [--network-id <id>] [--node-id <id>] [--timeout-ms <ms>] [--require-signed-discovery] [--advertisement-output <path>] [--connect-output <path>]
   slate-broadwebd-net-probe discover-probe --discovery-target <host:port> [--network-id <id>] [--node-id <id>] [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>] [--timeout-ms <ms>] [--require-signed-discovery]"
         .to_string()
@@ -1106,11 +1100,13 @@ mod tests {
 
         assert_eq!(endpoint.connector_kind, ServiceFrameConnectorKind::Tcp);
         assert_eq!(endpoint.endpoint, "/ip4/192.0.2.55/tcp/9443");
+        let factory = ServiceFrameEndpointConnectorFactory::new();
+        let connector = factory
+            .connector(endpoint.endpoint.as_str())
+            .expect("factory selects rewritten TCP endpoint");
         assert_eq!(
-            tcp_discovered_peer_endpoint(&peer)
-                .expect("TCP endpoint")
-                .endpoint,
-            "/ip4/192.0.2.55/tcp/9443"
+            connector.kind().expect("rewritten TCP connector kind"),
+            ServiceFrameConnectorKind::Tcp
         );
     }
 
@@ -1132,10 +1128,22 @@ mod tests {
 
         assert_eq!(endpoint.connector_kind, ServiceFrameConnectorKind::Libp2p);
         assert_eq!(endpoint.endpoint, "/dnsaddr/bootstrap.libp2p.io/p2p/peer-a");
+        let factory = ServiceFrameEndpointConnectorFactory::new();
+        let connector = factory
+            .connector(endpoint.endpoint.as_str())
+            .expect("factory accepts p2p-shaped deferred endpoint");
+        assert_eq!(
+            connector.kind().expect("deferred p2p connector kind"),
+            ServiceFrameConnectorKind::Libp2p
+        );
+        let error = match connector.connect(ServiceFrameCodec::new(4096)) {
+            Ok(_) => panic!("deferred endpoint cannot connect without a live transport adapter"),
+            Err(error) => error,
+        };
         assert!(
-            tcp_discovered_peer_endpoint(&peer)
-                .expect_err("deferred endpoint cannot be probed over TCP")
-                .contains("only TCP probing is implemented")
+            error
+                .to_string()
+                .contains("service-frame libp2p connector is not implemented yet")
         );
     }
 

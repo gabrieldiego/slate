@@ -435,8 +435,12 @@ require_text \
     'manual broadwebd discovery probes must capture p2p-shaped endpoints without trying to open TCP.'
 require_text \
     crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
-    'only TCP probing is implemented in this harness' \
-    'manual broadwebd discover-probe must fail closed for deferred p2p/IPNS/Iroh endpoints.'
+    'ServiceFrameEndpointConnectorFactory::new' \
+    'manual broadwebd probe paths must route through the shared service-frame endpoint connector factory.'
+require_text \
+    crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
+    'service-frame libp2p connector is not implemented yet' \
+    'manual broadwebd discover-probe must fail closed for deferred p2p/IPNS/Iroh endpoints at the connector boundary.'
 require_text \
     crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
     '--discovery-membership-epoch' \
