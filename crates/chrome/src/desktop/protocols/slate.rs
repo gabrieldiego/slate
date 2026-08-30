@@ -2232,6 +2232,17 @@ mod tests {
             default_filename.as_deref(),
             Some("slate-profile-enrollment-key-default.json")
         );
+        let click_time_filename = profile_sync_key_download_filename_from_url(
+            &Url::parse(
+                "slate://download?url=slate%3A%2F%2Fsettings%2Fprofile-sync%2Fkey%2Fexport%3Fnonce%3D123%26download%3D1&filename=slate-profile-enrollment-key-default.json",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            click_time_filename.as_deref(),
+            Some("slate-profile-enrollment-key-default.json")
+        );
         assert_eq!(
             profile_sync_key_download_filename_from_url(
                 &Url::parse(

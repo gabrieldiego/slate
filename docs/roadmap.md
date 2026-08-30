@@ -1894,6 +1894,11 @@ Current baseline:
   represented as deferred connector stubs that fail closed until their real
   protocol transports are implemented. This keeps local fixture modeling and
   future broadweb discovery records on the same adapter boundary.
+- broadwebd now has a socketless service-frame endpoint registry for
+  deterministic deferred-transport harnesses. Tests can bind real-looking
+  libp2p/IPNS/Iroh endpoint refs to in-process `BroadwebdClient` handlers while
+  still exchanging bounded service-frame bytes over the same connector
+  interface that future real transports must implement.
 - The manual `slate-broadwebd-net-probe discover` harness now reports the
   selected connector kind and can capture deferred p2p/IPNS/Iroh service
   advertisements without connecting. The `discover-probe` path stays TCP-only

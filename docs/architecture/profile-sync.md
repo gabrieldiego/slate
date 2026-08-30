@@ -1323,6 +1323,11 @@ operate over `Read + Write` streams, so socketless fixtures and TCP probes
 exercise the same length-prefixed request and response bytes. Tests may replace
 the stream with an in-process shim, but the profile-sync client and server code
 must still use the normal service request envelope.
+The socketless service-frame endpoint registry extends that harness boundary to
+deferred endpoint families. A fixture can register libp2p/IPNS/Iroh-shaped
+endpoint references against in-process handlers, while unregistered deferred
+endpoints and all TCP endpoints still fail closed unless an explicit connector
+is selected.
 
 `slate-broadwebd-net-probe` is the current manual harness binary:
 

@@ -453,6 +453,11 @@ multiaddrs map to a deferred libp2p connector, `/ipns/...` maps to IPNS, and
 `iroh-node:...` or `/iroh-node/...` maps to Iroh. `DeferredServiceFrameConnector`
 is a fail-closed stub for those endpoint families until the real protocol
 connectors exist.
+For deterministic fixture runs, `InProcessServiceFrameEndpointRegistry` can
+bind those same deferred endpoint references to in-process `BroadwebdClient`
+handlers. It still uses the bounded service-frame codec and `Read + Write`
+stream exchange, so local tests model the future p2p/IPNS/Iroh connector shape
+without opening sockets or teaching profile-sync logic about fixture internals.
 The manual `slate-broadwebd-net-probe discover` command reports the selected
 connector kind and can capture deferred p2p/IPNS/Iroh endpoint advertisements
 without opening a service connection. `discover-probe` remains TCP-only and

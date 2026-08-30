@@ -8,6 +8,7 @@ use crate::{
 };
 use serde::{Serialize, de::DeserializeOwned};
 use slate_routing::Multiaddr;
+use std::collections::BTreeMap;
 use std::io::{self, Cursor, Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::time::Duration;
@@ -323,6 +324,100 @@ impl<'a> ServiceFrameConnector for InProcessServiceFrameConnector<'a> {
 
     fn connect(&self, codec: ServiceFrameCodec) -> Result<Self::Stream, BroadwebdError> {
         Ok(InProcessServiceFrameStream::new(self.handler, codec))
+    }
+}
+
+#[derive(Default)]
+pub struct InProcessServiceFrameEndpointRegistry<'a> {
+    endpoints: BTreeMap<String, InProcessServiceFrameEndpoint<'a>>,
+}
+
+#[derive(Clone, Copy)]
+struct InProcessServiceFrameEndpoint<'a> {
+    handler: &'a dyn BroadwebdClient,
+    kind: ServiceFrameConnectorKind,
+}
+
+impl<'a> InProcessServiceFrameEndpointRegistry<'a> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn register(
+        &mut self,
+        endpoint: impl Into<String>,
+        handler: &'a dyn BroadwebdClient,
+    ) -> Result<(), BroadwebdError> {
+        let endpoint = endpoint.into();
+        let kind = service_frame_connector_kind_for_endpoint(endpoint.as_str())?;
+        if !kind.is_deferred() {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "in-process service-frame endpoint registry does not model TCP endpoint {endpoint}; use TcpServiceFrameConnector for TCP"
+            )));
+        }
+        if self.endpoints.contains_key(endpoint.as_str()) {
+            return Err(BroadwebdError::Request(format!(
+                "in-process service-frame endpoint is already registered: {endpoint}"
+            )));
+        }
+
+        self.endpoints
+            .insert(endpoint, InProcessServiceFrameEndpoint { handler, kind });
+        Ok(())
+    }
+
+    pub fn connector(
+        &self,
+        endpoint: impl Into<String>,
+    ) -> Result<InProcessServiceFrameEndpointConnector<'_, 'a>, BroadwebdError> {
+        let endpoint = endpoint.into();
+        self.endpoint(endpoint.as_str())?;
+        Ok(InProcessServiceFrameEndpointConnector {
+            registry: self,
+            endpoint,
+        })
+    }
+
+    fn endpoint(
+        &self,
+        endpoint: &str,
+    ) -> Result<InProcessServiceFrameEndpoint<'a>, BroadwebdError> {
+        let kind = service_frame_connector_kind_for_endpoint(endpoint)?;
+        if !kind.is_deferred() {
+            return Err(BroadwebdError::UnsupportedRequest(format!(
+                "in-process service-frame endpoint registry cannot connect TCP endpoint {endpoint}; use TcpServiceFrameConnector for TCP"
+            )));
+        }
+
+        self.endpoints.get(endpoint).copied().ok_or_else(|| {
+            BroadwebdError::UnsupportedRequest(format!(
+                "unregistered in-process service-frame endpoint: {endpoint}"
+            ))
+        })
+    }
+}
+
+pub struct InProcessServiceFrameEndpointConnector<'registry, 'handler> {
+    registry: &'registry InProcessServiceFrameEndpointRegistry<'handler>,
+    endpoint: String,
+}
+
+impl InProcessServiceFrameEndpointConnector<'_, '_> {
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
+
+    pub fn kind(&self) -> Result<ServiceFrameConnectorKind, BroadwebdError> {
+        Ok(self.registry.endpoint(self.endpoint.as_str())?.kind)
+    }
+}
+
+impl<'handler> ServiceFrameConnector for InProcessServiceFrameEndpointConnector<'_, 'handler> {
+    type Stream = InProcessServiceFrameStream<'handler>;
+
+    fn connect(&self, codec: ServiceFrameCodec) -> Result<Self::Stream, BroadwebdError> {
+        let endpoint = self.registry.endpoint(self.endpoint.as_str())?;
+        Ok(InProcessServiceFrameStream::new(endpoint.handler, codec))
     }
 }
 
@@ -1091,6 +1186,171 @@ mod tests {
             ProfileSyncResponse::RetainedObjects {
                 object_ids: vec!["connector-object".to_string()],
             }
+        );
+    }
+
+    #[test]
+    fn in_process_service_frame_endpoint_registry_models_deferred_connectors_without_sockets() {
+        struct EchoClient;
+
+        impl BroadwebdClient for EchoClient {
+            fn health(&self) -> DaemonHealth {
+                DaemonHealth {
+                    lifecycle: DaemonLifecycle::Ready,
+                    plugins: Vec::new(),
+                }
+            }
+
+            fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+                BroadwebStatusSnapshot::idle()
+            }
+
+            fn dispatch_service_request(
+                &self,
+                request: ServiceRequest,
+            ) -> Result<ServiceResponse, BroadwebdError> {
+                assert_eq!(
+                    request,
+                    ServiceRequest::ProfileSync(ProfileSyncRequest::DiscoverProviders(
+                        ProfileSyncProfileRequest::new("default")
+                    ))
+                );
+                Ok(ServiceResponse::ProfileSync(
+                    ProfileSyncResponse::RetainedObjects {
+                        object_ids: vec!["registered-endpoint-object".to_string()],
+                    },
+                ))
+            }
+
+            fn temporary_downloads(
+                &self,
+                _profile: &str,
+            ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+                Ok(Vec::new())
+            }
+
+            fn downloads(
+                &self,
+                _profile: &str,
+            ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+                Ok(Vec::new())
+            }
+        }
+
+        let handler = EchoClient;
+        let mut registry = InProcessServiceFrameEndpointRegistry::new();
+        let p2p_endpoint = "/dnsaddr/rendezvous.slate.test/tcp/443/wss/p2p/12D3KooWDeviceA";
+        let ipns_endpoint = "/ipns/k51-profile-sync-root";
+        let iroh_endpoint = "iroh-node:node-a";
+        registry
+            .register(p2p_endpoint, &handler)
+            .expect("register p2p-shaped endpoint");
+        registry
+            .register(ipns_endpoint, &handler)
+            .expect("register IPNS-shaped endpoint");
+        registry
+            .register(iroh_endpoint, &handler)
+            .expect("register Iroh-shaped endpoint");
+
+        let connector = registry
+            .connector(p2p_endpoint)
+            .expect("build connector for registered endpoint");
+        assert_eq!(connector.endpoint(), p2p_endpoint);
+        assert_eq!(
+            connector.kind().expect("registered endpoint kind"),
+            ServiceFrameConnectorKind::Libp2p
+        );
+
+        let client = ConnectorServiceFrameBroadwebdClient::with_codec(
+            connector,
+            ServiceFrameCodec::new(4096),
+        );
+        let response = client
+            .profile_sync(ProfileSyncRequest::DiscoverProviders(
+                ProfileSyncProfileRequest::new("default"),
+            ))
+            .expect("exchange request through registered socketless endpoint");
+
+        assert_eq!(
+            response,
+            ProfileSyncResponse::RetainedObjects {
+                object_ids: vec!["registered-endpoint-object".to_string()],
+            }
+        );
+    }
+
+    #[test]
+    fn in_process_service_frame_endpoint_registry_rejects_tcp_and_missing_endpoints() {
+        struct EmptyClient;
+
+        impl BroadwebdClient for EmptyClient {
+            fn health(&self) -> DaemonHealth {
+                DaemonHealth {
+                    lifecycle: DaemonLifecycle::Ready,
+                    plugins: Vec::new(),
+                }
+            }
+
+            fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+                BroadwebStatusSnapshot::idle()
+            }
+
+            fn dispatch_service_request(
+                &self,
+                _request: ServiceRequest,
+            ) -> Result<ServiceResponse, BroadwebdError> {
+                Err(BroadwebdError::UnsupportedRequest(
+                    "empty client has no services".to_string(),
+                ))
+            }
+
+            fn temporary_downloads(
+                &self,
+                _profile: &str,
+            ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+                Ok(Vec::new())
+            }
+
+            fn downloads(
+                &self,
+                _profile: &str,
+            ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+                Ok(Vec::new())
+            }
+        }
+
+        let handler = EmptyClient;
+        let mut registry = InProcessServiceFrameEndpointRegistry::new();
+        let tcp_error = registry
+            .register("/ip4/127.0.0.1/tcp/9443", &handler)
+            .expect_err("TCP endpoints should stay on the TCP connector");
+        assert!(
+            tcp_error
+                .to_string()
+                .contains("does not model TCP endpoint")
+        );
+
+        let endpoint = "/ip4/127.0.0.1/tcp/9443/p2p/peer-a";
+        let missing_error = match registry.connector(endpoint) {
+            Ok(_) => panic!("unregistered endpoint should fail closed"),
+            Err(error) => error,
+        };
+        assert!(
+            missing_error
+                .to_string()
+                .contains("unregistered in-process service-frame endpoint")
+        );
+
+        registry
+            .register(endpoint, &handler)
+            .expect("register p2p endpoint");
+        let duplicate_error = registry
+            .register(endpoint, &handler)
+            .expect_err("duplicate endpoints should be rejected");
+        assert!(
+            duplicate_error
+                .to_string()
+                .contains("endpoint is already registered")
         );
     }
 }
