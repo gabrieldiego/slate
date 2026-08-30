@@ -1062,7 +1062,9 @@ stored-provider fixture readiness. The signed broadweb-style advertisement can
 therefore be trusted and selected while its discovered multiaddr remains
 pending protocol materialization; the socketless fixture handle used for the
 local run is reported as runnable stored-provider state, not as the advertised
-network endpoint.
+network endpoint. Preview report JSON serialization also lives in
+`slate-profile-sync`, not the Servo-backed chrome resource protocol module, so
+the Settings sync data contract can be tested under the low-memory profile.
 
 The rule for these internal broadweb models is strict: they may replace socket
 I/O with deterministic in-process communication shims, but they must not

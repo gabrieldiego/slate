@@ -1963,6 +1963,11 @@ Current baseline:
   advertisement is trusted and selected while its discovered multiaddr still
   requires a protocol materializer, without pretending the socketless fixture
   handle is the advertised network endpoint.
+- Profile-sync preview report JSON serialization now lives in
+  `slate-profile-sync` rather than chrome's Servo-backed resource protocol
+  module. Chrome keeps only thin timestamped report wrappers, and the low-memory
+  boundary script rejects reintroducing duplicated discovery JSON helpers there,
+  so the Settings sync data contract can be tested without compiling Servo.
 
 Next:
 

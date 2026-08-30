@@ -779,15 +779,15 @@ require_text \
     'set_current_chrome_element_zoom_setting' \
     'Chrome synced settings must apply zoom updates through the runtime zoom path.'
 require_text \
-    crates/chrome/src/desktop/protocols/slate.rs \
+    crates/profile-sync/src/lib.rs \
     'root_object_provider_issues' \
     'Slate settings profile-sync JSON must expose root-object provider issue summaries.'
 require_text \
-    crates/chrome/src/desktop/protocols/slate.rs \
+    crates/profile-sync/src/lib.rs \
     'retention_provider_selection_issues' \
     'Slate settings profile-sync JSON must expose retention provider selection issue summaries.'
 require_text \
-    crates/chrome/src/desktop/protocols/slate.rs \
+    crates/profile-sync/src/lib.rs \
     'stored_provider_metadata_issues' \
     'Slate settings profile-sync JSON must expose stored provider metadata issue summaries.'
 require_text \
@@ -823,12 +823,12 @@ require_text \
     '"endpoint_ref": provider.endpoint_ref.as_deref\(\)' \
     'Slate settings profile-sync JSON must expose provider endpoint refs as profile metadata.'
 require_text \
-    crates/chrome/src/desktop/protocols/slate.rs \
+    crates/profile-sync/src/lib.rs \
     'selected_endpoint_pending_protocol_provider_count' \
     'Slate settings profile-sync JSON must expose selected endpoint materialization summary counts.'
 require_text \
-    crates/chrome/src/desktop/protocols/slate.rs \
-    'retention_issues: Vec<LocalSettingsSyncRetentionIssueSummary>' \
+    crates/profile-sync/src/lib.rs \
+    'retention_issues' \
     'Slate settings profile-sync JSON must expose retained-object issue summaries.'
 require_text \
     resources/resource_protocol/slate-settings.html \
@@ -906,6 +906,18 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'discovery_endpoint_pending_protocol_provider_count' \
     'Slate settings page must expose discovered provider endpoint materialization status.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'pub fn local_settings_sync_preview_cycle_report_json' \
+    'Profile-sync reports must own low-memory JSON serialization for Settings preview runs.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'local_settings_sync_preview_cycle_report_json' \
+    'Slate chrome must delegate profile-sync preview report JSON serialization to slate-profile-sync.'
+reject_protocol_model_leak \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'fn profile_sync_discovery_rejections_json' \
+    'Slate chrome must not duplicate profile-sync discovery JSON serialization.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'discovery_rejections' \
