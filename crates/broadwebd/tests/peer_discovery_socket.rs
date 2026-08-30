@@ -6,6 +6,7 @@ use slate_broadwebd::{
     ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootHealthRequest, ProfileSyncRootRequest,
     ProfileSyncRootUpdate, ResourceBudget, ServiceFrameCodec, TcpServiceFrameBroadwebdClient,
     discover_profile_sync_peers, respond_to_profile_sync_peer_solicit,
+    serve_one_service_frame_request_over_stream,
 };
 use std::env;
 use std::fs;
@@ -113,15 +114,8 @@ fn handle_connection(
     codec: ServiceFrameCodec,
     stream: &mut TcpStream,
 ) -> Result<(), String> {
-    let request = codec
-        .read_request(stream)
-        .map_err(|error| format!("read local service request: {error}"))?;
-    let response = daemon
-        .dispatch_service_request(request)
-        .map_err(|error| format!("dispatch local service request: {error}"))?;
-    codec
-        .write_response(stream, &response)
-        .map_err(|error| format!("write local service response: {error}"))
+    serve_one_service_frame_request_over_stream(codec, daemon, stream)
+        .map_err(|error| format!("handle local service-frame request: {error}"))
 }
 
 fn run_profile_sync_smoke(client: &TcpServiceFrameBroadwebdClient) -> Result<(), String> {

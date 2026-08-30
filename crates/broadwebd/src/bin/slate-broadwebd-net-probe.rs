@@ -1,11 +1,12 @@
 #![forbid(unsafe_code)]
 
 use slate_broadwebd::{
-    BroadwebDaemon, BroadwebdClient, PluginRegistry, ProfileSyncObjectRequest,
+    BroadwebDaemon, BroadwebdClient, IpfsConfig, PluginRegistry, ProfileSyncObjectRequest,
     ProfileSyncPeerAdvertisement, ProfileSyncProfileRequest, ProfileSyncPutObjectRequest,
     ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootHealthRequest, ProfileSyncRootRequest,
-    ProfileSyncRootUpdate, ResourceBudget, ServiceFrameCodec, TcpServiceFrameBroadwebdClient,
-    discover_profile_sync_peers, respond_to_profile_sync_peer_solicit,
+    ProfileSyncRootUpdate, ProfileSyncRuntimeConfig, ResourceBudget, ServiceFrameCodec,
+    TcpServiceFrameBroadwebdClient, default_session_status_reporter, discover_profile_sync_peers,
+    respond_to_profile_sync_peer_solicit, serve_one_service_frame_request_over_stream,
 };
 use std::env;
 use std::fs;
@@ -62,6 +63,7 @@ struct ServerArgs {
     discovery_node_id: String,
     discovery_provider_id: String,
     discovery_multicast: Option<Ipv4Addr>,
+    runtime_profile_sync: bool,
 }
 
 impl ServerArgs {
@@ -77,6 +79,7 @@ impl ServerArgs {
         let mut discovery_node_id = format!("probe_{}", std::process::id());
         let mut discovery_provider_id = DEFAULT_DISCOVERY_PROVIDER_ID.to_string();
         let mut discovery_multicast = None;
+        let mut runtime_profile_sync = false;
         let mut args = args.peekable();
 
         while let Some(arg) = args.next() {
@@ -124,6 +127,7 @@ impl ServerArgs {
                             .map_err(|error| format!("invalid multicast IPv4 address: {error}"))?,
                     );
                 }
+                "--runtime-profile-sync" => runtime_profile_sync = true,
                 "-h" | "--help" => return Err(usage()),
                 _ => return Err(format!("unknown serve argument: {arg}\n\n{}", usage())),
             }
@@ -148,6 +152,7 @@ impl ServerArgs {
             discovery_node_id,
             discovery_provider_id,
             discovery_multicast,
+            runtime_profile_sync,
         })
     }
 }
@@ -284,12 +289,10 @@ fn run_server(args: ServerArgs) -> Result<(), String> {
     let local_addr = listener
         .local_addr()
         .map_err(|error| format!("read listener address: {error}"))?;
-    let daemon = BroadwebDaemon::start_with_registry(
-        &args.state_root,
-        ResourceBudget::default(),
-        PluginRegistry::with_default_http(),
-    )
-    .map_err(|error| format!("start broadwebd probe daemon: {error}"))?;
+    let registry = probe_registry(args.runtime_profile_sync)?;
+    let daemon =
+        BroadwebDaemon::start_with_registry(&args.state_root, ResourceBudget::default(), registry)
+            .map_err(|error| format!("start broadwebd probe daemon: {error}"))?;
 
     if let Some(ready_file) = &args.ready_file {
         fs::write(ready_file, local_addr.to_string())
@@ -395,15 +398,8 @@ fn handle_connection(
     codec: ServiceFrameCodec,
     stream: &mut TcpStream,
 ) -> Result<(), String> {
-    let request = codec
-        .read_request(stream)
-        .map_err(|error| format!("read service request: {error}"))?;
-    let response = daemon
-        .dispatch_service_request(request)
-        .map_err(|error| format!("dispatch service request: {error}"))?;
-    codec
-        .write_response(stream, &response)
-        .map_err(|error| format!("write service response: {error}"))
+    serve_one_service_frame_request_over_stream(codec, daemon, stream)
+        .map_err(|error| format!("handle service-frame request: {error}"))
 }
 
 fn run_probe(args: ProbeArgs) -> Result<(), String> {
@@ -639,6 +635,21 @@ fn configure_stream(stream: &TcpStream) -> io::Result<()> {
     Ok(())
 }
 
+fn probe_registry(runtime_profile_sync: bool) -> Result<PluginRegistry, String> {
+    if !runtime_profile_sync {
+        return Ok(PluginRegistry::with_default_http());
+    }
+
+    PluginRegistry::with_default_http_and_runtime_profile_sync_config(
+        IpfsConfig::from_environment()
+            .map_err(|error| format!("read IPFS runtime config: {error}"))?,
+        default_session_status_reporter(),
+        ProfileSyncRuntimeConfig::from_environment()
+            .map_err(|error| format!("read profile-sync runtime config: {error}"))?,
+    )
+    .map_err(|error| format!("build runtime profile-sync registry: {error}"))
+}
+
 fn next_value(args: &mut impl Iterator<Item = String>, name: &str) -> Result<String, String> {
     args.next()
         .ok_or_else(|| format!("{name} requires a value\n\n{}", usage()))
@@ -665,7 +676,7 @@ fn is_udp_timeout_error(error: &slate_broadwebd::BroadwebdError) -> bool {
 
 fn usage() -> String {
     "usage:
-  slate-broadwebd-net-probe serve --state-root <dir> [--bind <addr:port>] [--ready-file <path>] [--max-requests <n>] [--frame-max-bytes <bytes>] [--discovery-bind <addr:port>] [--discovery-ready-file <path>] [--discovery-network <id>] [--discovery-node <id>] [--discovery-provider <id>] [--discovery-multicast <ipv4>]
+  slate-broadwebd-net-probe serve --state-root <dir> [--bind <addr:port>] [--ready-file <path>] [--max-requests <n>] [--frame-max-bytes <bytes>] [--runtime-profile-sync] [--discovery-bind <addr:port>] [--discovery-ready-file <path>] [--discovery-network <id>] [--discovery-node <id>] [--discovery-provider <id>] [--discovery-multicast <ipv4>]
   slate-broadwebd-net-probe probe --connect <host:port> [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>]
   slate-broadwebd-net-probe discover-probe --discovery-target <host:port> [--network-id <id>] [--node-id <id>] [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>] [--timeout-ms <ms>]"
         .to_string()

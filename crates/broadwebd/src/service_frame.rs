@@ -7,7 +7,7 @@ use crate::{
     status::BroadwebStatusSnapshot,
 };
 use serde::{Serialize, de::DeserializeOwned};
-use std::io::{self, Read, Write};
+use std::io::{self, Cursor, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
@@ -78,6 +78,93 @@ impl Default for ServiceFrameCodec {
     }
 }
 
+pub fn dispatch_service_frame_request_over_stream<S: Read + Write>(
+    codec: ServiceFrameCodec,
+    stream: &mut S,
+    request: &ServiceRequest,
+) -> Result<ServiceResponse, BroadwebdError> {
+    codec.write_request(stream, request)?;
+    codec.read_response(stream)
+}
+
+pub fn serve_one_service_frame_request_over_stream<S: Read + Write>(
+    codec: ServiceFrameCodec,
+    handler: &dyn BroadwebdClient,
+    stream: &mut S,
+) -> Result<(), BroadwebdError> {
+    let request = codec.read_request(stream)?;
+    let response = handler.dispatch_service_request(request)?;
+    codec.write_response(stream, &response)
+}
+
+pub struct InProcessServiceFrameStream<'a> {
+    handler: &'a dyn BroadwebdClient,
+    codec: ServiceFrameCodec,
+    request_bytes: Vec<u8>,
+    response_bytes: Cursor<Vec<u8>>,
+    response_ready: bool,
+}
+
+impl<'a> InProcessServiceFrameStream<'a> {
+    pub fn new(handler: &'a dyn BroadwebdClient, codec: ServiceFrameCodec) -> Self {
+        Self {
+            handler,
+            codec,
+            request_bytes: Vec::new(),
+            response_bytes: Cursor::new(Vec::new()),
+            response_ready: false,
+        }
+    }
+
+    fn prepare_response(&mut self) -> io::Result<()> {
+        if self.response_ready {
+            return Ok(());
+        }
+
+        let mut request_reader = Cursor::new(self.request_bytes.as_slice());
+        let request = self
+            .codec
+            .read_request(&mut request_reader)
+            .map_err(service_frame_io_error)?;
+        let response = self
+            .handler
+            .dispatch_service_request(request)
+            .map_err(service_frame_io_error)?;
+        let mut response_bytes = Vec::new();
+        self.codec
+            .write_response(&mut response_bytes, &response)
+            .map_err(service_frame_io_error)?;
+        self.response_bytes = Cursor::new(response_bytes);
+        self.response_ready = true;
+        Ok(())
+    }
+}
+
+impl Read for InProcessServiceFrameStream<'_> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.prepare_response()?;
+        self.response_bytes.read(buffer)
+    }
+}
+
+impl Write for InProcessServiceFrameStream<'_> {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        if self.response_ready {
+            return Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "in-process service-frame stream is one request per connection",
+            ));
+        }
+
+        self.request_bytes.extend_from_slice(buffer);
+        Ok(buffer.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.prepare_response()
+    }
+}
+
 pub struct ServiceFrameBroadwebdClient<'a> {
     inner: &'a dyn BroadwebdClient,
     codec: ServiceFrameCodec,
@@ -110,11 +197,8 @@ impl BroadwebdClient for ServiceFrameBroadwebdClient<'_> {
         &self,
         request: ServiceRequest,
     ) -> Result<ServiceResponse, BroadwebdError> {
-        let request_frame = self.codec.encode_request(&request)?;
-        let decoded_request = self.codec.decode_request(request_frame.as_slice())?;
-        let response = self.inner.dispatch_service_request(decoded_request)?;
-        let response_frame = self.codec.encode_response(&response)?;
-        self.codec.decode_response(response_frame.as_slice())
+        let mut stream = InProcessServiceFrameStream::new(self.inner, self.codec);
+        dispatch_service_frame_request_over_stream(self.codec, &mut stream, &request)
     }
 
     fn temporary_downloads(
@@ -193,8 +277,7 @@ impl BroadwebdClient for TcpServiceFrameBroadwebdClient {
         let mut stream = TcpStream::connect_timeout(&address, self.timeout)?;
         stream.set_read_timeout(Some(self.timeout))?;
         stream.set_write_timeout(Some(self.timeout))?;
-        self.codec.write_request(&mut stream, &request)?;
-        self.codec.read_response(&mut stream)
+        dispatch_service_frame_request_over_stream(self.codec, &mut stream, &request)
     }
 
     fn temporary_downloads(
@@ -282,6 +365,10 @@ fn read_len_prefixed_frame(
     let mut frame = vec![0_u8; frame_len];
     reader.read_exact(&mut frame)?;
     Ok(frame)
+}
+
+fn service_frame_io_error(error: BroadwebdError) -> io::Error {
+    io::Error::other(error)
 }
 
 struct BoundedFrameWriter {
@@ -384,6 +471,71 @@ mod tests {
                 limit: 2,
                 actual: 3,
             }
+        );
+    }
+
+    #[test]
+    fn in_process_service_frame_stream_uses_same_exchange_helper_as_tcp() {
+        struct EchoClient;
+
+        impl BroadwebdClient for EchoClient {
+            fn health(&self) -> DaemonHealth {
+                DaemonHealth {
+                    lifecycle: DaemonLifecycle::Ready,
+                    plugins: Vec::new(),
+                }
+            }
+
+            fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+                BroadwebStatusSnapshot::idle()
+            }
+
+            fn dispatch_service_request(
+                &self,
+                request: ServiceRequest,
+            ) -> Result<ServiceResponse, BroadwebdError> {
+                assert_eq!(
+                    request,
+                    ServiceRequest::ProfileSync(ProfileSyncRequest::DiscoverProviders(
+                        ProfileSyncProfileRequest::new("default")
+                    ))
+                );
+                Ok(ServiceResponse::ProfileSync(
+                    ProfileSyncResponse::RetainedObjects {
+                        object_ids: vec!["socket-shim-object".to_string()],
+                    },
+                ))
+            }
+
+            fn temporary_downloads(
+                &self,
+                _profile: &str,
+            ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+                Ok(Vec::new())
+            }
+
+            fn downloads(
+                &self,
+                _profile: &str,
+            ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+                Ok(Vec::new())
+            }
+        }
+
+        let codec = ServiceFrameCodec::new(4096);
+        let request = ServiceRequest::ProfileSync(ProfileSyncRequest::DiscoverProviders(
+            ProfileSyncProfileRequest::new("default"),
+        ));
+        let handler = EchoClient;
+        let mut stream = InProcessServiceFrameStream::new(&handler, codec);
+
+        let response = dispatch_service_frame_request_over_stream(codec, &mut stream, &request)
+            .expect("exchange request through in-process service-frame stream");
+        assert_eq!(
+            response,
+            ServiceResponse::ProfileSync(ProfileSyncResponse::RetainedObjects {
+                object_ids: vec!["socket-shim-object".to_string()],
+            })
         );
     }
 }

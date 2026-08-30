@@ -34,8 +34,9 @@ SLATE_SHARED_DEBUG_BIN := $(SLATE_SHARED_TARGET_DIR)/debug/slate
 SLATE_SHARED_RELEASE_BIN := $(SLATE_SHARED_TARGET_DIR)/release/slate
 SLATE_SHARED_DEBUG_LIB_PATH := $(SLATE_SHARED_TARGET_DIR)/debug/deps:$(SLATE_SHARED_TARGET_DIR)/debug
 SLATE_SHARED_RELEASE_LIB_PATH := $(SLATE_SHARED_TARGET_DIR)/release/deps:$(SLATE_SHARED_TARGET_DIR)/release
+SLATE_BROADWEBD_NET_PROBE_BIN ?= target/debug/slate-broadwebd-net-probe
 
-.PHONY: check chrome-verify profile-sync-boundary-check check-tools setup-local-rust ensure-local-rust slate-bin slate-release-bin slate-shared-bin slate-shared-release-bin release shared share shared-release share-release run run-release run-shared run-share run-shared-release run-share-release test-broadwebd test-network test-external-network clean-slate-bin clean-object-data
+.PHONY: check chrome-verify profile-sync-boundary-check check-tools setup-local-rust ensure-local-rust slate-bin slate-release-bin slate-shared-bin slate-shared-release-bin release shared share shared-release share-release run run-release run-shared run-share run-shared-release run-share-release test-broadwebd test-network test-external-network profile-sync-net-probe profile-sync-lan-smoke profile-sync-p2p-lan-smoke clean-slate-bin clean-object-data
 
 check: ensure-local-rust
 	$(SLATE_LIMITED_CARGO) check --workspace -j "$(CARGO_BUILD_JOBS)"
@@ -141,6 +142,15 @@ test-network: ensure-local-rust
 
 test-external-network: ensure-local-rust
 	SLATE_EXTERNAL_NETWORK_TESTS=1 $(SLATE_LIMITED_CARGO) test -j "$(CARGO_BUILD_JOBS)" -p slate-broadwebd external_ -- --ignored --test-threads="$(SLATE_TEST_THREADS)"
+
+profile-sync-net-probe: ensure-local-rust
+	$(SLATE_LIMITED_CARGO) build -j "$(CARGO_BUILD_JOBS)" -p slate-broadwebd --bin slate-broadwebd-net-probe
+
+profile-sync-lan-smoke: profile-sync-net-probe
+	SLATE_LAN_SMOKE_BINARY="$(SLATE_BROADWEBD_NET_PROBE_BIN)" "$(CURDIR)/scripts/profile-sync-lan-smoke.sh" "$(SLATE_LAN_SMOKE_SSH)"
+
+profile-sync-p2p-lan-smoke: profile-sync-net-probe
+	SLATE_P2P_LAN_SMOKE_BINARY="$(SLATE_BROADWEBD_NET_PROBE_BIN)" "$(CURDIR)/scripts/profile-sync-p2p-lan-smoke.sh" "$(SLATE_P2P_LAN_SMOKE_SSH)"
 
 clean-slate-bin:
 	rm -f "$(ROOT_SLATE_BIN)"
