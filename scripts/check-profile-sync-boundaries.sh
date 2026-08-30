@@ -722,6 +722,10 @@ reject_protocol_model_leak \
     resources/resource_protocol/slate-settings.html \
     'id="profile-sync-handoff-create"' \
     'Slate settings page must not expose a separate handoff creation control; download should create the file on demand.'
+reject_protocol_model_leak \
+    resources/resource_protocol/slate-settings.html \
+    'id="profile-sync-handoff"' \
+    'Slate settings page must keep secret handoff bundle text out of the normal file-only enrollment UI.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Download enrollment file' \

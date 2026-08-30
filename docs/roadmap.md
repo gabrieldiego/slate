@@ -1745,28 +1745,28 @@ Current baseline:
   Preview as the single visible PC-to-PC enrollment-file flow. An enrolled
   session can download a target-specific
   `slate-profile-enrollment-<device>.json` file, and a target device can import
-  a selected or pasted enrollment file to apply membership and activate the
-  session key-derived local metadata in one step. The lower-level key-file,
-  device-request, and non-secret enrollment-bundle storage primitives remain for
-  deterministic fixture logic, but their `slate://settings` protocol routes and
-  rendered controls have been removed until QR-code or unbound onboarding
-  semantics are designed deliberately. This remains a sensitive local preview
-  flow and still uses the existing query-string internal action transport until
-  POST/body-capable Slate protocol imports are added.
+  a selected enrollment file to apply membership and activate the session
+  key-derived local metadata in one step. The page no longer exposes or caches
+  the raw secret-bearing handoff JSON in a visible text field. The lower-level
+  key-file, device-request, and non-secret enrollment-bundle storage primitives
+  remain for deterministic fixture logic, but their `slate://settings` protocol
+  routes and rendered controls have been removed until QR-code or unbound
+  onboarding semantics are designed deliberately. This remains a sensitive local
+  preview flow and still uses the existing query-string internal action
+  transport until POST/body-capable Slate protocol imports are added.
 - The enrollment-file handoff path now has an explicit bounded-import guard
   while it remains on that query-string transport. The Settings page rejects
-  oversized selected or pasted enrollment files before building the internal
-  action URL, and the `slate://settings` handoff import route rejects oversized
-  payloads before parsing secret-bearing JSON. The same storage-owned size
-  limit is enforced by the `ProfileSyncSecretHandoffBundle` parser and encoder
-  so future non-UI callers do not deserialize or generate unbounded
-  secret-bearing handoff files.
+  oversized selected enrollment files before building the internal action URL,
+  and the `slate://settings` handoff import route rejects oversized payloads
+  before parsing secret-bearing JSON. The same storage-owned size limit is
+  enforced by the `ProfileSyncSecretHandoffBundle` parser and encoder so future
+  non-UI callers do not deserialize or generate unbounded secret-bearing
+  handoff files.
 - The Settings Profile Sync Preview JSON now follows the same narrower surface:
   normal state responses no longer include raw key-file exports, device-request
   files, or non-secret enrollment-bundle JSON. The secret-bearing
   `handoff_export_text` field is returned only by the explicit handoff-create
-  action that backs the enrollment-file download, and editing the target device
-  clears any pending generated file text in the page.
+  action that backs the enrollment-file download.
 - The socketless two-device Profile Sync Preview now uses the same request
   shape: the receiver emits a `ProfileSyncDeviceEnrollmentRequest`, the
   publisher derives the enrollment bundle from that request, and the normal

@@ -219,26 +219,6 @@
       overflow-wrap: anywhere;
     }
 
-    .profile-sync-secret {
-      box-sizing: border-box;
-      width: 100%;
-      min-height: 118px;
-      margin-top: 14px;
-      border: 1px solid #c8c5bd;
-      border-radius: 6px;
-      background: #fffefa;
-      color: #242421;
-      padding: 10px;
-      font: 13px ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-      line-height: 1.35;
-      resize: vertical;
-    }
-
-    .profile-sync-secret:focus {
-      border-color: #0b7e79;
-      outline: 3px solid rgba(11, 126, 121, 0.18);
-    }
-
     .profile-sync-input {
       box-sizing: border-box;
       width: 100%;
@@ -373,13 +353,6 @@
         accept="application/json,.json"
         aria-label="Profile sync enrollment file"
       />
-      <textarea
-        id="profile-sync-handoff"
-        class="profile-sync-secret"
-        spellcheck="false"
-        autocomplete="off"
-        aria-label="Profile sync enrollment file contents"
-      ></textarea>
       <div class="actions">
         <button id="profile-sync-handoff-download">Download enrollment file</button>
         <button id="profile-sync-handoff-import">Import enrollment file</button>
@@ -476,7 +449,6 @@
     const profileSyncRunLocalTwoDeviceButton = document.getElementById("profile-sync-run-local-two-device");
     const profileSyncHandoffDevice = document.getElementById("profile-sync-handoff-device");
     const profileSyncHandoffFile = document.getElementById("profile-sync-handoff-file");
-    const profileSyncHandoff = document.getElementById("profile-sync-handoff");
     const profileSyncHandoffDownloadButton = document.getElementById("profile-sync-handoff-download");
     const profileSyncHandoffImportButton = document.getElementById("profile-sync-handoff-import");
     const params = new URLSearchParams(window.location.search);
@@ -910,9 +882,6 @@
     function updateProfileSyncEnrollmentState(state) {
       if (!state) {
         return;
-      }
-      if (state.handoff_export_text) {
-        profileSyncHandoff.value = state.handoff_export_text;
       }
       if (state.handoff_target_device_id) {
         profileSyncHandoffDevice.value = state.handoff_target_device_id;
@@ -1476,11 +1445,11 @@
         "enrollment file",
         PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES
       ).then((fileText) => {
-        if (fileText) {
-          profileSyncHandoff.value = fileText.trim();
+        if (!fileText) {
+          throw new Error("choose an enrollment file to import");
         }
         const handoffText = profileSyncBoundedFileText(
-          profileSyncHandoff.value.trim(),
+          fileText.trim(),
           "enrollment file",
           PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES
         );
@@ -1532,31 +1501,27 @@
     }
 
     function downloadProfileSyncHandoffBundle() {
-      const text = profileSyncHandoff.value.trim();
-      if (!text) {
-        fetchProfileSyncState("handoff/create", {
-          target_device: profileSyncHandoffDevice.value.trim()
-        }).then((state) => {
-          if (state && state.handoff_export_text) {
-            downloadProfileSyncHandoffBundle();
-          }
-        });
-        return;
-      }
-      try {
-        profileSyncBoundedFileText(text, "enrollment file", PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES);
-      } catch (error) {
+      fetchProfileSyncState("handoff/create", {
+        target_device: profileSyncHandoffDevice.value.trim()
+      }).then((state) => {
+        const text = profileSyncBoundedFileText(
+          profileSyncText(state && state.handoff_export_text, "").trim(),
+          "enrollment file",
+          PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES
+        );
+        if (!text) {
+          setProfileSyncState({ last_error: "could not create enrollment file" });
+          return;
+        }
+        const blob = new Blob([text], { type: "application/json" });
+        const link = document.createElement("a");
+        link.download = handoffFilename(state);
+        link.href = URL.createObjectURL(blob);
+        link.click();
+        URL.revokeObjectURL(link.href);
+      }).catch((error) => {
         setProfileSyncState({ last_error: String(error) });
-        return;
-      }
-      const blob = new Blob([text], { type: "application/json" });
-      const link = document.createElement("a");
-      link.download = handoffFilename({
-        handoff_export_filename: `slate-profile-enrollment-${profileSyncHandoffDevice.value.trim() || "device"}.json`
       });
-      link.href = URL.createObjectURL(blob);
-      link.click();
-      URL.revokeObjectURL(link.href);
     }
 
     function saveSettings() {
@@ -1583,24 +1548,22 @@
     profileSyncRunLocalButton.addEventListener("click", runProfileSyncLocalTrial);
     profileSyncRunLocalTwoDeviceButton.addEventListener("click", runProfileSyncLocalTwoDeviceTrial);
     profileSyncHandoffDevice.addEventListener("input", () => {
-      profileSyncHandoff.value = "";
+      profileSyncHandoffFile.value = "";
     });
     profileSyncHandoffImportButton.addEventListener("click", importProfileSyncHandoffBundle);
     profileSyncHandoffDownloadButton.addEventListener("click", downloadProfileSyncHandoffBundle);
     profileSyncHandoffFile.addEventListener("change", () => {
-      readSelectedProfileSyncFile(
-        profileSyncHandoffFile,
-        "enrollment file",
-        PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES
-      )
-        .then((fileText) => {
-          if (fileText) {
-            profileSyncHandoff.value = fileText.trim();
-          }
-        })
-        .catch((error) => {
-          setProfileSyncState({ last_error: String(error) });
+      const file = profileSyncHandoffFile.files && profileSyncHandoffFile.files[0];
+      if (
+        file &&
+        Number.isFinite(PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES) &&
+        Number.isFinite(file.size) &&
+        file.size > PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES
+      ) {
+        setProfileSyncState({
+          last_error: `enrollment file is too large; maximum is ${PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES} bytes`
         });
+      }
     });
     document.getElementById("reset").addEventListener("click", () => {
       setSliderValue(DEFAULT_ZOOM, true);

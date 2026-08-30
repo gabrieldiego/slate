@@ -2238,7 +2238,6 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-run-local-two-device\""));
         assert!(settings_page.contains("id=\"profile-sync-handoff-device\""));
         assert!(settings_page.contains("id=\"profile-sync-handoff-file\""));
-        assert!(settings_page.contains("id=\"profile-sync-handoff\""));
         assert!(settings_page.contains("id=\"profile-sync-handoff-download\""));
         assert!(settings_page.contains("id=\"profile-sync-handoff-import\""));
         assert!(settings_page.contains("PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES"));
@@ -2256,6 +2255,7 @@ mod tests {
         assert!(!settings_page.contains("id=\"profile-sync-enrollment-file\""));
         assert!(!settings_page.contains("id=\"profile-sync-enrollment\""));
         assert!(!settings_page.contains("id=\"profile-sync-handoff-create\""));
+        assert!(!settings_page.contains("id=\"profile-sync-handoff\""));
         assert!(settings_page.contains("Current sync"));
         assert!(settings_page.contains("Two-device trial"));
         assert!(settings_page.contains("Enabled domains"));
