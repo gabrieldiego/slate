@@ -1237,10 +1237,38 @@
       const selected = Number.isFinite(run.discovery_selected_retention_provider_count) ?
         run.discovery_selected_retention_provider_count :
         0;
+      const ready = Number.isFinite(run.discovery_endpoint_ready_provider_count) ?
+        run.discovery_endpoint_ready_provider_count :
+        0;
+      const pendingProtocol =
+        Number.isFinite(run.discovery_endpoint_pending_protocol_provider_count) ?
+          run.discovery_endpoint_pending_protocol_provider_count :
+          0;
+      const missing = Number.isFinite(run.discovery_endpoint_missing_provider_count) ?
+        run.discovery_endpoint_missing_provider_count :
+        0;
+      const failClosed = Number.isFinite(run.discovery_endpoint_fail_closed_provider_count) ?
+        run.discovery_endpoint_fail_closed_provider_count :
+        0;
       const rejected = Number.isFinite(run.discovery_rejected_peer_count) ?
         run.discovery_rejected_peer_count :
         0;
       const details = [`${trusted} trusted`, `${selected} selected`];
+      if (ready > 0) {
+        details.push(`${ready} endpoint ready`);
+      }
+      if (pendingProtocol > 0) {
+        details.push(`${pendingProtocol} endpoint pending`);
+      }
+      if (missing > 0) {
+        details.push(`${missing} endpoint missing`);
+      }
+      if (failClosed > 0) {
+        details.push(`${failClosed} endpoint fail closed`);
+      }
+      if (run.discovery_endpoint_requires_protocol_materializer) {
+        details.push("adapter required");
+      }
       if (rejected > 0) {
         details.push(`${rejected} rejected`);
       }

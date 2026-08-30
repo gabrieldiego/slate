@@ -1053,6 +1053,14 @@ provider-role contracts. The model also treats an Iroh-shaped live-transfer
 peer without the durable availability role as ineligible for retention even
 when stored metadata claims it can retain data. That keeps simulated discovery
 and transfer behavior from bypassing the real provider-role contract.
+
+The local Settings preview reports trusted-discovery endpoint materialization
+separately from stored-provider fixture readiness. A signed broadweb-style
+advertisement can therefore be trusted and selected while its discovered
+multiaddr remains pending protocol materialization; the socketless fixture
+handle used for the local run is reported as runnable stored-provider state,
+not as the advertised network endpoint.
+
 The rule for these internal broadweb models is strict: they may replace socket
 I/O with deterministic in-process communication shims, but they must not
 replace the protocol implementation itself. Protocol adapters should still

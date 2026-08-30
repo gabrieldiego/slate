@@ -1952,6 +1952,12 @@ Current baseline:
   and trial sync paths still use the existing membership-log retention-provider
   path, so this remains a diagnostic/user-facing bridge rather than automatic
   real-network discovery.
+- The Settings Profile Sync Preview now also reports endpoint materialization
+  status for trusted-discovery results separately from stored-provider fixture
+  readiness. Local fixture runs can show that a signed broadweb-style provider
+  advertisement is trusted and selected while its discovered multiaddr still
+  requires a protocol materializer, without pretending the socketless fixture
+  handle is the advertised network endpoint.
 
 Next:
 

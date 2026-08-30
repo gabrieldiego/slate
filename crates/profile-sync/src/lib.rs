@@ -152,6 +152,11 @@ pub struct LocalSettingsSyncDiscoverySummary {
     pub trusted_peer_count: usize,
     pub rejected_peer_count: usize,
     pub selected_retention_provider_count: usize,
+    pub endpoint_ready_provider_count: usize,
+    pub endpoint_pending_protocol_provider_count: usize,
+    pub endpoint_missing_provider_count: usize,
+    pub endpoint_fail_closed_provider_count: usize,
+    pub endpoint_requires_protocol_materializer: bool,
     pub retention_provider_selection_issue_count: usize,
     pub rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
 }
@@ -387,6 +392,11 @@ pub struct LocalSettingsSyncPreviewCycleReport {
     pub discovery_trusted_peer_count: usize,
     pub discovery_rejected_peer_count: usize,
     pub discovery_selected_retention_provider_count: usize,
+    pub discovery_endpoint_ready_provider_count: usize,
+    pub discovery_endpoint_pending_protocol_provider_count: usize,
+    pub discovery_endpoint_missing_provider_count: usize,
+    pub discovery_endpoint_fail_closed_provider_count: usize,
+    pub discovery_endpoint_requires_protocol_materializer: bool,
     pub discovery_retention_provider_selection_issue_count: usize,
     pub discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     pub selected_retention_provider_count: usize,
@@ -427,6 +437,11 @@ pub struct LocalSettingsSyncCurrentCycleReport {
     pub discovery_trusted_peer_count: usize,
     pub discovery_rejected_peer_count: usize,
     pub discovery_selected_retention_provider_count: usize,
+    pub discovery_endpoint_ready_provider_count: usize,
+    pub discovery_endpoint_pending_protocol_provider_count: usize,
+    pub discovery_endpoint_missing_provider_count: usize,
+    pub discovery_endpoint_fail_closed_provider_count: usize,
+    pub discovery_endpoint_requires_protocol_materializer: bool,
     pub discovery_retention_provider_selection_issue_count: usize,
     pub discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     pub selected_retention_provider_count: usize,
@@ -474,6 +489,11 @@ pub struct LocalSettingsSyncTwoDevicePreviewCycleReport {
     pub discovery_trusted_peer_count: usize,
     pub discovery_rejected_peer_count: usize,
     pub discovery_selected_retention_provider_count: usize,
+    pub discovery_endpoint_ready_provider_count: usize,
+    pub discovery_endpoint_pending_protocol_provider_count: usize,
+    pub discovery_endpoint_missing_provider_count: usize,
+    pub discovery_endpoint_fail_closed_provider_count: usize,
+    pub discovery_endpoint_requires_protocol_materializer: bool,
     pub discovery_retention_provider_selection_issue_count: usize,
     pub discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     pub receiver_applied_setting_count: usize,
@@ -9254,6 +9274,11 @@ struct LocalSettingsSyncFixtureCycleSummary {
     discovery_trusted_peer_count: usize,
     discovery_rejected_peer_count: usize,
     discovery_selected_retention_provider_count: usize,
+    discovery_endpoint_ready_provider_count: usize,
+    discovery_endpoint_pending_protocol_provider_count: usize,
+    discovery_endpoint_missing_provider_count: usize,
+    discovery_endpoint_fail_closed_provider_count: usize,
+    discovery_endpoint_requires_protocol_materializer: bool,
     discovery_retention_provider_selection_issue_count: usize,
     discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     selected_retention_provider_count: usize,
@@ -9348,29 +9373,52 @@ fn local_settings_sync_preview_discovery_summary(
         [ProfileSyncPeerDiscoveryProtocol::LocalSimulation],
         8,
     )?;
+    let discovery_report = discover_trusted_profile_sync_peers(
+        database,
+        profile,
+        &discovery_provider,
+        &discovery_query,
+    )
+    .map_err(profile_sync_peer_discovery_error_to_cycle_with_health)?;
+    let scheduler = BroadwebdSettingsSyncScheduler::new(device_daemon);
+    let endpoint_plan = scheduler
+        .plan_once_selecting_trusted_discovered_retention_provider_endpoints(
+            database,
+            config,
+            &preparation.signer,
+            &discovery_report,
+        )?;
+    let endpoint_materialization_plan = endpoint_plan.selected_endpoint_materialization_plan();
+    let protocol_materialization_plan =
+        endpoint_materialization_plan.protocol_materialization_plan();
     let retention_provider_handles = [SettingsSyncRetentionProviderHandle::with_endpoint_ref(
         DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
         preparation.provider_endpoint_ref.as_str(),
         provider_daemon,
     )];
-    let plan = BroadwebdSettingsSyncScheduler::new(device_daemon)
-        .plan_once_discovering_trusted_retention_providers(
-            database,
-            config,
-            &preparation.signer,
-            &discovery_provider,
-            &discovery_query,
-            &retention_provider_handles,
-        )?;
+    let plan = scheduler.plan_once_selecting_trusted_discovered_retention_providers(
+        database,
+        config,
+        &preparation.signer,
+        &discovery_report,
+        &retention_provider_handles,
+    )?;
 
     Ok(LocalSettingsSyncDiscoverySummary {
-        trusted_peer_count: plan.trusted_peer_count(),
-        rejected_peer_count: plan.rejected_peer_count(),
+        trusted_peer_count: discovery_report.trusted_peer_count(),
+        rejected_peer_count: discovery_report.rejected_peer_count(),
         selected_retention_provider_count: plan.selected_retention_provider_count(),
-        retention_provider_selection_issue_count: plan
-            .cycle
-            .retention_provider_selection_issue_count(),
-        rejections: local_settings_sync_discovery_rejection_summaries(&plan.discovery_report),
+        endpoint_ready_provider_count: endpoint_materialization_plan.fixture_ready_request_count(),
+        endpoint_pending_protocol_provider_count: protocol_materialization_plan
+            .protocol_request_count(),
+        endpoint_missing_provider_count: protocol_materialization_plan
+            .missing_endpoint_provider_count(),
+        endpoint_fail_closed_provider_count: protocol_materialization_plan
+            .fail_closed_provider_count(),
+        endpoint_requires_protocol_materializer: protocol_materialization_plan
+            .requires_protocol_materializer(),
+        retention_provider_selection_issue_count: plan.retention_provider_selection_issue_count(),
+        rejections: local_settings_sync_discovery_rejection_summaries(&discovery_report),
     })
 }
 
@@ -9473,6 +9521,15 @@ fn run_local_settings_sync_fixture_cycle(
         discovery_rejected_peer_count: discovery_summary.rejected_peer_count,
         discovery_selected_retention_provider_count: discovery_summary
             .selected_retention_provider_count,
+        discovery_endpoint_ready_provider_count: discovery_summary.endpoint_ready_provider_count,
+        discovery_endpoint_pending_protocol_provider_count: discovery_summary
+            .endpoint_pending_protocol_provider_count,
+        discovery_endpoint_missing_provider_count: discovery_summary
+            .endpoint_missing_provider_count,
+        discovery_endpoint_fail_closed_provider_count: discovery_summary
+            .endpoint_fail_closed_provider_count,
+        discovery_endpoint_requires_protocol_materializer: discovery_summary
+            .endpoint_requires_protocol_materializer,
         discovery_retention_provider_selection_issue_count: discovery_summary
             .retention_provider_selection_issue_count,
         discovery_rejections: discovery_summary.rejections,
@@ -9531,6 +9588,15 @@ pub fn run_local_settings_sync_current_cycle(
         discovery_rejected_peer_count: summary.discovery_rejected_peer_count,
         discovery_selected_retention_provider_count: summary
             .discovery_selected_retention_provider_count,
+        discovery_endpoint_ready_provider_count: summary.discovery_endpoint_ready_provider_count,
+        discovery_endpoint_pending_protocol_provider_count: summary
+            .discovery_endpoint_pending_protocol_provider_count,
+        discovery_endpoint_missing_provider_count: summary
+            .discovery_endpoint_missing_provider_count,
+        discovery_endpoint_fail_closed_provider_count: summary
+            .discovery_endpoint_fail_closed_provider_count,
+        discovery_endpoint_requires_protocol_materializer: summary
+            .discovery_endpoint_requires_protocol_materializer,
         discovery_retention_provider_selection_issue_count: summary
             .discovery_retention_provider_selection_issue_count,
         discovery_rejections: summary.discovery_rejections,
@@ -9607,6 +9673,15 @@ pub fn run_local_settings_sync_preview_cycle(
         discovery_rejected_peer_count: summary.discovery_rejected_peer_count,
         discovery_selected_retention_provider_count: summary
             .discovery_selected_retention_provider_count,
+        discovery_endpoint_ready_provider_count: summary.discovery_endpoint_ready_provider_count,
+        discovery_endpoint_pending_protocol_provider_count: summary
+            .discovery_endpoint_pending_protocol_provider_count,
+        discovery_endpoint_missing_provider_count: summary
+            .discovery_endpoint_missing_provider_count,
+        discovery_endpoint_fail_closed_provider_count: summary
+            .discovery_endpoint_fail_closed_provider_count,
+        discovery_endpoint_requires_protocol_materializer: summary
+            .discovery_endpoint_requires_protocol_materializer,
         discovery_retention_provider_selection_issue_count: summary
             .discovery_retention_provider_selection_issue_count,
         discovery_rejections: summary.discovery_rejections,
@@ -9841,6 +9916,15 @@ pub fn run_local_settings_sync_two_device_preview_cycle(
         discovery_rejected_peer_count: discovery_summary.rejected_peer_count,
         discovery_selected_retention_provider_count: discovery_summary
             .selected_retention_provider_count,
+        discovery_endpoint_ready_provider_count: discovery_summary.endpoint_ready_provider_count,
+        discovery_endpoint_pending_protocol_provider_count: discovery_summary
+            .endpoint_pending_protocol_provider_count,
+        discovery_endpoint_missing_provider_count: discovery_summary
+            .endpoint_missing_provider_count,
+        discovery_endpoint_fail_closed_provider_count: discovery_summary
+            .endpoint_fail_closed_provider_count,
+        discovery_endpoint_requires_protocol_materializer: discovery_summary
+            .endpoint_requires_protocol_materializer,
         discovery_retention_provider_selection_issue_count: discovery_summary
             .retention_provider_selection_issue_count,
         discovery_rejections: discovery_summary.rejections,
@@ -15733,6 +15817,11 @@ mod tests {
         assert_eq!(report.discovery_trusted_peer_count, 1);
         assert_eq!(report.discovery_rejected_peer_count, 0);
         assert_eq!(report.discovery_selected_retention_provider_count, 1);
+        assert_eq!(report.discovery_endpoint_ready_provider_count, 0);
+        assert_eq!(report.discovery_endpoint_pending_protocol_provider_count, 1);
+        assert_eq!(report.discovery_endpoint_missing_provider_count, 0);
+        assert_eq!(report.discovery_endpoint_fail_closed_provider_count, 0);
+        assert!(report.discovery_endpoint_requires_protocol_materializer);
         assert_eq!(report.discovery_retention_provider_selection_issue_count, 0);
         assert!(report.discovery_rejections.is_empty());
         assert_eq!(report.selected_retention_provider_count, 1);
@@ -15813,6 +15902,11 @@ mod tests {
         assert_eq!(report.discovery_trusted_peer_count, 1);
         assert_eq!(report.discovery_rejected_peer_count, 0);
         assert_eq!(report.discovery_selected_retention_provider_count, 1);
+        assert_eq!(report.discovery_endpoint_ready_provider_count, 0);
+        assert_eq!(report.discovery_endpoint_pending_protocol_provider_count, 1);
+        assert_eq!(report.discovery_endpoint_missing_provider_count, 0);
+        assert_eq!(report.discovery_endpoint_fail_closed_provider_count, 0);
+        assert!(report.discovery_endpoint_requires_protocol_materializer);
         assert_eq!(report.discovery_retention_provider_selection_issue_count, 0);
         assert!(report.discovery_rejections.is_empty());
         assert_eq!(report.selected_retention_provider_count, 1);
@@ -15904,6 +15998,11 @@ mod tests {
         assert_eq!(report.discovery_trusted_peer_count, 1);
         assert_eq!(report.discovery_rejected_peer_count, 0);
         assert_eq!(report.discovery_selected_retention_provider_count, 1);
+        assert_eq!(report.discovery_endpoint_ready_provider_count, 0);
+        assert_eq!(report.discovery_endpoint_pending_protocol_provider_count, 1);
+        assert_eq!(report.discovery_endpoint_missing_provider_count, 0);
+        assert_eq!(report.discovery_endpoint_fail_closed_provider_count, 0);
+        assert!(report.discovery_endpoint_requires_protocol_materializer);
         assert_eq!(report.discovery_retention_provider_selection_issue_count, 0);
         assert!(report.discovery_rejections.is_empty());
         assert_eq!(report.publisher_published_step_count, 1);

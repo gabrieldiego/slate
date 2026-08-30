@@ -725,6 +725,11 @@ struct ProfileSyncPreviewCurrentSyncState {
     discovery_trusted_peer_count: usize,
     discovery_rejected_peer_count: usize,
     discovery_selected_retention_provider_count: usize,
+    discovery_endpoint_ready_provider_count: usize,
+    discovery_endpoint_pending_protocol_provider_count: usize,
+    discovery_endpoint_missing_provider_count: usize,
+    discovery_endpoint_fail_closed_provider_count: usize,
+    discovery_endpoint_requires_protocol_materializer: bool,
     discovery_retention_provider_selection_issue_count: usize,
     discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     selected_retention_provider_count: usize,
@@ -764,6 +769,15 @@ impl ProfileSyncPreviewCurrentSyncState {
             discovery_rejected_peer_count: report.discovery_rejected_peer_count,
             discovery_selected_retention_provider_count: report
                 .discovery_selected_retention_provider_count,
+            discovery_endpoint_ready_provider_count: report.discovery_endpoint_ready_provider_count,
+            discovery_endpoint_pending_protocol_provider_count: report
+                .discovery_endpoint_pending_protocol_provider_count,
+            discovery_endpoint_missing_provider_count: report
+                .discovery_endpoint_missing_provider_count,
+            discovery_endpoint_fail_closed_provider_count: report
+                .discovery_endpoint_fail_closed_provider_count,
+            discovery_endpoint_requires_protocol_materializer: report
+                .discovery_endpoint_requires_protocol_materializer,
             discovery_retention_provider_selection_issue_count: report
                 .discovery_retention_provider_selection_issue_count,
             discovery_rejections: report.discovery_rejections.clone(),
@@ -808,6 +822,11 @@ impl ProfileSyncPreviewCurrentSyncState {
             "discovery_trusted_peer_count": self.discovery_trusted_peer_count,
             "discovery_rejected_peer_count": self.discovery_rejected_peer_count,
             "discovery_selected_retention_provider_count": self.discovery_selected_retention_provider_count,
+            "discovery_endpoint_ready_provider_count": self.discovery_endpoint_ready_provider_count,
+            "discovery_endpoint_pending_protocol_provider_count": self.discovery_endpoint_pending_protocol_provider_count,
+            "discovery_endpoint_missing_provider_count": self.discovery_endpoint_missing_provider_count,
+            "discovery_endpoint_fail_closed_provider_count": self.discovery_endpoint_fail_closed_provider_count,
+            "discovery_endpoint_requires_protocol_materializer": self.discovery_endpoint_requires_protocol_materializer,
             "discovery_retention_provider_selection_issue_count": self.discovery_retention_provider_selection_issue_count,
             "discovery_rejections": profile_sync_discovery_rejections_json(self.discovery_rejections.as_slice()),
             "selected_retention_provider_count": self.selected_retention_provider_count,
@@ -849,6 +868,11 @@ struct ProfileSyncPreviewTrialState {
     discovery_trusted_peer_count: usize,
     discovery_rejected_peer_count: usize,
     discovery_selected_retention_provider_count: usize,
+    discovery_endpoint_ready_provider_count: usize,
+    discovery_endpoint_pending_protocol_provider_count: usize,
+    discovery_endpoint_missing_provider_count: usize,
+    discovery_endpoint_fail_closed_provider_count: usize,
+    discovery_endpoint_requires_protocol_materializer: bool,
     discovery_retention_provider_selection_issue_count: usize,
     discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     selected_retention_provider_count: usize,
@@ -890,6 +914,15 @@ impl ProfileSyncPreviewTrialState {
             discovery_rejected_peer_count: report.discovery_rejected_peer_count,
             discovery_selected_retention_provider_count: report
                 .discovery_selected_retention_provider_count,
+            discovery_endpoint_ready_provider_count: report.discovery_endpoint_ready_provider_count,
+            discovery_endpoint_pending_protocol_provider_count: report
+                .discovery_endpoint_pending_protocol_provider_count,
+            discovery_endpoint_missing_provider_count: report
+                .discovery_endpoint_missing_provider_count,
+            discovery_endpoint_fail_closed_provider_count: report
+                .discovery_endpoint_fail_closed_provider_count,
+            discovery_endpoint_requires_protocol_materializer: report
+                .discovery_endpoint_requires_protocol_materializer,
             discovery_retention_provider_selection_issue_count: report
                 .discovery_retention_provider_selection_issue_count,
             discovery_rejections: report.discovery_rejections.clone(),
@@ -936,6 +969,11 @@ impl ProfileSyncPreviewTrialState {
             "discovery_trusted_peer_count": self.discovery_trusted_peer_count,
             "discovery_rejected_peer_count": self.discovery_rejected_peer_count,
             "discovery_selected_retention_provider_count": self.discovery_selected_retention_provider_count,
+            "discovery_endpoint_ready_provider_count": self.discovery_endpoint_ready_provider_count,
+            "discovery_endpoint_pending_protocol_provider_count": self.discovery_endpoint_pending_protocol_provider_count,
+            "discovery_endpoint_missing_provider_count": self.discovery_endpoint_missing_provider_count,
+            "discovery_endpoint_fail_closed_provider_count": self.discovery_endpoint_fail_closed_provider_count,
+            "discovery_endpoint_requires_protocol_materializer": self.discovery_endpoint_requires_protocol_materializer,
             "discovery_retention_provider_selection_issue_count": self.discovery_retention_provider_selection_issue_count,
             "discovery_rejections": profile_sync_discovery_rejections_json(self.discovery_rejections.as_slice()),
             "selected_retention_provider_count": self.selected_retention_provider_count,
@@ -1072,6 +1110,11 @@ struct ProfileSyncPreviewTwoDeviceTrialState {
     discovery_trusted_peer_count: usize,
     discovery_rejected_peer_count: usize,
     discovery_selected_retention_provider_count: usize,
+    discovery_endpoint_ready_provider_count: usize,
+    discovery_endpoint_pending_protocol_provider_count: usize,
+    discovery_endpoint_missing_provider_count: usize,
+    discovery_endpoint_fail_closed_provider_count: usize,
+    discovery_endpoint_requires_protocol_materializer: bool,
     discovery_retention_provider_selection_issue_count: usize,
     discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     receiver_applied_setting_count: usize,
@@ -1123,6 +1166,15 @@ impl ProfileSyncPreviewTwoDeviceTrialState {
             discovery_rejected_peer_count: report.discovery_rejected_peer_count,
             discovery_selected_retention_provider_count: report
                 .discovery_selected_retention_provider_count,
+            discovery_endpoint_ready_provider_count: report.discovery_endpoint_ready_provider_count,
+            discovery_endpoint_pending_protocol_provider_count: report
+                .discovery_endpoint_pending_protocol_provider_count,
+            discovery_endpoint_missing_provider_count: report
+                .discovery_endpoint_missing_provider_count,
+            discovery_endpoint_fail_closed_provider_count: report
+                .discovery_endpoint_fail_closed_provider_count,
+            discovery_endpoint_requires_protocol_materializer: report
+                .discovery_endpoint_requires_protocol_materializer,
             discovery_retention_provider_selection_issue_count: report
                 .discovery_retention_provider_selection_issue_count,
             discovery_rejections: report.discovery_rejections.clone(),
@@ -1175,6 +1227,11 @@ impl ProfileSyncPreviewTwoDeviceTrialState {
             "discovery_trusted_peer_count": self.discovery_trusted_peer_count,
             "discovery_rejected_peer_count": self.discovery_rejected_peer_count,
             "discovery_selected_retention_provider_count": self.discovery_selected_retention_provider_count,
+            "discovery_endpoint_ready_provider_count": self.discovery_endpoint_ready_provider_count,
+            "discovery_endpoint_pending_protocol_provider_count": self.discovery_endpoint_pending_protocol_provider_count,
+            "discovery_endpoint_missing_provider_count": self.discovery_endpoint_missing_provider_count,
+            "discovery_endpoint_fail_closed_provider_count": self.discovery_endpoint_fail_closed_provider_count,
+            "discovery_endpoint_requires_protocol_materializer": self.discovery_endpoint_requires_protocol_materializer,
             "discovery_retention_provider_selection_issue_count": self.discovery_retention_provider_selection_issue_count,
             "discovery_rejections": profile_sync_discovery_rejections_json(self.discovery_rejections.as_slice()),
             "receiver_applied_setting_count": self.receiver_applied_setting_count,
@@ -2434,6 +2491,11 @@ mod tests {
             discovery_trusted_peer_count: 1,
             discovery_rejected_peer_count: 1,
             discovery_selected_retention_provider_count: 1,
+            discovery_endpoint_ready_provider_count: 0,
+            discovery_endpoint_pending_protocol_provider_count: 1,
+            discovery_endpoint_missing_provider_count: 0,
+            discovery_endpoint_fail_closed_provider_count: 0,
+            discovery_endpoint_requires_protocol_materializer: true,
             discovery_retention_provider_selection_issue_count: 0,
             discovery_rejections: vec![super::LocalSettingsSyncDiscoveryRejectionSummary {
                 protocol: "local-simulation".to_string(),
@@ -2552,6 +2614,17 @@ mod tests {
         assert_eq!(json["discovery_trusted_peer_count"], 1);
         assert_eq!(json["discovery_rejected_peer_count"], 1);
         assert_eq!(json["discovery_selected_retention_provider_count"], 1);
+        assert_eq!(json["discovery_endpoint_ready_provider_count"], 0);
+        assert_eq!(
+            json["discovery_endpoint_pending_protocol_provider_count"],
+            1
+        );
+        assert_eq!(json["discovery_endpoint_missing_provider_count"], 0);
+        assert_eq!(json["discovery_endpoint_fail_closed_provider_count"], 0);
+        assert_eq!(
+            json["discovery_endpoint_requires_protocol_materializer"],
+            true
+        );
         assert_eq!(
             json["discovery_retention_provider_selection_issue_count"],
             0

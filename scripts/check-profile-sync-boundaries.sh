@@ -904,6 +904,10 @@ require_text \
     'Slate settings page must render trusted-discovery preflight counts.'
 require_text \
     resources/resource_protocol/slate-settings.html \
+    'discovery_endpoint_pending_protocol_provider_count' \
+    'Slate settings page must expose discovered provider endpoint materialization status.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
     'discovery_rejections' \
     'Slate settings page must include profile-sync discovery rejections in issue details.'
 require_text \
