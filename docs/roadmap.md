@@ -1863,9 +1863,11 @@ Current baseline:
   an enrollment key from a JSON file. The visible page no longer exposes the
   diagnostic local-key, provider, preflight, and local-trial buttons; those
   lower-level protocol routes remain for deterministic tests and future
-  development-only tools. Metadata-only profiles still fail closed for
-  re-export because the root enrollment secret is intentionally not persisted
-  in `slate-settings.db`.
+  development-only tools. The download action is a direct `slate://download`
+  link to the key export route instead of a fetch-gated preflight, so first-use
+  export can create and save an enrollment file even when internal page fetch is
+  brittle. Metadata-only profiles still fail closed for re-export because the
+  root enrollment secret is intentionally not persisted in `slate-settings.db`.
 - The profile-sync boundary script now has a static-only mode for constrained
   development runs. With `SLATE_PROFILE_SYNC_BOUNDARY_RUN_TESTS=0`, it verifies
   the socketless service-frame stream boundary, explicit runtime probe opt-in,

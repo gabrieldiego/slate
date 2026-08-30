@@ -1005,6 +1005,10 @@ require_text \
     'Slate settings page must route enrollment-key exports through the internal download handler.'
 require_text \
     resources/resource_protocol/slate-settings.html \
+    'href="slate://download\?url=slate%3A%2F%2Fsettings%2Fprofile-sync%2Fkey%2Fexport%3Fdownload%3D1"' \
+    'Slate settings page must keep enrollment-key export usable as a direct internal download link.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
     'download: "1"' \
     'Slate settings page must keep the internal enrollment-key export route marked as a download target.'
 require_text \
@@ -1109,48 +1113,12 @@ require_text \
     'Slate settings profile-sync JSON must expose retained-object issue summaries.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'Last check' \
-    'Slate settings page must show compact profile-sync health and issue status.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'Enabled domains' \
-    'Slate settings page must show enabled app sync domains.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
     'Local sync' \
     'Slate settings page must show compact local sync readiness.'
-require_text \
+reject_protocol_model_leak \
     resources/resource_protocol/slate-settings.html \
-    'profileSyncAppDomainHeadStatus' \
-    'Slate settings page must render app-domain sync revision heads.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'profileSyncContentAppDomainStatus' \
-    'Slate settings page must render sync-content app domain status.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'profileSyncAuthorizedProviderStatus' \
-    'Slate settings page must render authorized provider status.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'profileSyncProviderEndpointStatus' \
-    'Slate settings page must render provider endpoint metadata without scheduler internals.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'profileSyncEndpointMaterializationStatus' \
-    'Slate settings page must render endpoint materialization status from protocol-neutral reports.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'profileSyncHealthStatus' \
-    'Slate settings page must distinguish healthy, recovered, and degraded profile-sync health.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'profileSyncDiscoveryStatus' \
-    'Slate settings page must render trusted-discovery preflight counts.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'discovery_endpoint_pending_protocol_provider_count' \
-    'Slate settings page must expose discovered provider endpoint materialization status.'
+    'Last check|Enabled domains|profileSyncAppDomainHeadStatus|profileSyncContentAppDomainStatus|profileSyncAuthorizedProviderStatus|profileSyncProviderEndpointStatus|profileSyncEndpointMaterializationStatus|profileSyncHealthStatus|profileSyncDiscoveryStatus|discovery_endpoint_pending_protocol_provider_count' \
+    'Slate settings page must keep profile-sync provider and discovery diagnostics out of the simple enrollment-key flow.'
 require_text \
     crates/profile-sync/src/preview_json.rs \
     'pub fn local_settings_sync_preview_cycle_report_json' \
@@ -1163,22 +1131,10 @@ reject_protocol_model_leak \
     crates/chrome/src/desktop/protocols/slate.rs \
     'fn profile_sync_discovery_rejections_json' \
     'Slate chrome must not duplicate profile-sync discovery JSON serialization.'
-require_text \
+reject_protocol_model_leak \
     resources/resource_protocol/slate-settings.html \
-    'discovery_rejections' \
-    'Slate settings page must include profile-sync discovery rejections in issue details.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'candidates.push\(state.last_two_device_trial\)' \
-    'Slate settings page must include the two-device local trial in profile-sync health and issue summaries.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'retention_issues' \
-    'Slate settings page must include retained-object issues in sync issue details.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'Issue details' \
-    'Slate settings page must expose protocol-neutral profile-sync issue details.'
+    'discovery_rejections|candidates.push\(state.last_two_device_trial\)|retention_issues|Issue details' \
+    'Slate settings page must keep protocol-neutral issue diagnostics out of the simple enrollment-key flow.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Download enrollment key' \
@@ -1194,11 +1150,11 @@ reject_protocol_model_leak \
 require_text \
     resources/resource_protocol/slate-settings.html \
     'setProfileSyncEnrollmentBusy' \
-    'Slate settings page must disable enrollment actions while an import or download is being prepared.'
+    'Slate settings page must disable enrollment actions while an import is being prepared.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'Preparing enrollment key' \
-    'Slate settings page must show progress when preparing an enrollment-key download.'
+    'currentProfileSyncState' \
+    'Slate settings page must show progress when following the enrollment-key download link.'
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
     'settings/profile-sync/key/export' \

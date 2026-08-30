@@ -125,7 +125,12 @@
       margin-top: 20px;
     }
 
-    button {
+    button,
+    .button {
+      box-sizing: border-box;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       border: 1px solid #c8c5bd;
       border-radius: 6px;
       background: #f3f0ea;
@@ -133,17 +138,22 @@
       padding: 8px 12px;
       font: inherit;
       cursor: pointer;
+      text-align: center;
+      text-decoration: none;
     }
 
-    button.primary {
+    button.primary,
+    .button.primary {
       border-color: #0b7e79;
       background: #0b7e79;
       color: #fffefa;
     }
 
-    button:disabled {
+    button:disabled,
+    .button[aria-disabled="true"] {
       cursor: default;
       opacity: 0.58;
+      pointer-events: none;
     }
 
     .keybinding-list {
@@ -348,7 +358,11 @@
         aria-label="Profile sync enrollment key"
       />
       <div class="profile-sync-actions">
-        <button id="profile-sync-key-download" class="primary">Download enrollment key</button>
+        <a
+          id="profile-sync-key-download"
+          class="button primary"
+          href="slate://download?url=slate%3A%2F%2Fsettings%2Fprofile-sync%2Fkey%2Fexport%3Fdownload%3D1"
+        >Download enrollment key</a>
         <button id="profile-sync-key-import">Import enrollment key</button>
       </div>
       <div
@@ -449,6 +463,7 @@
     let sliderValue = DEFAULT_ZOOM;
     let lastPreviewZoom = "";
     let dragging = false;
+    let currentProfileSyncState = null;
     const DEFAULT_KEY_BINDINGS = [
       {
         id: "new_tab",
@@ -887,20 +902,6 @@
       return String(value);
     }
 
-    function profileSyncCount(value) {
-      return Number.isFinite(value) ? String(value) : "0";
-    }
-
-    function profileSyncProviderStatus(state) {
-      if (!state || !state.local_sync) {
-        return "not configured";
-      }
-      if (state.local_sync.ready_for_manual_sync) {
-        return "ready";
-      }
-      return profileSyncText(state.local_sync.blocked_reason, "not ready");
-    }
-
     function profileSyncKeyStatus(state) {
       if (!state) {
         return "unavailable";
@@ -914,419 +915,22 @@
       return "created on download";
     }
 
-    function profileSyncEnabledAppDomainStatus(state) {
+    function profileSyncLocalStatus(state) {
       const localSync = state && state.local_sync ? state.local_sync : null;
-      const domains = localSync && Array.isArray(localSync.app_domains) ?
-        localSync.app_domains :
-        [];
-      const enabledDomains = domains
-        .filter((domain) => domain && domain.enabled)
-        .map((domain) => profileSyncText(domain.domain, "unknown").replace(/_/g, " "));
-      if (enabledDomains.length === 0) {
-        return "none";
+      if (localSync && localSync.ready_for_manual_sync) {
+        return "ready";
       }
-      const visibleDomains = enabledDomains.slice(0, 4);
-      if (enabledDomains.length > visibleDomains.length) {
-        visibleDomains.push(`${enabledDomains.length - visibleDomains.length} more`);
-      }
-      return visibleDomains.join(", ");
-    }
-
-    function profileSyncAppDomainHeadStatus(state) {
-      const localSync = state && state.local_sync ? state.local_sync : null;
-      const domains = localSync && Array.isArray(localSync.app_domains) ?
-        localSync.app_domains :
-        [];
-      const readiness = localSync && Array.isArray(localSync.app_domain_readiness) ?
-        localSync.app_domain_readiness :
-        [];
-      const revisions = new Map(readiness
-        .filter((domain) => domain && domain.domain)
-        .map((domain) => [
-          domain.domain,
-          Number.isFinite(domain.latest_revision) ? domain.latest_revision : 0
-        ]));
-      const enabledHeads = domains
-        .filter((domain) => domain && domain.enabled)
-        .map((domain) => {
-          const name = profileSyncText(domain.domain, "unknown").replace(/_/g, " ");
-          const revision = revisions.get(domain.domain) || 0;
-          return `${name} r${revision}`;
-        });
-      if (enabledHeads.length === 0) {
-        return "none";
-      }
-      const visibleHeads = enabledHeads.slice(0, 4);
-      if (enabledHeads.length > visibleHeads.length) {
-        visibleHeads.push(`${enabledHeads.length - visibleHeads.length} more`);
-      }
-      return visibleHeads.join(", ");
-    }
-
-    function profileSyncContentAppDomainStatus(state) {
-      const localSync = state && state.local_sync ? state.local_sync : null;
-      const domains = localSync && Array.isArray(localSync.app_domains) ?
-        localSync.app_domains :
-        [];
-      const contentDomains = domains
-        .filter((domain) => domain && domain.enabled && domain.sync_content)
-        .map((domain) => profileSyncText(domain.domain, "unknown").replace(/_/g, " "));
-      if (contentDomains.length === 0) {
-        return "none";
-      }
-      const visibleDomains = contentDomains.slice(0, 3);
-      if (contentDomains.length > visibleDomains.length) {
-        visibleDomains.push(`${contentDomains.length - visibleDomains.length} more`);
-      }
-      return visibleDomains.join(", ");
-    }
-
-    function profileSyncActiveProviderStatus(state) {
-      const localSync = state && state.local_sync ? state.local_sync : null;
-      const providers = localSync && Array.isArray(localSync.storage_providers) ?
-        localSync.storage_providers :
-        [];
-      const activeProviders = providers
-        .filter((provider) => provider &&
-          provider.enabled &&
-          provider.availability &&
-          provider.object_transfer)
-        .map((provider) => {
-          const label = profileSyncText(
-            provider.display_name,
-            profileSyncText(provider.provider_id, "provider")
-          );
-          const kind = profileSyncText(provider.provider_kind, "provider");
-          return `${label} (${kind})`;
-        });
-      if (activeProviders.length === 0) {
-        return "none";
-      }
-      const visibleProviders = activeProviders.slice(0, 3);
-      if (activeProviders.length > visibleProviders.length) {
-        visibleProviders.push(`${activeProviders.length - visibleProviders.length} more`);
-      }
-      return visibleProviders.join(", ");
-    }
-
-    function profileSyncAuthorizedProviderStatus(state) {
-      const localSync = state && state.local_sync ? state.local_sync : null;
-      const authorizedIds = localSync && Array.isArray(localSync.authorized_retention_provider_ids) ?
-        localSync.authorized_retention_provider_ids.filter((providerId) => providerId) :
-        [];
-      if (authorizedIds.length === 0) {
-        return "none";
-      }
-      const providers = localSync && Array.isArray(localSync.storage_providers) ?
-        localSync.storage_providers :
-        [];
-      const labels = authorizedIds.map((providerId) => {
-        const provider = providers.find((candidate) =>
-          candidate && candidate.provider_id === providerId
-        );
-        return provider ?
-          profileSyncText(provider.display_name, providerId) :
-          profileSyncText(providerId, "provider");
-      });
-      const visibleProviders = labels.slice(0, 3);
-      if (labels.length > visibleProviders.length) {
-        visibleProviders.push(`${labels.length - visibleProviders.length} more`);
-      }
-      return visibleProviders.join(", ");
-    }
-
-    function profileSyncProviderEndpointStatus(state) {
-      const localSync = state && state.local_sync ? state.local_sync : null;
-      const providers = localSync && Array.isArray(localSync.storage_providers) ?
-        localSync.storage_providers :
-        [];
-      const activeProviderEndpoints = providers
-        .filter((provider) => provider &&
-          provider.enabled &&
-          provider.availability &&
-          provider.object_transfer)
-        .map((provider) => {
-          const label = profileSyncText(
-            provider.display_name,
-            profileSyncText(provider.provider_id, "provider")
-          );
-          const endpoint = profileSyncText(provider.endpoint_ref, "metadata only");
-          return `${label}: ${endpoint}`;
-        });
-      if (activeProviderEndpoints.length === 0) {
-        return "none";
-      }
-      const visibleEndpoints = activeProviderEndpoints.slice(0, 2);
-      if (activeProviderEndpoints.length > visibleEndpoints.length) {
-        visibleEndpoints.push(`${activeProviderEndpoints.length - visibleEndpoints.length} more`);
-      }
-      return visibleEndpoints.join("; ");
-    }
-
-    function profileSyncLocalTrialStatus(state) {
-      if (!state || !state.last_trial) {
-        return "not run";
-      }
-      const trial = state.last_trial;
-      return `${trial.retained_object_count}/${trial.published_object_count} objects retained`;
-    }
-
-    function profileSyncCurrentSyncStatus(state) {
-      if (!state || !state.last_current_sync) {
-        return "not run";
-      }
-      const run = state.last_current_sync;
-      return `${run.published_step_count} step; ${run.retained_object_count}/${run.published_object_count} objects retained`;
-    }
-
-    function profileSyncTwoDeviceTrialStatus(state) {
-      if (!state || !state.last_two_device_trial) {
-        return "not run";
-      }
-      const trial = state.last_two_device_trial;
-      const received = profileSyncText(trial.receiver_received_value, "no value");
-      return `${trial.receiver_applied_setting_count} applied; ${received}`;
-    }
-
-    function profileSyncLatestIssueRun(state) {
-      const candidates = [];
-      if (state && state.last_current_sync) {
-        candidates.push(state.last_current_sync);
-      }
-      if (state && state.last_trial) {
-        candidates.push(state.last_trial);
-      }
-      if (state && state.last_two_device_trial) {
-        candidates.push(state.last_two_device_trial);
-      }
-      if (candidates.length === 0) {
-        return null;
-      }
-      return candidates.reduce((latest, candidate) => {
-        const latestTime = Number.isFinite(latest.completed_at) ? latest.completed_at : 0;
-        const candidateTime = Number.isFinite(candidate.completed_at) ? candidate.completed_at : 0;
-        return candidateTime >= latestTime ? candidate : latest;
-      });
-    }
-
-    function profileSyncHealthStatus(state) {
-      const run = profileSyncLatestIssueRun(state);
-      if (!run) {
-        return "not checked";
-      }
-      if (run.degraded_after) {
-        return "degraded";
-      }
-      if (run.degraded_before) {
-        return "recovered";
-      }
-      return "healthy";
-    }
-
-    function profileSyncIssueStatus(state) {
-      const run = profileSyncLatestIssueRun(state);
-      if (!run) {
-        return "not checked";
-      }
-      const rootIssueCount = Number.isFinite(run.root_object_provider_issue_count) ?
-        run.root_object_provider_issue_count :
-        0;
-      const retentionIssueCount = Number.isFinite(run.retention_issue_count) ?
-        run.retention_issue_count :
-        0;
-      const providerIssueCount =
-        (Number.isFinite(run.retention_provider_selection_issue_count) ?
-          run.retention_provider_selection_issue_count :
-          0) +
-        (Number.isFinite(run.stored_provider_metadata_issue_count) ?
-          run.stored_provider_metadata_issue_count :
-          0);
-      const discoveryIssueCount = Number.isFinite(run.discovery_rejected_peer_count) ?
-        run.discovery_rejected_peer_count :
-        0;
-      const issueCount = rootIssueCount + retentionIssueCount + providerIssueCount + discoveryIssueCount;
-      if (issueCount > 0) {
-        return `${issueCount} sync ${issueCount === 1 ? "issue" : "issues"}`;
-      }
-      return run.degraded_after ? "degraded" : "none";
-    }
-
-    function profileSyncEndpointMaterializationStatus(state) {
-      const run = profileSyncLatestIssueRun(state);
-      if (!run) {
-        return "not checked";
-      }
-      const ready = Number.isFinite(run.selected_endpoint_ready_provider_count) ?
-        run.selected_endpoint_ready_provider_count :
-        0;
-      const pendingProtocol =
-        Number.isFinite(run.selected_endpoint_pending_protocol_provider_count) ?
-          run.selected_endpoint_pending_protocol_provider_count :
-          0;
-      const missing = Number.isFinite(run.selected_endpoint_missing_provider_count) ?
-        run.selected_endpoint_missing_provider_count :
-        0;
-      const failClosed = Number.isFinite(run.selected_endpoint_fail_closed_provider_count) ?
-        run.selected_endpoint_fail_closed_provider_count :
-        0;
-      const details = [`${ready} ready`];
-      if (pendingProtocol > 0) {
-        details.push(`${pendingProtocol} protocol pending`);
-      }
-      if (missing > 0) {
-        details.push(`${missing} missing`);
-      }
-      if (failClosed > 0) {
-        details.push(`${failClosed} fail closed`);
-      }
-      if (run.selected_endpoint_requires_protocol_materializer) {
-        details.push("adapter required");
-      }
-      return details.join("; ");
-    }
-
-    function profileSyncDiscoveryStatus(state) {
-      const run = profileSyncLatestIssueRun(state);
-      if (!run) {
-        return "not checked";
-      }
-      const trusted = Number.isFinite(run.discovery_trusted_peer_count) ?
-        run.discovery_trusted_peer_count :
-        0;
-      const selected = Number.isFinite(run.discovery_selected_retention_provider_count) ?
-        run.discovery_selected_retention_provider_count :
-        0;
-      const ready = Number.isFinite(run.discovery_endpoint_ready_provider_count) ?
-        run.discovery_endpoint_ready_provider_count :
-        0;
-      const pendingProtocol =
-        Number.isFinite(run.discovery_endpoint_pending_protocol_provider_count) ?
-          run.discovery_endpoint_pending_protocol_provider_count :
-          0;
-      const missing = Number.isFinite(run.discovery_endpoint_missing_provider_count) ?
-        run.discovery_endpoint_missing_provider_count :
-        0;
-      const failClosed = Number.isFinite(run.discovery_endpoint_fail_closed_provider_count) ?
-        run.discovery_endpoint_fail_closed_provider_count :
-        0;
-      const rejected = Number.isFinite(run.discovery_rejected_peer_count) ?
-        run.discovery_rejected_peer_count :
-        0;
-      const protocols = Array.isArray(run.discovery_protocols) ?
-        run.discovery_protocols
-          .map((protocol) => profileSyncText(protocol, ""))
-          .filter((protocol) => protocol.length > 0)
-          .join(", ") :
-        "";
-      const details = [`${trusted} trusted`, `${selected} selected`];
-      if (protocols.length > 0) {
-        details.push(`via ${protocols}`);
-      }
-      if (ready > 0) {
-        details.push(`${ready} endpoint ready`);
-      }
-      if (pendingProtocol > 0) {
-        details.push(`${pendingProtocol} endpoint pending`);
-      }
-      if (missing > 0) {
-        details.push(`${missing} endpoint missing`);
-      }
-      if (failClosed > 0) {
-        details.push(`${failClosed} endpoint fail closed`);
-      }
-      if (run.discovery_endpoint_requires_protocol_materializer) {
-        details.push("adapter required");
-      }
-      if (rejected > 0) {
-        details.push(`${rejected} rejected`);
-      }
-      return details.join("; ");
-    }
-
-    function profileSyncIssueLabel(value, fallback) {
-      return profileSyncText(value, fallback).replace(/_/g, " ");
-    }
-
-    function profileSyncIssueDetails(state) {
-      const run = profileSyncLatestIssueRun(state);
-      const rootIssues = run && Array.isArray(run.root_object_provider_issues) ?
-        run.root_object_provider_issues :
-        [];
-      const retentionIssues = run && Array.isArray(run.retention_issues) ?
-        run.retention_issues :
-        [];
-      const providerIssues = run ? []
-        .concat(Array.isArray(run.retention_provider_selection_issues) ?
-          run.retention_provider_selection_issues :
-          [])
-        .concat(Array.isArray(run.stored_provider_metadata_issues) ?
-          run.stored_provider_metadata_issues :
-          []) :
-        [];
-      const discoveryRejections = run && Array.isArray(run.discovery_rejections) ?
-        run.discovery_rejections :
-        [];
-      const rendered = [];
-      rootIssues.forEach((issue) => {
-        const kind = profileSyncIssueLabel(issue && issue.kind, "issue");
-        const component = profileSyncIssueLabel(issue && issue.component, "root");
-        const rootId = profileSyncText(issue && issue.root_id, "unknown root");
-        const objectId = profileSyncText(issue && issue.object_id, "unknown object");
-        const providerId = profileSyncText(issue && issue.provider_id, "unknown provider");
-        rendered.push(`${kind} ${component} ${rootId}/${objectId} on ${providerId}`);
-      });
-      retentionIssues.forEach((issue) => {
-        const kind = profileSyncIssueLabel(issue && issue.kind, "retention issue");
-        const objectId = profileSyncText(issue && issue.object_id, "unknown object");
-        const providerIndex = Number.isFinite(issue && issue.provider_index) ?
-          issue.provider_index :
-          "?";
-        rendered.push(`retention ${kind} ${objectId} on provider ${providerIndex}`);
-      });
-      providerIssues.forEach((issue) => {
-        const category = profileSyncIssueLabel(issue && issue.category, "provider");
-        const kind = profileSyncIssueLabel(issue && issue.kind, "issue");
-        const providerId = profileSyncText(issue && issue.provider_id, "unknown provider");
-        rendered.push(`${category} ${kind} on ${providerId}`);
-      });
-      discoveryRejections.forEach((rejection) => {
-        const reason = profileSyncIssueLabel(rejection && rejection.reason, "rejected");
-        const protocol = profileSyncText(rejection && rejection.protocol, "discovery");
-        const nodeId = profileSyncText(rejection && rejection.node_id, "unknown node");
-        const providerId = profileSyncText(rejection && rejection.provider_id, "unknown provider");
-        rendered.push(`discovery ${reason} from ${nodeId} via ${protocol} on ${providerId}`);
-      });
-      if (rendered.length === 0) {
-        return "";
-      }
-      const visibleIssues = rendered.slice(0, 3);
-      if (rendered.length > visibleIssues.length) {
-        visibleIssues.push(`${rendered.length - visibleIssues.length} more`);
-      }
-      return visibleIssues.join("; ");
+      return profileSyncText(localSync && localSync.blocked_reason, "not ready");
     }
 
     function renderProfileSyncDetails(state) {
       profileSyncDetails.textContent = "";
-      const localSync = state && state.local_sync ? state.local_sync : null;
-      const latestIssueStatus = profileSyncIssueStatus(state);
-      const latestHealthStatus = profileSyncHealthStatus(state);
-      const localSyncStatus = localSync && localSync.ready_for_manual_sync ?
-        "ready" :
-        profileSyncText(localSync && localSync.blocked_reason, "not ready");
       const rows = [
         ["Profile", profileSyncText(state && state.profile, "default")],
         ["Device", profileSyncText(state && state.local_device_id, "none")],
-        ["Enrollment key", state && state.has_secret ? "available" : "not loaded"],
-        ["Local sync", localSyncStatus],
-        ["Trusted devices", localSync ? profileSyncCount(localSync.trusted_device_count) : "0"],
-        ["Enabled domains", profileSyncEnabledAppDomainStatus(state)],
-        ["Last check", latestHealthStatus === "not checked" ? "not checked" : `${latestHealthStatus}; ${latestIssueStatus}`]
+        ["Enrollment key", profileSyncKeyStatus(state)],
+        ["Local sync", profileSyncLocalStatus(state)]
       ];
-      const issueDetails = profileSyncIssueDetails(state);
-      if (issueDetails) {
-        rows.push(["Issue details", issueDetails]);
-      }
       rows.forEach(([label, value]) => {
         const row = document.createElement("div");
         const labelElement = document.createElement("span");
@@ -1341,45 +945,31 @@
     }
 
     function setProfileSyncState(state) {
+      currentProfileSyncState = state;
+      updateProfileSyncDownloadHref(state);
       if (!state) {
         profileSyncStatus.textContent = "Unavailable";
         renderProfileSyncDetails(null);
         return;
       }
       renderProfileSyncDetails(state);
-      const trialStatus = state.last_trial ?
-        `; last trial retained ${state.last_trial.retained_object_count}/${state.last_trial.published_object_count} objects` :
-        "";
-      const twoDeviceStatus = state.last_two_device_trial ?
-        `; receiver applied ${state.last_two_device_trial.receiver_applied_setting_count} setting` :
-        "";
-      const currentSyncStatus = state.last_current_sync ?
-        `; current sync retained ${state.last_current_sync.retained_object_count}/${state.last_current_sync.published_object_count} objects` :
-        "";
       const deviceStatus = state.local_device_id ?
         ` (${state.local_device_id})` :
         "";
       if (state.last_error) {
         profileSyncStatus.textContent = `Error: ${state.last_error}`;
       } else if (state.has_secret && state.local_sync && state.local_sync.ready_for_manual_sync) {
-        profileSyncStatus.textContent =
-          `Ready for ${state.profile}${deviceStatus} - local device trusted, local sync preflight passed${currentSyncStatus}${trialStatus}${twoDeviceStatus}`;
+        profileSyncStatus.textContent = `Ready to sync ${state.profile}${deviceStatus}`;
       } else if (state.has_secret) {
-        const trusted = state.local_sync && state.local_sync.local_device_trusted ?
-          " - local device trusted" :
-          "";
-        const suffix = state.metadata_ready && state.active_key_id ?
-          ` - local metadata ready (${state.active_key_id})${trusted}` :
-          "";
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           ` - ${state.local_sync.blocked_reason}` :
           "";
-        profileSyncStatus.textContent = `Ready for ${state.profile}${deviceStatus}${suffix}${syncGap}${currentSyncStatus}${trialStatus}${twoDeviceStatus}`;
+        profileSyncStatus.textContent = `Enrollment key loaded for ${state.profile}${deviceStatus}${syncGap}`;
       } else if (state.metadata_ready) {
         const syncGap = state.local_sync && state.local_sync.blocked_reason ?
           `; ${state.local_sync.blocked_reason}` :
           "";
-        profileSyncStatus.textContent = `Local sync metadata ready${deviceStatus}; enrollment key not loaded${syncGap}`;
+        profileSyncStatus.textContent = `Import enrollment key${deviceStatus}${syncGap}`;
       } else {
         profileSyncStatus.textContent = `Not enrolled${deviceStatus}`;
       }
@@ -1402,25 +992,8 @@
         });
     }
 
-    function ensureProfileSyncKeyForDownload(state) {
-      if (!state) {
-        return Promise.resolve(state);
-      }
-      if (state.has_secret) {
-        return Promise.resolve(state);
-      }
-      if (state.metadata_ready) {
-        const blockedState = Object.assign({}, state, {
-          last_error: "enrollment key is not loaded on this device; import it before downloading it again"
-        });
-        setProfileSyncState(blockedState);
-        return Promise.resolve(blockedState);
-      }
-      return fetchProfileSyncState("create");
-    }
-
     function setProfileSyncEnrollmentBusy(busy) {
-      profileSyncKeyDownloadButton.disabled = busy;
+      profileSyncKeyDownloadButton.setAttribute("aria-disabled", busy ? "true" : "false");
       profileSyncKeyImportButton.disabled = busy;
     }
 
@@ -1495,29 +1068,18 @@
       return value;
     }
 
-    function triggerProfileSyncEnrollmentKeyDownload(state) {
+    function updateProfileSyncDownloadHref(state) {
       const targetUrl = profileSyncUrl("key/export", { download: "1" });
-      profileSyncStatus.textContent = `Saving ${enrollmentKeyFilename(state)}...`;
-      window.location.href = slateDownloadUrl(targetUrl, enrollmentKeyFilename(state));
+      profileSyncKeyDownloadButton.href = slateDownloadUrl(targetUrl, enrollmentKeyFilename(state));
     }
 
-    function downloadProfileSyncEnrollmentKey() {
-      if (!window.fetch) {
-        triggerProfileSyncEnrollmentKeyDownload(null);
+    function downloadProfileSyncEnrollmentKey(event) {
+      if (profileSyncKeyDownloadButton.getAttribute("aria-disabled") === "true") {
+        event.preventDefault();
         return;
       }
-      setProfileSyncEnrollmentBusy(true);
-      profileSyncStatus.textContent = "Preparing enrollment key...";
-      fetchProfileSyncState("state").then(ensureProfileSyncKeyForDownload).then((state) => {
-        if (!state || state.last_error) {
-          setProfileSyncEnrollmentBusy(false);
-          return;
-        }
-        triggerProfileSyncEnrollmentKeyDownload(state);
-      }).catch((error) => {
-        setProfileSyncEnrollmentBusy(false);
-        setProfileSyncState({ last_error: String(error) });
-      });
+      updateProfileSyncDownloadHref(currentProfileSyncState);
+      profileSyncStatus.textContent = `Saving ${enrollmentKeyFilename(currentProfileSyncState)}...`;
     }
 
     function saveSettings() {

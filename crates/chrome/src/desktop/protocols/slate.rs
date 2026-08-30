@@ -2221,6 +2221,17 @@ mod tests {
         .unwrap();
 
         assert_eq!(filename.as_deref(), Some("key.json"));
+        let default_filename = profile_sync_key_download_filename_from_url(
+            &Url::parse(
+                "slate://download?url=slate%3A%2F%2Fsettings%2Fprofile-sync%2Fkey%2Fexport%3Fdownload%3D1",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            default_filename.as_deref(),
+            Some("slate-profile-enrollment-key-default.json")
+        );
         assert_eq!(
             profile_sync_key_download_filename_from_url(
                 &Url::parse(
@@ -2808,8 +2819,8 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-key-download\""));
         assert!(settings_page.contains("id=\"profile-sync-key-import\""));
         assert!(settings_page.contains("setProfileSyncEnrollmentBusy"));
-        assert!(settings_page.contains("Preparing enrollment key"));
-        assert!(settings_page.contains("Saving ${enrollmentKeyFilename(state)}"));
+        assert!(settings_page.contains("href=\"slate://download?url=slate%3A%2F%2Fsettings%2Fprofile-sync%2Fkey%2Fexport%3Fdownload%3D1\""));
+        assert!(settings_page.contains("Saving ${enrollmentKeyFilename(currentProfileSyncState)}"));
         assert!(settings_page.contains("Importing enrollment key"));
         assert!(settings_page.contains("created on download"));
         assert!(settings_page.contains("import needed"));
@@ -2817,14 +2828,16 @@ mod tests {
         assert!(settings_page.contains("profileSyncBoundedFileText"));
         assert!(settings_page.contains("Download enrollment key"));
         assert!(settings_page.contains("Import enrollment key"));
-        assert!(settings_page.contains("triggerProfileSyncEnrollmentKeyDownload"));
+        assert!(settings_page.contains("updateProfileSyncDownloadHref"));
         assert!(settings_page.contains("slateDownloadUrl(targetUrl"));
-        assert!(settings_page.contains("window.location.href = slateDownloadUrl"));
         assert!(settings_page.contains("download: \"1\""));
         assert!(settings_page.contains("chooseProfileSyncEnrollmentKey"));
         assert!(settings_page.contains("profileSyncEnrollmentKeyFile.click()"));
         assert!(settings_page.contains("Enrollment key"));
         assert!(!settings_page.contains("Local diagnostics"));
+        assert!(!settings_page.contains("Preparing enrollment key"));
+        assert!(!settings_page.contains("ensureProfileSyncKeyForDownload"));
+        assert!(!settings_page.contains("triggerProfileSyncEnrollmentKeyDownload"));
         assert!(!settings_page.contains("id=\"profile-sync-create\""));
         assert!(!settings_page.contains("Create local key"));
         assert!(!settings_page.contains("id=\"profile-sync-provider\""));
@@ -2855,25 +2868,26 @@ mod tests {
         assert!(!settings_page.contains("id=\"profile-sync-enrollment\""));
         assert!(!settings_page.contains("id=\"profile-sync-handoff-create\""));
         assert!(!settings_page.contains("id=\"profile-sync-handoff\""));
-        assert!(settings_page.contains("Enabled domains"));
         assert!(settings_page.contains("Local sync"));
-        assert!(settings_page.contains("Last check"));
-        assert!(settings_page.contains("profileSyncEnabledAppDomainStatus"));
-        assert!(settings_page.contains("profileSyncAppDomainHeadStatus"));
-        assert!(settings_page.contains("profileSyncContentAppDomainStatus"));
-        assert!(settings_page.contains("profileSyncActiveProviderStatus"));
-        assert!(settings_page.contains("profileSyncAuthorizedProviderStatus"));
-        assert!(settings_page.contains("profileSyncDiscoveryStatus"));
-        assert!(settings_page.contains("profileSyncHealthStatus"));
-        assert!(settings_page.contains("profileSyncIssueStatus"));
-        assert!(settings_page.contains("Issue details"));
-        assert!(settings_page.contains("profileSyncIssueDetails"));
-        assert!(settings_page.contains("profileSyncLatestIssueRun"));
-        assert!(settings_page.contains("candidates.push(state.last_two_device_trial)"));
-        assert!(settings_page.contains("discovery_rejections"));
-        assert!(settings_page.contains("retention_provider_selection_issues"));
-        assert!(settings_page.contains("stored_provider_metadata_issues"));
-        assert!(settings_page.contains("profileSyncIssueLabel"));
+        assert!(settings_page.contains("profileSyncLocalStatus"));
+        assert!(!settings_page.contains("Enabled domains"));
+        assert!(!settings_page.contains("Last check"));
+        assert!(!settings_page.contains("profileSyncEnabledAppDomainStatus"));
+        assert!(!settings_page.contains("profileSyncAppDomainHeadStatus"));
+        assert!(!settings_page.contains("profileSyncContentAppDomainStatus"));
+        assert!(!settings_page.contains("profileSyncActiveProviderStatus"));
+        assert!(!settings_page.contains("profileSyncAuthorizedProviderStatus"));
+        assert!(!settings_page.contains("profileSyncDiscoveryStatus"));
+        assert!(!settings_page.contains("profileSyncHealthStatus"));
+        assert!(!settings_page.contains("profileSyncIssueStatus"));
+        assert!(!settings_page.contains("Issue details"));
+        assert!(!settings_page.contains("profileSyncIssueDetails"));
+        assert!(!settings_page.contains("profileSyncLatestIssueRun"));
+        assert!(!settings_page.contains("candidates.push(state.last_two_device_trial)"));
+        assert!(!settings_page.contains("discovery_rejections"));
+        assert!(!settings_page.contains("retention_provider_selection_issues"));
+        assert!(!settings_page.contains("stored_provider_metadata_issues"));
+        assert!(!settings_page.contains("profileSyncIssueLabel"));
         assert!(settings_page.contains("slate://settings/profile-sync/"));
         assert!(settings_page.contains("slate-profile-enrollment"));
         assert!(!settings_page.contains("slate-sync-secret.json"));
