@@ -9,6 +9,7 @@ jobs=${CARGO_BUILD_JOBS:-1}
 threads=${SLATE_TEST_THREADS:-1}
 memory_mb=${SLATE_BUILD_MEMORY_LIMIT_MB:-2048}
 check_chrome=${SLATE_PROFILE_SYNC_CHECK_CHROME:-0}
+run_tests=${SLATE_PROFILE_SYNC_BOUNDARY_RUN_TESTS:-1}
 
 export RUSTUP_HOME=${RUSTUP_HOME:-"$repo_root/.rustup"}
 export CARGO_HOME=${CARGO_HOME:-"$repo_root/.cargo"}
@@ -42,7 +43,7 @@ reject_protocol_model_leak() {
     file=$1
     pattern=$2
     message=$3
-    if rg -n "$pattern" "$file"; then
+    if rg -n -- "$pattern" "$file"; then
         printf '\nprofile-sync boundary violation: %s\n' "$message" >&2
         exit 1
     fi
@@ -52,7 +53,7 @@ require_text() {
     file=$1
     pattern=$2
     message=$3
-    if ! rg -q "$pattern" "$file"; then
+    if ! rg -q -- "$pattern" "$file"; then
         printf '\nprofile-sync boundary violation: %s\n' "$message" >&2
         printf 'missing pattern %s in %s\n' "$pattern" "$file" >&2
         exit 1
@@ -198,6 +199,18 @@ require_text \
     'broadwebd must expose an in-process framed client adapter for socketless IPC-boundary tests.'
 require_text \
     crates/broadwebd/src/service_frame.rs \
+    'pub fn dispatch_service_frame_request_over_stream' \
+    'broadwebd must keep service-frame client exchanges at a swappable Read/Write stream boundary.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'pub fn serve_one_service_frame_request_over_stream' \
+    'broadwebd must keep service-frame server dispatch at a swappable Read/Write stream boundary.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'pub struct InProcessServiceFrameStream' \
+    'broadwebd must keep an in-process stream shim so socketless tests exercise framed bytes without loopback sockets.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
     'impl BroadwebdClient for ServiceFrameBroadwebdClient' \
     'broadwebd framed client adapter must implement the normal client trait.'
 require_text \
@@ -236,6 +249,18 @@ require_text \
     crates/broadwebd/tests/peer_discovery_socket.rs \
     'SLATE_LOCAL_SOCKET_TESTS' \
     'local socket peer-discovery coverage must remain opt-in instead of binding sockets in default tests.'
+require_text \
+    crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
+    '--runtime-profile-sync' \
+    'manual broadwebd profile-sync probes must require an explicit flag before using runtime profile-sync backend configuration.'
+require_text \
+    scripts/profile-sync-lan-smoke.sh \
+    'SLATE_LAN_SMOKE_RUNTIME_PROFILE_SYNC' \
+    'LAN smoke helpers must keep runtime profile-sync backend selection opt-in.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    'SLATE_P2P_LAN_RUNTIME_PROFILE_SYNC' \
+    'P2P LAN smoke helpers must keep runtime profile-sync backend selection opt-in.'
 require_text \
     crates/broadwebd/src/lib.rs \
     'daemon_dispatches_profile_sync_through_service_request_envelope' \
@@ -717,7 +742,7 @@ reject_protocol_model_leak \
 reject_protocol_model_leak \
     crates/chrome/src/desktop/protocols/slate.rs \
     'settings/profile-sync/(import|device-request|enrollment)' \
-    'Slate settings profile-sync protocol must expose only the single enrollment-file handoff route, not raw key, device-request, or internal enrollment-bundle routes.'
+    'Slate settings profile-sync protocol must not expose obsolete raw import, device-request, or internal enrollment-bundle routes.'
 reject_protocol_model_leak \
     resources/resource_protocol/slate-settings.html \
     'id="profile-sync-handoff-create"' \
@@ -728,24 +753,24 @@ reject_protocol_model_leak \
     'Slate settings page must keep secret handoff bundle text out of the normal file-only enrollment UI.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'Download enrollment file' \
-    'Slate settings page must expose a single enrollment-file download action.'
+    'Download enrollment key' \
+    'Slate settings page must expose a single enrollment-key download action.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'id="profile-sync-handoff-import"' \
-    'Slate settings page must expose profile-sync enrollment-file import.'
+    'Slate settings page must expose profile-sync enrollment-key import.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'handoff/create' \
-    'Slate settings page must call the handoff create route.'
+    'key/export' \
+    'Slate settings page must call the enrollment-key export route.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'handoff/import' \
-    'Slate settings page must call the handoff import route.'
+    'key/import' \
+    'Slate settings page must call the enrollment-key import route.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES' \
-    'Slate settings page must bound enrollment file reads before importing through the protocol URL.'
+    'Slate settings page must bound enrollment key reads before importing through the protocol URL.'
 require_text \
     crates/chrome/src/desktop/settings_watcher.rs \
     'AppSyncDomainWatcher::new' \
@@ -940,24 +965,54 @@ require_text \
     'Slate settings page must expose protocol-neutral profile-sync issue details.'
 require_text \
     resources/resource_protocol/slate-settings.html \
+    'Download enrollment key' \
+    'Slate settings page must expose one enrollment key export action.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Import enrollment key' \
+    'Slate settings page must expose one enrollment key import action.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Local diagnostics' \
+    'Slate settings page must keep local profile-sync diagnostics behind an expandable section.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'settings/profile-sync/key/export' \
+    'Slate settings must keep an explicit profile-sync enrollment-key export route.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'settings/profile-sync/key/import' \
+    'Slate settings must keep an explicit profile-sync enrollment-key import route.'
+require_text \
+    crates/chrome/src/desktop/protocols/slate.rs \
+    'to_json_with_key_export' \
+    'Slate settings must expose secret-bearing enrollment-key JSON only through an explicit export response.'
+reject_protocol_model_leak \
+    resources/resource_protocol/slate-settings.html \
     'profile-sync-handoff-device' \
-    'Slate settings page must expose one target-device field for enrollment file handoff.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'Download enrollment file' \
-    'Slate settings page must expose one enrollment file export action.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'Import enrollment file' \
-    'Slate settings page must expose one enrollment file import action.'
+    'Slate settings profile-sync UI must not require a target device id for the simple enrollment-key flow.'
 reject_protocol_model_leak \
     resources/resource_protocol/slate-settings.html \
     'id="profile-sync-(secret|download|import|device-request|enrollment)([^a-zA-Z_-]|")' \
-    'Settings Profile Sync Preview must not expose obsolete internal key, device-request, or enrollment-bundle file controls.'
+    'Settings Profile Sync must not expose obsolete internal key, device-request, or enrollment-bundle file controls.'
 reject_protocol_model_leak \
     resources/resource_protocol/slate-settings.html \
     'slate-sync-secret\.json|Download internal key file|Import internal key|internal device request|internal enrollment bundle' \
-    'Settings Profile Sync Preview should present a single enrollment-file handoff, not internal sync artifacts.'
+    'Settings Profile Sync should present a simple enrollment-key flow, not internal sync artifacts.'
+
+case "$run_tests" in
+    1 | true | yes)
+        ;;
+    0 | false | no)
+        printf '\n==> profile-sync boundary tests\n'
+        printf 'skipped by SLATE_PROFILE_SYNC_BOUNDARY_RUN_TESTS=%s after static boundary checks.\n' "$run_tests"
+        exit 0
+        ;;
+    *)
+        printf 'SLATE_PROFILE_SYNC_BOUNDARY_RUN_TESTS must be 1, true, yes, 0, false, or no\n' >&2
+        exit 2
+        ;;
+esac
 
 run_test slate-apps sync_domains
 run_test slate-storage rail_app_sync_domains_match_seeded_storage_domains

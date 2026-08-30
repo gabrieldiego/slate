@@ -1821,6 +1821,10 @@ Current baseline:
   preflight, and local-trial controls remain available under an expandable
   local diagnostics section for development without crowding the normal
   user-facing flow.
+- The profile-sync boundary script now has a static-only mode for constrained
+  development runs. With `SLATE_PROFILE_SYNC_BOUNDARY_RUN_TESTS=0`, it verifies
+  the socketless service-frame stream boundary, explicit runtime probe opt-in,
+  and simple enrollment-key UI without starting the long Cargo test list.
 - The profile-sync scheduler retention-provider boundary now takes
   `BroadwebdClient` trait objects instead of concrete `BroadwebDaemon`
   references. Fixture and protocol materializers can still hand over in-process
