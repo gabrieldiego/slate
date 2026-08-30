@@ -1892,6 +1892,10 @@ Current baseline:
   represented as deferred connector stubs that fail closed until their real
   protocol transports are implemented. This keeps local fixture modeling and
   future broadweb discovery records on the same adapter boundary.
+- The manual `slate-broadwebd-net-probe discover` harness now reports the
+  selected connector kind and can capture deferred p2p/IPNS/Iroh service
+  advertisements without connecting. The `discover-probe` path stays TCP-only
+  and fails closed for deferred endpoints until those connectors exist.
 - The Settings Profile Sync Preview now separates sync health from issue
   details. After the current-settings or local trial action, the page reports
   whether the latest local fixture run is healthy, still degraded, or recovered

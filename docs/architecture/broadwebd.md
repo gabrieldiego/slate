@@ -453,6 +453,11 @@ multiaddrs map to a deferred libp2p connector, `/ipns/...` maps to IPNS, and
 `iroh-node:...` or `/iroh-node/...` maps to Iroh. `DeferredServiceFrameConnector`
 is a fail-closed stub for those endpoint families until the real protocol
 connectors exist.
+The manual `slate-broadwebd-net-probe discover` command reports the selected
+connector kind and can capture deferred p2p/IPNS/Iroh endpoint advertisements
+without opening a service connection. `discover-probe` remains TCP-only and
+fails closed for deferred endpoints, so manual smoke tests do not accidentally
+treat protocol-discovery metadata as a connectable socket.
 The codec now also has length-prefixed read/write helpers and an opt-in
 `TcpServiceFrameBroadwebdClient` for manual LAN smoke tests. This TCP client is
 not the default Slate-to-broadwebd IPC design and accepts only literal socket

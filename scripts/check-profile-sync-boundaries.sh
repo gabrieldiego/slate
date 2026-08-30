@@ -411,6 +411,18 @@ require_text \
     'manual broadwebd discovery probes must be able to carry a checked discovered peer into an exact follow-up probe.'
 require_text \
     crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
+    'connector=\{\}' \
+    'manual broadwebd discovery probes must report the selected service-frame connector kind.'
+require_text \
+    crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
+    'discovered_peer_endpoint_captures_deferred_p2p_without_tcp_probe' \
+    'manual broadwebd discovery probes must capture p2p-shaped endpoints without trying to open TCP.'
+require_text \
+    crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
+    'only TCP probing is implemented in this harness' \
+    'manual broadwebd discover-probe must fail closed for deferred p2p/IPNS/Iroh endpoints.'
+require_text \
+    crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
     '--discovery-membership-epoch' \
     'manual broadwebd discovery probes must expose membership epoch metadata for generated advertisements.'
 require_text \

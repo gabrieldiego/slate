@@ -5,9 +5,10 @@ use slate_broadwebd::{
     ProfileSyncObjectRequest, ProfileSyncPeerAdvertisement, ProfileSyncProfileRequest,
     ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
     ProfileSyncRootHealthRequest, ProfileSyncRootRequest, ProfileSyncRootUpdate,
-    ProfileSyncRuntimeConfig, ResourceBudget, ServiceFrameCodec, TcpServiceFrameBroadwebdClient,
-    default_session_status_reporter, discover_profile_sync_peers,
+    ProfileSyncRuntimeConfig, ResourceBudget, ServiceFrameCodec, ServiceFrameConnectorKind,
+    TcpServiceFrameBroadwebdClient, default_session_status_reporter, discover_profile_sync_peers,
     respond_to_profile_sync_peer_solicit, serve_one_service_frame_request_over_stream,
+    service_frame_connector_kind_for_endpoint,
 };
 use std::env;
 use std::fs;
@@ -308,6 +309,12 @@ struct DiscoverProbeArgs {
     require_signed_discovery: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct DiscoveredPeerEndpoint {
+    connector_kind: ServiceFrameConnectorKind,
+    endpoint: String,
+}
+
 impl DiscoverProbeArgs {
     fn parse(args: impl Iterator<Item = String>) -> Result<Self, String> {
         let mut discovery_target = None;
@@ -507,21 +514,20 @@ fn run_discover(args: DiscoverArgs) -> Result<(), String> {
     )
     .map_err(|error| format!("discover profile-sync peers: {error}"))?;
     let peer = select_discovered_peer(peers, args.require_signed_discovery)?;
-    let connect_addr = peer
-        .connect_addr()
-        .map_err(|error| format!("resolve discovered peer connect address: {error}"))?;
+    let endpoint = discovered_peer_endpoint(&peer)?;
     eprintln!(
-        "DISCOVERED_PROFILE_SYNC_PEER node_id={} provider_id={} membership_epoch={} signed={} source={} connect={}",
+        "DISCOVERED_PROFILE_SYNC_PEER node_id={} provider_id={} membership_epoch={} signed={} source={} connector={} connect={}",
         peer.advertisement.node_id,
         peer.advertisement.provider_id,
         peer.advertisement.membership_epoch,
         peer.advertisement.identity_signature.is_some(),
         peer.source_addr,
-        connect_addr
+        endpoint.connector_kind.as_str(),
+        endpoint.endpoint
     );
     write_discovered_peer_outputs(
         &peer,
-        connect_addr.as_str(),
+        endpoint.endpoint.as_str(),
         args.advertisement_output.as_ref(),
         args.connect_output.as_ref(),
     )
@@ -537,20 +543,19 @@ fn run_discover_probe(args: DiscoverProbeArgs) -> Result<(), String> {
     )
     .map_err(|error| format!("discover profile-sync peers: {error}"))?;
     let peer = select_discovered_peer(peers, args.require_signed_discovery)?;
-    let connect_addr = peer
-        .connect_addr()
-        .map_err(|error| format!("resolve discovered peer connect address: {error}"))?;
+    let endpoint = tcp_discovered_peer_endpoint(&peer)?;
     println!(
-        "DISCOVERED_PROFILE_SYNC_PEER node_id={} provider_id={} membership_epoch={} signed={} source={} connect={}",
+        "DISCOVERED_PROFILE_SYNC_PEER node_id={} provider_id={} membership_epoch={} signed={} source={} connector={} connect={}",
         peer.advertisement.node_id,
         peer.advertisement.provider_id,
         peer.advertisement.membership_epoch,
         peer.advertisement.identity_signature.is_some(),
         peer.source_addr,
-        connect_addr
+        endpoint.connector_kind.as_str(),
+        endpoint.endpoint
     );
     let client = TcpServiceFrameBroadwebdClient::with_codec(
-        connect_addr,
+        endpoint.endpoint,
         ServiceFrameCodec::new(args.frame_max_bytes),
     )
     .with_timeout(Duration::from_secs(12));
@@ -609,6 +614,39 @@ fn select_discovered_peer(
                 "discover-probe found no profile-sync peers".to_string()
             }
         })
+}
+
+fn discovered_peer_endpoint(
+    peer: &DiscoveredProfileSyncPeer,
+) -> Result<DiscoveredPeerEndpoint, String> {
+    let connector_kind =
+        service_frame_connector_kind_for_endpoint(peer.advertisement.service_addr.as_str())
+            .map_err(|error| format!("classify discovered peer service endpoint: {error}"))?;
+    let endpoint = if connector_kind == ServiceFrameConnectorKind::Tcp {
+        peer.connect_addr()
+            .map_err(|error| format!("resolve discovered peer connect address: {error}"))?
+    } else {
+        peer.advertisement.service_addr.clone()
+    };
+    Ok(DiscoveredPeerEndpoint {
+        connector_kind,
+        endpoint,
+    })
+}
+
+fn tcp_discovered_peer_endpoint(
+    peer: &DiscoveredProfileSyncPeer,
+) -> Result<DiscoveredPeerEndpoint, String> {
+    let endpoint = discovered_peer_endpoint(peer)?;
+    if endpoint.connector_kind == ServiceFrameConnectorKind::Tcp {
+        return Ok(endpoint);
+    }
+
+    Err(format!(
+        "discover-probe selected a {} service-frame endpoint {}; only TCP probing is implemented in this harness",
+        endpoint.connector_kind.as_str(),
+        endpoint.endpoint
+    ))
 }
 
 fn server_discovery_advertisement(
@@ -1047,6 +1085,57 @@ mod tests {
         assert_eq!(
             args.connect_output.as_deref(),
             Some(std::path::Path::new("connect.txt"))
+        );
+    }
+
+    #[test]
+    fn discovered_peer_endpoint_rewrites_unspecified_tcp_for_manual_connect() {
+        let peer = DiscoveredProfileSyncPeer {
+            advertisement: ProfileSyncPeerAdvertisement::new(
+                "manual-net",
+                "node-a",
+                "provider-a",
+                "/ip4/0.0.0.0/tcp/9443",
+                1,
+            )
+            .expect("TCP multiaddr advertisement"),
+            source_addr: "192.0.2.55:47883".parse().unwrap(),
+        };
+
+        let endpoint = discovered_peer_endpoint(&peer).expect("discovered endpoint");
+
+        assert_eq!(endpoint.connector_kind, ServiceFrameConnectorKind::Tcp);
+        assert_eq!(endpoint.endpoint, "/ip4/192.0.2.55/tcp/9443");
+        assert_eq!(
+            tcp_discovered_peer_endpoint(&peer)
+                .expect("TCP endpoint")
+                .endpoint,
+            "/ip4/192.0.2.55/tcp/9443"
+        );
+    }
+
+    #[test]
+    fn discovered_peer_endpoint_captures_deferred_p2p_without_tcp_probe() {
+        let peer = DiscoveredProfileSyncPeer {
+            advertisement: ProfileSyncPeerAdvertisement::new(
+                "manual-net",
+                "node-a",
+                "provider-a",
+                "/dnsaddr/bootstrap.libp2p.io/p2p/peer-a",
+                1,
+            )
+            .expect("p2p multiaddr advertisement"),
+            source_addr: "192.0.2.55:47883".parse().unwrap(),
+        };
+
+        let endpoint = discovered_peer_endpoint(&peer).expect("deferred endpoint");
+
+        assert_eq!(endpoint.connector_kind, ServiceFrameConnectorKind::Libp2p);
+        assert_eq!(endpoint.endpoint, "/dnsaddr/bootstrap.libp2p.io/p2p/peer-a");
+        assert!(
+            tcp_discovered_peer_endpoint(&peer)
+                .expect_err("deferred endpoint cannot be probed over TCP")
+                .contains("only TCP probing is implemented")
         );
     }
 
