@@ -2828,8 +2828,12 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-details\""));
         assert!(settings_page.contains("id=\"profile-sync-enrollment-key-file\""));
         assert!(settings_page.contains("id=\"profile-sync-key-download\""));
+        assert!(settings_page.contains("aria-disabled=\"true\""));
         assert!(settings_page.contains("id=\"profile-sync-key-import\""));
         assert!(settings_page.contains("setProfileSyncEnrollmentBusy"));
+        assert!(settings_page.contains("canExportProfileSyncKey"));
+        assert!(settings_page.contains("profileSyncExportBlockedMessage"));
+        assert!(settings_page.contains("Import enrollment key before downloading it again"));
         assert!(settings_page.contains("href=\"slate://download?url=slate%3A%2F%2Fsettings%2Fprofile-sync%2Fkey%2Fexport%3Fdownload%3D1\""));
         assert!(settings_page.contains("Saving ${enrollmentKeyFilename(currentProfileSyncState)}"));
         assert!(settings_page.contains("Importing enrollment key"));

@@ -361,6 +361,7 @@
         <a
           id="profile-sync-key-download"
           class="button primary"
+          aria-disabled="true"
           href="slate://download?url=slate%3A%2F%2Fsettings%2Fprofile-sync%2Fkey%2Fexport%3Fdownload%3D1"
         >Download enrollment key</a>
         <button id="profile-sync-key-import">Import enrollment key</button>
@@ -915,6 +916,23 @@
       return "created on download";
     }
 
+    function canExportProfileSyncKey(state) {
+      if (!state) {
+        return false;
+      }
+      return Boolean(state.has_secret || !state.metadata_ready);
+    }
+
+    function profileSyncExportBlockedMessage(state) {
+      if (!state) {
+        return "Profile sync status is unavailable";
+      }
+      if (state.metadata_ready && !state.has_secret) {
+        return "Import enrollment key before downloading it again";
+      }
+      return "";
+    }
+
     function profileSyncLocalStatus(state) {
       const localSync = state && state.local_sync ? state.local_sync : null;
       if (localSync && localSync.ready_for_manual_sync) {
@@ -947,6 +965,7 @@
     function setProfileSyncState(state) {
       currentProfileSyncState = state;
       updateProfileSyncDownloadHref(state);
+      updateProfileSyncDownloadState(state, false);
       if (!state) {
         profileSyncStatus.textContent = "Unavailable";
         renderProfileSyncDetails(null);
@@ -993,7 +1012,7 @@
     }
 
     function setProfileSyncEnrollmentBusy(busy) {
-      profileSyncKeyDownloadButton.setAttribute("aria-disabled", busy ? "true" : "false");
+      updateProfileSyncDownloadState(currentProfileSyncState, busy);
       profileSyncKeyImportButton.disabled = busy;
     }
 
@@ -1073,9 +1092,20 @@
       profileSyncKeyDownloadButton.href = slateDownloadUrl(targetUrl, enrollmentKeyFilename(state));
     }
 
+    function updateProfileSyncDownloadState(state, busy) {
+      const blockedMessage = profileSyncExportBlockedMessage(state);
+      const disabled = busy || !canExportProfileSyncKey(state);
+      profileSyncKeyDownloadButton.setAttribute("aria-disabled", disabled ? "true" : "false");
+      profileSyncKeyDownloadButton.title = busy ? "" : blockedMessage;
+    }
+
     function downloadProfileSyncEnrollmentKey(event) {
       if (profileSyncKeyDownloadButton.getAttribute("aria-disabled") === "true") {
         event.preventDefault();
+        const message = profileSyncExportBlockedMessage(currentProfileSyncState);
+        if (message) {
+          profileSyncStatus.textContent = message;
+        }
         return;
       }
       updateProfileSyncDownloadHref(currentProfileSyncState);

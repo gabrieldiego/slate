@@ -172,11 +172,12 @@ First-use download may create and activate a local key when no sync metadata
 exists yet. Devices that only have sync metadata fail closed because
 `slate-settings.db` intentionally does not store the root secret. The page does
 not display or cache the raw secret-bearing JSON in a normal text control. The
-download control is a direct `slate://download` link to the internal key export
-route, so exporting an available key does not depend on JavaScript fetch support
-inside the settings page. The older target-specific handoff bundle remains a
-lower-level fixture primitive, and QR-code or unbound enrollment variants remain
-future design work.
+download control is disabled in that metadata-only state and tells the user to
+import the enrollment key before exporting it again. Otherwise, it is a direct
+`slate://download` link to the internal key export route, so exporting an
+available key does not depend on JavaScript fetch support inside the settings
+page. The older target-specific handoff bundle remains a lower-level fixture
+primitive, and QR-code or unbound enrollment variants remain future design work.
 
 `slate-settings.db` now has the first local persistence primitive for that
 authority set: signed membership records are stored by profile, record id,

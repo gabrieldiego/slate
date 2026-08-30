@@ -1169,6 +1169,14 @@ require_text \
     'Slate settings page must expose one enrollment key export action.'
 require_text \
     resources/resource_protocol/slate-settings.html \
+    'canExportProfileSyncKey' \
+    'Slate settings page must disable enrollment-key export when no exportable key is loaded.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Import enrollment key before downloading it again' \
+    'Slate settings page must explain metadata-only profile sync export blocking.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
     'Import enrollment key' \
     'Slate settings page must expose one enrollment key import action.'
 reject_protocol_model_leak \
