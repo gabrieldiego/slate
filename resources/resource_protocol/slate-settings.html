@@ -1182,7 +1182,10 @@
         (Number.isFinite(run.stored_provider_metadata_issue_count) ?
           run.stored_provider_metadata_issue_count :
           0);
-      const issueCount = rootIssueCount + retentionIssueCount + providerIssueCount;
+      const discoveryIssueCount = Number.isFinite(run.discovery_rejected_peer_count) ?
+        run.discovery_rejected_peer_count :
+        0;
+      const issueCount = rootIssueCount + retentionIssueCount + providerIssueCount + discoveryIssueCount;
       if (issueCount > 0) {
         return `${issueCount} sync ${issueCount === 1 ? "issue" : "issues"}`;
       }
@@ -1223,6 +1226,27 @@
       return details.join("; ");
     }
 
+    function profileSyncDiscoveryStatus(state) {
+      const run = profileSyncLatestIssueRun(state);
+      if (!run) {
+        return "not checked";
+      }
+      const trusted = Number.isFinite(run.discovery_trusted_peer_count) ?
+        run.discovery_trusted_peer_count :
+        0;
+      const selected = Number.isFinite(run.discovery_selected_retention_provider_count) ?
+        run.discovery_selected_retention_provider_count :
+        0;
+      const rejected = Number.isFinite(run.discovery_rejected_peer_count) ?
+        run.discovery_rejected_peer_count :
+        0;
+      const details = [`${trusted} trusted`, `${selected} selected`];
+      if (rejected > 0) {
+        details.push(`${rejected} rejected`);
+      }
+      return details.join("; ");
+    }
+
     function profileSyncIssueLabel(value, fallback) {
       return profileSyncText(value, fallback).replace(/_/g, " ");
     }
@@ -1242,6 +1266,9 @@
         .concat(Array.isArray(run.stored_provider_metadata_issues) ?
           run.stored_provider_metadata_issues :
           []) :
+        [];
+      const discoveryRejections = run && Array.isArray(run.discovery_rejections) ?
+        run.discovery_rejections :
         [];
       const rendered = [];
       rootIssues.forEach((issue) => {
@@ -1265,6 +1292,13 @@
         const kind = profileSyncIssueLabel(issue && issue.kind, "issue");
         const providerId = profileSyncText(issue && issue.provider_id, "unknown provider");
         rendered.push(`${category} ${kind} on ${providerId}`);
+      });
+      discoveryRejections.forEach((rejection) => {
+        const reason = profileSyncIssueLabel(rejection && rejection.reason, "rejected");
+        const protocol = profileSyncText(rejection && rejection.protocol, "discovery");
+        const nodeId = profileSyncText(rejection && rejection.node_id, "unknown node");
+        const providerId = profileSyncText(rejection && rejection.provider_id, "unknown provider");
+        rendered.push(`discovery ${reason} from ${nodeId} via ${protocol} on ${providerId}`);
       });
       if (rendered.length === 0) {
         return "";
@@ -1296,6 +1330,7 @@
         ["Current sync", profileSyncCurrentSyncStatus(state)],
         ["Local trial", profileSyncLocalTrialStatus(state)],
         ["Two-device trial", profileSyncTwoDeviceTrialStatus(state)],
+        ["Discovery", profileSyncDiscoveryStatus(state)],
         ["Endpoint status", profileSyncEndpointMaterializationStatus(state)],
         ["Sync health", profileSyncHealthStatus(state)],
         ["Sync issues", profileSyncIssueStatus(state)]

@@ -5,7 +5,9 @@ use core::fmt;
 #[cfg(feature = "local-preview-fixtures")]
 use slate_broadwebd::BroadwebDaemon;
 #[cfg(feature = "local-preview-fixtures")]
-use slate_broadwebd::test_fixtures::LocalProfileSyncFixture;
+use slate_broadwebd::test_fixtures::{
+    LocalProfileSyncFixture, SimulatedProfileSyncPeerDiscoveryNetwork,
+};
 use slate_broadwebd::{
     BroadwebdClient, BroadwebdError, IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
     ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
@@ -23,7 +25,10 @@ use slate_broadwebd::{
     parse_in_process_profile_sync_fixture_endpoint_ref,
 };
 #[cfg(feature = "local-preview-fixtures")]
-use slate_broadwebd::{PluginRegistry, ProfileSyncProviderRoles, ResourceBudget};
+use slate_broadwebd::{
+    DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE, PluginRegistry, ProfileSyncPeerAdvertisement,
+    ProfileSyncPeerDiscoveryProtocol, ProfileSyncProviderRoles, ResourceBudget,
+};
 use slate_routing::{Multiaddr, RoutingMode, RoutingPlan};
 #[cfg(feature = "local-preview-fixtures")]
 use slate_storage::{
@@ -105,6 +110,9 @@ pub const LOCAL_SETTINGS_SYNC_PREVIEW_REMOTE_SETTING_KEY: &str =
     "profile_sync.preview.two_device_last_run";
 #[cfg(feature = "local-preview-fixtures")]
 pub const LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID: &str = "local-preview-receiver";
+#[cfg(feature = "local-preview-fixtures")]
+const LOCAL_SETTINGS_SYNC_PREVIEW_DISCOVERY_SERVICE_ADDR: &str =
+    "/dnsaddr/profile-sync-preview.local/tcp/443/wss/p2p/local-preview-provider";
 pub const PROFILE_SYNC_DEFERRED_PROVIDER_PROTOCOL: &str = "provider";
 pub const PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL: &str = "iroh-node";
 const PROFILE_SYNC_PROVIDER_MULTIADDR_PRIVACY_BOUNDARY: &str =
@@ -126,6 +134,26 @@ pub struct LocalSettingsSyncProviderIssueSummary {
     pub category: String,
     pub provider_id: String,
     pub kind: String,
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LocalSettingsSyncDiscoveryRejectionSummary {
+    pub protocol: String,
+    pub namespace: String,
+    pub node_id: String,
+    pub provider_id: String,
+    pub reason: String,
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct LocalSettingsSyncDiscoverySummary {
+    pub trusted_peer_count: usize,
+    pub rejected_peer_count: usize,
+    pub selected_retention_provider_count: usize,
+    pub retention_provider_selection_issue_count: usize,
+    pub rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
 }
 
 #[cfg(feature = "local-preview-fixtures")]
@@ -174,6 +202,19 @@ impl LocalSettingsSyncProviderIssueSummary {
 }
 
 #[cfg(feature = "local-preview-fixtures")]
+impl LocalSettingsSyncDiscoveryRejectionSummary {
+    fn from_rejection(rejection: &RejectedProfileSyncPeerDiscoveryCandidate) -> Self {
+        Self {
+            protocol: rejection.protocol.as_str().to_string(),
+            namespace: rejection.namespace.clone(),
+            node_id: rejection.node_id.clone(),
+            provider_id: rejection.provider_id.clone(),
+            reason: profile_sync_peer_discovery_trust_rejection_name(rejection.reason).to_string(),
+        }
+    }
+}
+
+#[cfg(feature = "local-preview-fixtures")]
 impl LocalSettingsSyncRetentionIssueSummary {
     fn from_issue(issue: SettingsSyncCycleProviderRetentionIssue) -> Self {
         Self {
@@ -182,6 +223,17 @@ impl LocalSettingsSyncRetentionIssueSummary {
             kind: settings_sync_cycle_provider_retention_issue_kind_name(issue.kind).to_string(),
         }
     }
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+fn local_settings_sync_discovery_rejection_summaries(
+    report: &TrustedProfileSyncPeerDiscoveryReport,
+) -> Vec<LocalSettingsSyncDiscoveryRejectionSummary> {
+    report
+        .rejected_peers
+        .iter()
+        .map(LocalSettingsSyncDiscoveryRejectionSummary::from_rejection)
+        .collect()
 }
 
 #[cfg(feature = "local-preview-fixtures")]
@@ -285,6 +337,36 @@ fn settings_sync_stored_provider_metadata_issue_kind_name(
 }
 
 #[cfg(feature = "local-preview-fixtures")]
+fn profile_sync_peer_discovery_trust_rejection_name(
+    reason: ProfileSyncPeerDiscoveryTrustRejection,
+) -> &'static str {
+    match reason {
+        ProfileSyncPeerDiscoveryTrustRejection::WrongNetwork => "wrong_network",
+        ProfileSyncPeerDiscoveryTrustRejection::LocalDevice => "local_device",
+        ProfileSyncPeerDiscoveryTrustRejection::MissingProfileSyncServiceFrameCapability => {
+            "missing_profile_sync_service_frame_capability"
+        }
+        ProfileSyncPeerDiscoveryTrustRejection::UnknownDevicePublicKey => {
+            "unknown_device_public_key"
+        }
+        ProfileSyncPeerDiscoveryTrustRejection::UntrustedDevicePublicKey => {
+            "untrusted_device_public_key"
+        }
+        ProfileSyncPeerDiscoveryTrustRejection::MissingSignedIdentity => "missing_signed_identity",
+        ProfileSyncPeerDiscoveryTrustRejection::SignatureDeviceMismatch => {
+            "signature_device_mismatch"
+        }
+        ProfileSyncPeerDiscoveryTrustRejection::SignaturePublicKeyMismatch => {
+            "signature_public_key_mismatch"
+        }
+        ProfileSyncPeerDiscoveryTrustRejection::SignerMembershipEpochTooNew => {
+            "signer_membership_epoch_too_new"
+        }
+        ProfileSyncPeerDiscoveryTrustRejection::InvalidSignature => "invalid_signature",
+    }
+}
+
+#[cfg(feature = "local-preview-fixtures")]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalSettingsSyncPreviewCycleReport {
     pub profile: String,
@@ -296,6 +378,11 @@ pub struct LocalSettingsSyncPreviewCycleReport {
     pub ready_for_manual_sync: bool,
     pub blocked_reason: Option<String>,
     pub pulled_membership_application_count: usize,
+    pub discovery_trusted_peer_count: usize,
+    pub discovery_rejected_peer_count: usize,
+    pub discovery_selected_retention_provider_count: usize,
+    pub discovery_retention_provider_selection_issue_count: usize,
+    pub discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     pub selected_retention_provider_count: usize,
     pub materialized_retention_provider_count: usize,
     pub retained_provider_count: usize,
@@ -331,6 +418,11 @@ pub struct LocalSettingsSyncCurrentCycleReport {
     pub ready_for_manual_sync: bool,
     pub blocked_reason: Option<String>,
     pub pulled_membership_application_count: usize,
+    pub discovery_trusted_peer_count: usize,
+    pub discovery_rejected_peer_count: usize,
+    pub discovery_selected_retention_provider_count: usize,
+    pub discovery_retention_provider_selection_issue_count: usize,
+    pub discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     pub selected_retention_provider_count: usize,
     pub materialized_retention_provider_count: usize,
     pub retained_provider_count: usize,
@@ -373,6 +465,11 @@ pub struct LocalSettingsSyncTwoDevicePreviewCycleReport {
     pub receiver_device_request_device_id: String,
     pub receiver_enrollment_bundle_record_count: usize,
     pub receiver_pulled_membership_application_count: usize,
+    pub discovery_trusted_peer_count: usize,
+    pub discovery_rejected_peer_count: usize,
+    pub discovery_selected_retention_provider_count: usize,
+    pub discovery_retention_provider_selection_issue_count: usize,
+    pub discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     pub receiver_applied_setting_count: usize,
     pub receiver_published_step_count: usize,
     pub receiver_received_value: Option<String>,
@@ -458,6 +555,21 @@ impl From<BroadwebdError> for LocalSettingsSyncPreviewError {
 impl From<ProfileSyncCycleWithHealthError> for LocalSettingsSyncPreviewError {
     fn from(error: ProfileSyncCycleWithHealthError) -> Self {
         Self::Cycle(error)
+    }
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+impl From<ProfileSyncPeerAdvertisementSignatureError> for LocalSettingsSyncPreviewError {
+    fn from(error: ProfileSyncPeerAdvertisementSignatureError) -> Self {
+        match error {
+            ProfileSyncPeerAdvertisementSignatureError::Broadwebd(error) => Self::Broadwebd(error),
+            ProfileSyncPeerAdvertisementSignatureError::SyncObject(error) => {
+                Self::SyncObject(error)
+            }
+            ProfileSyncPeerAdvertisementSignatureError::SignerNodeMismatch { .. } => {
+                Self::Broadwebd(BroadwebdError::Request(error.to_string()))
+            }
+        }
     }
 }
 
@@ -8789,6 +8901,11 @@ struct LocalSettingsSyncFixtureCycleSummary {
     ready_for_manual_sync: bool,
     blocked_reason: Option<String>,
     pulled_membership_application_count: usize,
+    discovery_trusted_peer_count: usize,
+    discovery_rejected_peer_count: usize,
+    discovery_selected_retention_provider_count: usize,
+    discovery_retention_provider_selection_issue_count: usize,
+    discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     selected_retention_provider_count: usize,
     materialized_retention_provider_count: usize,
     retained_provider_count: usize,
@@ -8844,6 +8961,70 @@ fn prepare_local_settings_sync_fixture(
 }
 
 #[cfg(feature = "local-preview-fixtures")]
+fn local_settings_sync_preview_discovery_summary(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    sync_secret: &SlateSyncSecret,
+    preparation: &LocalSettingsSyncFixturePreparation,
+    config: &SettingsSyncSchedulerConfig,
+    device_daemon: &dyn BroadwebdClient,
+    provider_daemon: &dyn BroadwebdClient,
+) -> Result<LocalSettingsSyncDiscoverySummary, LocalSettingsSyncPreviewError> {
+    let discovery_network = SimulatedProfileSyncPeerDiscoveryNetwork::new();
+    let discovery_provider = discovery_network.provider();
+    let provider_signer = sync_secret.derive_profile_sync_device_signer(
+        profile,
+        DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+        DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+    )?;
+    let advertisement = sign_profile_sync_peer_advertisement(
+        ProfileSyncPeerAdvertisement::new(
+            LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID,
+            provider_signer.device_id(),
+            DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+            LOCAL_SETTINGS_SYNC_PREVIEW_DISCOVERY_SERVICE_ADDR,
+            1,
+        )?,
+        &provider_signer,
+    )?;
+    discovery_provider.publish_profile_sync_peer(
+        ProfileSyncPeerDiscoveryProtocol::LocalSimulation,
+        DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+        advertisement,
+    )?;
+    let discovery_query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
+        LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID,
+        preparation.local_device_id.as_str(),
+        [ProfileSyncPeerDiscoveryProtocol::LocalSimulation],
+        8,
+    )?;
+    let retention_provider_handles = [SettingsSyncRetentionProviderHandle::with_endpoint_ref(
+        DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
+        preparation.provider_endpoint_ref.as_str(),
+        provider_daemon,
+    )];
+    let plan = BroadwebdSettingsSyncScheduler::new(device_daemon)
+        .plan_once_discovering_trusted_retention_providers(
+            database,
+            config,
+            &preparation.signer,
+            &discovery_provider,
+            &discovery_query,
+            &retention_provider_handles,
+        )?;
+
+    Ok(LocalSettingsSyncDiscoverySummary {
+        trusted_peer_count: plan.trusted_peer_count(),
+        rejected_peer_count: plan.rejected_peer_count(),
+        selected_retention_provider_count: plan.selected_retention_provider_count(),
+        retention_provider_selection_issue_count: plan
+            .cycle
+            .retention_provider_selection_issue_count(),
+        rejections: local_settings_sync_discovery_rejection_summaries(&plan.discovery_report),
+    })
+}
+
+#[cfg(feature = "local-preview-fixtures")]
 fn run_local_settings_sync_fixture_cycle(
     database: &SlateProfileDatabase,
     profile: &str,
@@ -8885,6 +9066,15 @@ fn run_local_settings_sync_fixture_cycle(
         LOCAL_SETTINGS_SYNC_PREVIEW_ROOT_ID,
         policy.clone(),
     );
+    let discovery_summary = local_settings_sync_preview_discovery_summary(
+        database,
+        profile,
+        sync_secret,
+        &preparation,
+        &config,
+        &device_daemon,
+        &provider_daemon,
+    )?;
     let run = BroadwebdSettingsSyncScheduler::new(&device_daemon)
         .run_once_with_membership_log_and_stored_in_process_fixture_retention_provider_daemons_and_sync_secret(
             database,
@@ -8929,6 +9119,13 @@ fn run_local_settings_sync_fixture_cycle(
         ready_for_manual_sync: readiness.ready_for_manual_sync,
         blocked_reason: readiness.blocked_reason,
         pulled_membership_application_count: run.pulled_membership_application_count(),
+        discovery_trusted_peer_count: discovery_summary.trusted_peer_count,
+        discovery_rejected_peer_count: discovery_summary.rejected_peer_count,
+        discovery_selected_retention_provider_count: discovery_summary
+            .selected_retention_provider_count,
+        discovery_retention_provider_selection_issue_count: discovery_summary
+            .retention_provider_selection_issue_count,
+        discovery_rejections: discovery_summary.rejections,
         selected_retention_provider_count: run.selected_retention_provider_count(),
         materialized_retention_provider_count: run.materialized_retention_provider_count(),
         retained_provider_count: run.retained_provider_count(),
@@ -8980,6 +9177,13 @@ pub fn run_local_settings_sync_current_cycle(
         ready_for_manual_sync: summary.ready_for_manual_sync,
         blocked_reason: summary.blocked_reason,
         pulled_membership_application_count: summary.pulled_membership_application_count,
+        discovery_trusted_peer_count: summary.discovery_trusted_peer_count,
+        discovery_rejected_peer_count: summary.discovery_rejected_peer_count,
+        discovery_selected_retention_provider_count: summary
+            .discovery_selected_retention_provider_count,
+        discovery_retention_provider_selection_issue_count: summary
+            .discovery_retention_provider_selection_issue_count,
+        discovery_rejections: summary.discovery_rejections,
         selected_retention_provider_count: summary.selected_retention_provider_count,
         materialized_retention_provider_count: summary.materialized_retention_provider_count,
         retained_provider_count: summary.retained_provider_count,
@@ -9049,6 +9253,13 @@ pub fn run_local_settings_sync_preview_cycle(
         ready_for_manual_sync: summary.ready_for_manual_sync,
         blocked_reason: summary.blocked_reason,
         pulled_membership_application_count: summary.pulled_membership_application_count,
+        discovery_trusted_peer_count: summary.discovery_trusted_peer_count,
+        discovery_rejected_peer_count: summary.discovery_rejected_peer_count,
+        discovery_selected_retention_provider_count: summary
+            .discovery_selected_retention_provider_count,
+        discovery_retention_provider_selection_issue_count: summary
+            .discovery_retention_provider_selection_issue_count,
+        discovery_rejections: summary.discovery_rejections,
         selected_retention_provider_count: summary.selected_retention_provider_count,
         materialized_retention_provider_count: summary.materialized_retention_provider_count,
         retained_provider_count: summary.retained_provider_count,
@@ -9172,6 +9383,20 @@ pub fn run_local_settings_sync_two_device_preview_cycle(
         LOCAL_SETTINGS_SYNC_PREVIEW_ROOT_ID,
         policy.clone(),
     );
+    let publisher_discovery_preparation = LocalSettingsSyncFixturePreparation {
+        local_device_id: publisher_device_id.clone(),
+        provider_endpoint_ref: provider_endpoint_ref.clone(),
+        signer: publisher_signer.clone(),
+    };
+    let discovery_summary = local_settings_sync_preview_discovery_summary(
+        database,
+        profile,
+        sync_secret,
+        &publisher_discovery_preparation,
+        &config,
+        &publisher_daemon,
+        &provider_daemon,
+    )?;
     let publisher_run = BroadwebdSettingsSyncScheduler::new(&publisher_daemon)
         .run_once_with_membership_log_and_stored_in_process_fixture_retention_provider_daemons_and_sync_secret(
             database,
@@ -9262,6 +9487,13 @@ pub fn run_local_settings_sync_two_device_preview_cycle(
             .len(),
         receiver_pulled_membership_application_count: receiver_run
             .pulled_membership_application_count(),
+        discovery_trusted_peer_count: discovery_summary.trusted_peer_count,
+        discovery_rejected_peer_count: discovery_summary.rejected_peer_count,
+        discovery_selected_retention_provider_count: discovery_summary
+            .selected_retention_provider_count,
+        discovery_retention_provider_selection_issue_count: discovery_summary
+            .retention_provider_selection_issue_count,
+        discovery_rejections: discovery_summary.rejections,
         receiver_applied_setting_count: receiver_run.cycle.applied_count(),
         receiver_published_step_count: receiver_run.cycle.published_step_count(),
         receiver_received_value: receiver_value,
@@ -15148,6 +15380,11 @@ mod tests {
             report.provider_endpoint_ref,
             "slate-fixture-profile-sync://preview/local-preview-provider"
         );
+        assert_eq!(report.discovery_trusted_peer_count, 1);
+        assert_eq!(report.discovery_rejected_peer_count, 0);
+        assert_eq!(report.discovery_selected_retention_provider_count, 1);
+        assert_eq!(report.discovery_retention_provider_selection_issue_count, 0);
+        assert!(report.discovery_rejections.is_empty());
         assert_eq!(report.selected_retention_provider_count, 1);
         assert_eq!(report.materialized_retention_provider_count, 1);
         assert_eq!(report.retained_provider_count, 1);
@@ -15223,6 +15460,11 @@ mod tests {
             "slate-fixture-profile-sync://preview/local-preview-provider"
         );
         assert_eq!(report.pulled_membership_application_count, 0);
+        assert_eq!(report.discovery_trusted_peer_count, 1);
+        assert_eq!(report.discovery_rejected_peer_count, 0);
+        assert_eq!(report.discovery_selected_retention_provider_count, 1);
+        assert_eq!(report.discovery_retention_provider_selection_issue_count, 0);
+        assert!(report.discovery_rejections.is_empty());
         assert_eq!(report.selected_retention_provider_count, 1);
         assert_eq!(report.materialized_retention_provider_count, 1);
         assert_eq!(report.retained_provider_count, 1);
@@ -15309,6 +15551,11 @@ mod tests {
             report.preview_setting_key,
             super::LOCAL_SETTINGS_SYNC_PREVIEW_REMOTE_SETTING_KEY
         );
+        assert_eq!(report.discovery_trusted_peer_count, 1);
+        assert_eq!(report.discovery_rejected_peer_count, 0);
+        assert_eq!(report.discovery_selected_retention_provider_count, 1);
+        assert_eq!(report.discovery_retention_provider_selection_issue_count, 0);
+        assert!(report.discovery_rejections.is_empty());
         assert_eq!(report.publisher_published_step_count, 1);
         assert!(report.publisher_published_object_count > 0);
         assert_eq!(

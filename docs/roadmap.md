@@ -64,6 +64,10 @@ Next:
 - Make the main build targets consistently use the local Rust environment when
   it exists, so `make shared-release` does not fall back to `~/.rustup` on a
   small root filesystem.
+- Keep build-tool auxiliary caches on the source-code filesystem. The Makefile
+  and profile-sync boundary checks now default `XDG_CACHE_HOME` and
+  `UV_CACHE_DIR` under `target/cache` so Servo helper tooling does not spill
+  into `/home` while `/` is constrained.
 - Add a check target for required host tools and libraries. Missing tools should
   be reported with install guidance, while setup actions that download or
   install software should stay explicit.
@@ -1917,14 +1921,23 @@ Current baseline:
   modules while keeping the public crate re-exports stable. Each extracted
   module owns focused unit tests so future scheduler/protocol work can change
   those pieces without relying only on the large integration-style test module.
+- The Settings Profile Sync Preview now runs a socketless signed-discovery
+  preflight before each local fixture sync run. The preview publishes a bounded
+  local-simulation provider advertisement, applies the same membership-epoch
+  trust filter used by the scheduler, and surfaces trusted, selected, rejected,
+  and rejection-reason counts in `slate://settings`. The actual current-setting
+  and trial sync paths still use the existing membership-log retention-provider
+  path, so this remains a diagnostic/user-facing bridge rather than automatic
+  real-network discovery.
 
 Next:
 
 - Continue extending the protocol-neutral `profile-sync` application service
   toward real protocol-backed provider materialization.
-- Wire the scheduler's trusted-discovery plan/run path into Settings/UI cadence
-  control so configured IPNS, libp2p, Iroh, mDNS, or LAN discovery providers
-  can be queried before a user-facing sync run.
+- Extend the Settings discovery preflight from the local-simulation provider to
+  configured IPNS, libp2p, Iroh, mDNS, or LAN discovery providers, then add
+  cadence control and policy checks before any automatic sync run trusts
+  discovered providers.
 - Add a libp2p rendezvous/Kademlia discovery adapter behind
   `ProfileSyncPeerDiscoveryProvider` if its dependency footprint remains
   acceptable under Slate's low-memory development profile.

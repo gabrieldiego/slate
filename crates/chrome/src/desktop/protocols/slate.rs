@@ -22,11 +22,12 @@ use slate_broadwebd::{
     TemporaryDownloadRecord, default_session_state_root,
 };
 use slate_profile_sync::{
-    LocalSettingsSyncCurrentCycleReport, LocalSettingsSyncPreviewCycleReport,
-    LocalSettingsSyncPreviewError, LocalSettingsSyncProviderIssueSummary,
-    LocalSettingsSyncRetentionIssueSummary, LocalSettingsSyncRootObjectProviderIssueSummary,
-    LocalSettingsSyncTwoDevicePreviewCycleReport, run_local_settings_sync_current_cycle,
-    run_local_settings_sync_preview_cycle, run_local_settings_sync_two_device_preview_cycle,
+    LocalSettingsSyncCurrentCycleReport, LocalSettingsSyncDiscoveryRejectionSummary,
+    LocalSettingsSyncPreviewCycleReport, LocalSettingsSyncPreviewError,
+    LocalSettingsSyncProviderIssueSummary, LocalSettingsSyncRetentionIssueSummary,
+    LocalSettingsSyncRootObjectProviderIssueSummary, LocalSettingsSyncTwoDevicePreviewCycleReport,
+    run_local_settings_sync_current_cycle, run_local_settings_sync_preview_cycle,
+    run_local_settings_sync_two_device_preview_cycle,
 };
 use slate_storage::{
     DEFAULT_PROFILE_ID, DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
@@ -721,6 +722,11 @@ struct ProfileSyncPreviewCurrentSyncState {
     provider_endpoint_ref: String,
     ready_for_manual_sync: bool,
     pulled_membership_application_count: usize,
+    discovery_trusted_peer_count: usize,
+    discovery_rejected_peer_count: usize,
+    discovery_selected_retention_provider_count: usize,
+    discovery_retention_provider_selection_issue_count: usize,
+    discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     selected_retention_provider_count: usize,
     materialized_retention_provider_count: usize,
     retained_provider_count: usize,
@@ -754,6 +760,13 @@ impl ProfileSyncPreviewCurrentSyncState {
             provider_endpoint_ref: report.provider_endpoint_ref.clone(),
             ready_for_manual_sync: report.ready_for_manual_sync,
             pulled_membership_application_count: report.pulled_membership_application_count,
+            discovery_trusted_peer_count: report.discovery_trusted_peer_count,
+            discovery_rejected_peer_count: report.discovery_rejected_peer_count,
+            discovery_selected_retention_provider_count: report
+                .discovery_selected_retention_provider_count,
+            discovery_retention_provider_selection_issue_count: report
+                .discovery_retention_provider_selection_issue_count,
+            discovery_rejections: report.discovery_rejections.clone(),
             selected_retention_provider_count: report.selected_retention_provider_count,
             materialized_retention_provider_count: report.materialized_retention_provider_count,
             retained_provider_count: report.retained_provider_count,
@@ -792,6 +805,11 @@ impl ProfileSyncPreviewCurrentSyncState {
             "provider_endpoint_ref": self.provider_endpoint_ref.as_str(),
             "ready_for_manual_sync": self.ready_for_manual_sync,
             "pulled_membership_application_count": self.pulled_membership_application_count,
+            "discovery_trusted_peer_count": self.discovery_trusted_peer_count,
+            "discovery_rejected_peer_count": self.discovery_rejected_peer_count,
+            "discovery_selected_retention_provider_count": self.discovery_selected_retention_provider_count,
+            "discovery_retention_provider_selection_issue_count": self.discovery_retention_provider_selection_issue_count,
+            "discovery_rejections": profile_sync_discovery_rejections_json(self.discovery_rejections.as_slice()),
             "selected_retention_provider_count": self.selected_retention_provider_count,
             "materialized_retention_provider_count": self.materialized_retention_provider_count,
             "retained_provider_count": self.retained_provider_count,
@@ -828,6 +846,11 @@ struct ProfileSyncPreviewTrialState {
     preview_setting_revision: i64,
     ready_for_manual_sync: bool,
     pulled_membership_application_count: usize,
+    discovery_trusted_peer_count: usize,
+    discovery_rejected_peer_count: usize,
+    discovery_selected_retention_provider_count: usize,
+    discovery_retention_provider_selection_issue_count: usize,
+    discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     selected_retention_provider_count: usize,
     materialized_retention_provider_count: usize,
     retained_provider_count: usize,
@@ -863,6 +886,13 @@ impl ProfileSyncPreviewTrialState {
             preview_setting_revision: report.preview_setting_revision,
             ready_for_manual_sync: report.ready_for_manual_sync,
             pulled_membership_application_count: report.pulled_membership_application_count,
+            discovery_trusted_peer_count: report.discovery_trusted_peer_count,
+            discovery_rejected_peer_count: report.discovery_rejected_peer_count,
+            discovery_selected_retention_provider_count: report
+                .discovery_selected_retention_provider_count,
+            discovery_retention_provider_selection_issue_count: report
+                .discovery_retention_provider_selection_issue_count,
+            discovery_rejections: report.discovery_rejections.clone(),
             selected_retention_provider_count: report.selected_retention_provider_count,
             materialized_retention_provider_count: report.materialized_retention_provider_count,
             retained_provider_count: report.retained_provider_count,
@@ -903,6 +933,11 @@ impl ProfileSyncPreviewTrialState {
             "preview_setting_revision": self.preview_setting_revision,
             "ready_for_manual_sync": self.ready_for_manual_sync,
             "pulled_membership_application_count": self.pulled_membership_application_count,
+            "discovery_trusted_peer_count": self.discovery_trusted_peer_count,
+            "discovery_rejected_peer_count": self.discovery_rejected_peer_count,
+            "discovery_selected_retention_provider_count": self.discovery_selected_retention_provider_count,
+            "discovery_retention_provider_selection_issue_count": self.discovery_retention_provider_selection_issue_count,
+            "discovery_rejections": profile_sync_discovery_rejections_json(self.discovery_rejections.as_slice()),
             "selected_retention_provider_count": self.selected_retention_provider_count,
             "materialized_retention_provider_count": self.materialized_retention_provider_count,
             "retained_provider_count": self.retained_provider_count,
@@ -974,6 +1009,29 @@ fn profile_sync_provider_issue_json(
     })
 }
 
+fn profile_sync_discovery_rejections_json(
+    rejections: &[LocalSettingsSyncDiscoveryRejectionSummary],
+) -> serde_json::Value {
+    serde_json::Value::Array(
+        rejections
+            .iter()
+            .map(profile_sync_discovery_rejection_json)
+            .collect(),
+    )
+}
+
+fn profile_sync_discovery_rejection_json(
+    rejection: &LocalSettingsSyncDiscoveryRejectionSummary,
+) -> serde_json::Value {
+    serde_json::json!({
+        "protocol": rejection.protocol.as_str(),
+        "namespace": rejection.namespace.as_str(),
+        "node_id": rejection.node_id.as_str(),
+        "provider_id": rejection.provider_id.as_str(),
+        "reason": rejection.reason.as_str(),
+    })
+}
+
 fn profile_sync_retention_issues_json(
     issues: &[LocalSettingsSyncRetentionIssueSummary],
 ) -> serde_json::Value {
@@ -1011,6 +1069,11 @@ struct ProfileSyncPreviewTwoDeviceTrialState {
     publisher_retained_provider_count: usize,
     receiver_enrollment_bundle_record_count: usize,
     receiver_pulled_membership_application_count: usize,
+    discovery_trusted_peer_count: usize,
+    discovery_rejected_peer_count: usize,
+    discovery_selected_retention_provider_count: usize,
+    discovery_retention_provider_selection_issue_count: usize,
+    discovery_rejections: Vec<LocalSettingsSyncDiscoveryRejectionSummary>,
     receiver_applied_setting_count: usize,
     receiver_published_step_count: usize,
     receiver_received_value: Option<String>,
@@ -1056,6 +1119,13 @@ impl ProfileSyncPreviewTwoDeviceTrialState {
             receiver_enrollment_bundle_record_count: report.receiver_enrollment_bundle_record_count,
             receiver_pulled_membership_application_count: report
                 .receiver_pulled_membership_application_count,
+            discovery_trusted_peer_count: report.discovery_trusted_peer_count,
+            discovery_rejected_peer_count: report.discovery_rejected_peer_count,
+            discovery_selected_retention_provider_count: report
+                .discovery_selected_retention_provider_count,
+            discovery_retention_provider_selection_issue_count: report
+                .discovery_retention_provider_selection_issue_count,
+            discovery_rejections: report.discovery_rejections.clone(),
             receiver_applied_setting_count: report.receiver_applied_setting_count,
             receiver_published_step_count: report.receiver_published_step_count,
             receiver_received_value: report.receiver_received_value.clone(),
@@ -1102,6 +1172,11 @@ impl ProfileSyncPreviewTwoDeviceTrialState {
             "publisher_retained_provider_count": self.publisher_retained_provider_count,
             "receiver_enrollment_bundle_record_count": self.receiver_enrollment_bundle_record_count,
             "receiver_pulled_membership_application_count": self.receiver_pulled_membership_application_count,
+            "discovery_trusted_peer_count": self.discovery_trusted_peer_count,
+            "discovery_rejected_peer_count": self.discovery_rejected_peer_count,
+            "discovery_selected_retention_provider_count": self.discovery_selected_retention_provider_count,
+            "discovery_retention_provider_selection_issue_count": self.discovery_retention_provider_selection_issue_count,
+            "discovery_rejections": profile_sync_discovery_rejections_json(self.discovery_rejections.as_slice()),
             "receiver_applied_setting_count": self.receiver_applied_setting_count,
             "receiver_published_step_count": self.receiver_published_step_count,
             "receiver_received_value": self.receiver_received_value.as_deref(),
@@ -2356,6 +2431,17 @@ mod tests {
             preview_setting_revision: 7,
             ready_for_manual_sync: true,
             pulled_membership_application_count: 0,
+            discovery_trusted_peer_count: 1,
+            discovery_rejected_peer_count: 1,
+            discovery_selected_retention_provider_count: 1,
+            discovery_retention_provider_selection_issue_count: 0,
+            discovery_rejections: vec![super::LocalSettingsSyncDiscoveryRejectionSummary {
+                protocol: "local-simulation".to_string(),
+                namespace: "slate-profile-sync".to_string(),
+                node_id: "node-b".to_string(),
+                provider_id: "provider-d".to_string(),
+                reason: "signer_membership_epoch_too_new".to_string(),
+            }],
             selected_retention_provider_count: 1,
             materialized_retention_provider_count: 1,
             retained_provider_count: 1,
@@ -2462,6 +2548,23 @@ mod tests {
         assert_eq!(
             json["selected_endpoint_requires_protocol_materializer"],
             true
+        );
+        assert_eq!(json["discovery_trusted_peer_count"], 1);
+        assert_eq!(json["discovery_rejected_peer_count"], 1);
+        assert_eq!(json["discovery_selected_retention_provider_count"], 1);
+        assert_eq!(
+            json["discovery_retention_provider_selection_issue_count"],
+            0
+        );
+        assert_eq!(
+            json["discovery_rejections"][0]["protocol"],
+            "local-simulation"
+        );
+        assert_eq!(json["discovery_rejections"][0]["node_id"], "node-b");
+        assert_eq!(json["discovery_rejections"][0]["provider_id"], "provider-d");
+        assert_eq!(
+            json["discovery_rejections"][0]["reason"],
+            "signer_membership_epoch_too_new"
         );
     }
 
@@ -2740,6 +2843,8 @@ mod tests {
         assert!(settings_page.contains("profileSyncActiveProviderStatus"));
         assert!(settings_page.contains("Authorized providers"));
         assert!(settings_page.contains("profileSyncAuthorizedProviderStatus"));
+        assert!(settings_page.contains("Discovery"));
+        assert!(settings_page.contains("profileSyncDiscoveryStatus"));
         assert!(settings_page.contains("Sync issues"));
         assert!(settings_page.contains("Sync health"));
         assert!(settings_page.contains("profileSyncHealthStatus"));
@@ -2748,6 +2853,7 @@ mod tests {
         assert!(settings_page.contains("profileSyncIssueDetails"));
         assert!(settings_page.contains("profileSyncLatestIssueRun"));
         assert!(settings_page.contains("candidates.push(state.last_two_device_trial)"));
+        assert!(settings_page.contains("discovery_rejections"));
         assert!(settings_page.contains("retention_provider_selection_issues"));
         assert!(settings_page.contains("stored_provider_metadata_issues"));
         assert!(settings_page.contains("profileSyncIssueLabel"));

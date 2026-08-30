@@ -13,9 +13,11 @@ check_chrome=${SLATE_PROFILE_SYNC_CHECK_CHROME:-0}
 export RUSTUP_HOME=${RUSTUP_HOME:-"$repo_root/.rustup"}
 export CARGO_HOME=${CARGO_HOME:-"$repo_root/.cargo"}
 export TMPDIR=${TMPDIR:-"$repo_root/target/tmp"}
+export XDG_CACHE_HOME=${XDG_CACHE_HOME:-"$repo_root/target/cache/xdg"}
+export UV_CACHE_DIR=${UV_CACHE_DIR:-"$repo_root/target/cache/uv"}
 export CARGO_INCREMENTAL=${CARGO_INCREMENTAL:-0}
 
-mkdir -p "$TMPDIR"
+mkdir -p "$TMPDIR" "$XDG_CACHE_HOME" "$UV_CACHE_DIR"
 
 run_test() {
     package=$1
@@ -892,6 +894,18 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'profileSyncHealthStatus' \
     'Slate settings page must distinguish healthy, recovered, and degraded profile-sync health.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Discovery' \
+    'Slate settings page must show profile-sync discovery preflight status.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'profileSyncDiscoveryStatus' \
+    'Slate settings page must render trusted-discovery preflight counts.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'discovery_rejections' \
+    'Slate settings page must include profile-sync discovery rejections in issue details.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'candidates.push\(state.last_two_device_trial\)' \
