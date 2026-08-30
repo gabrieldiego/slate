@@ -118,6 +118,11 @@ impl ProfileSyncPeerAdvertisement {
                 self.membership_epoch
             )));
         }
+        if self.sequence == 0 {
+            return Err(BroadwebdError::Request(
+                "profile-sync peer advertisement sequence must be positive".to_string(),
+            ));
+        }
         if let Some(signature) = &self.identity_signature {
             signature.validate_for_node(self.node_id.as_str())?;
         }
@@ -834,6 +839,19 @@ mod tests {
             error,
             BroadwebdError::Request(message)
                 if message.contains("membership epoch must be positive")
+        ));
+    }
+
+    #[test]
+    fn peer_discovery_rejects_zero_sequence() {
+        let error =
+            ProfileSyncPeerAdvertisement::new("local", "node-a", "provider-a", "0.0.0.0:9000", 0)
+                .expect_err("zero discovery sequence should be rejected");
+
+        assert!(matches!(
+            error,
+            BroadwebdError::Request(message)
+                if message.contains("advertisement sequence must be positive")
         ));
     }
 
