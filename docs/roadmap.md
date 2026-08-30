@@ -373,9 +373,10 @@ Current baseline:
   membership trust filter used by schedulers, and emits trusted/rejected peer
   counts before any network connection is attempted by a human-run smoke.
 - The P2P LAN helper can optionally run that trust preflight with
-  `SLATE_P2P_LAN_DISCOVERY_CHECK_DB`, so signed advertisement files can be
-  checked against local profile trust before they are staged to the remote
-  smoke host.
+  `SLATE_P2P_LAN_DISCOVERY_CHECK_DB`. In that mode it first captures the live
+  discovered advertisement and resolved service address, checks the
+  advertisement against local profile trust, and only then probes the same
+  resolved address.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the
@@ -1906,9 +1907,10 @@ Current baseline:
   socketless deterministic fixtures.
 - The first peer-discovery LAN smoke is also available as an opt-in probe. It
   can now be paired with a profile-sync-generated signed advertisement file, so
-  manual runs may reject unsigned discovery before connecting. A separate
-  profile-sync checker can also verify captured or generated advertisement
-  files against `slate-settings.db` trust before staging them for a smoke run.
+  manual runs may reject unsigned discovery before connecting. The helper can
+  also capture a live discovered advertisement, verify it with the separate
+  profile-sync checker against `slate-settings.db` trust, and then probe the
+  exact resolved address from that checked discovery result.
   The next production step is full enrolled-membership verification in live
   discovered-candidate flows before automatic sync policy trusts discovered
   peers. libp2p, IPNS, Iroh, or mDNS adapters should implement the same

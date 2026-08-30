@@ -291,6 +291,18 @@ require_text \
     'manual broadwebd discovery probes must be able to reject unsigned candidates before connecting in signed-harness runs.'
 require_text \
     crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
+    'Some\("discover"\) => run_discover' \
+    'manual broadwebd discovery probes must support discovery capture without immediately connecting.'
+require_text \
+    crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
+    '--advertisement-output' \
+    'manual broadwebd discovery probes must be able to write captured advertisement JSON for profile-sync trust checks.'
+require_text \
+    crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
+    '--connect-output' \
+    'manual broadwebd discovery probes must be able to carry a checked discovered peer into an exact follow-up probe.'
+require_text \
+    crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
     '--discovery-membership-epoch' \
     'manual broadwebd discovery probes must expose membership epoch metadata for generated advertisements.'
 require_text \
@@ -320,11 +332,19 @@ require_text \
 require_text \
     scripts/profile-sync-p2p-lan-smoke.sh \
     'SLATE_P2P_LAN_DISCOVERY_CHECK_DB' \
-    'P2P LAN smoke helpers must optionally trust-check signed advertisements against slate-settings.db before staging them.'
+    'P2P LAN smoke helpers must optionally trust-check signed advertisements against slate-settings.db before probing them.'
 require_text \
     scripts/profile-sync-p2p-lan-smoke.sh \
     'SLATE_P2P_LAN_DISCOVERY_CHECK_BINARY' \
     'P2P LAN smoke helpers must keep manual discovery trust checks in the profile-sync layer.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    'captured_discovery_advertisement_file' \
+    'P2P LAN smoke helpers must capture live discovery advertisements before trust-checking them.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    '"\$binary" discover' \
+    'P2P LAN smoke helpers must split live discovery capture from the follow-up profile-sync probe.'
 require_text \
     scripts/profile-sync-p2p-lan-smoke.sh \
     'SLATE_P2P_LAN_DISCOVERY_MEMBERSHIP_EPOCH' \

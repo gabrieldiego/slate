@@ -46,6 +46,7 @@ fn run() -> Result<(), String> {
     match args.next().as_deref() {
         Some("serve") => run_server(ServerArgs::parse(args)?),
         Some("probe") => run_probe(ProbeArgs::parse(args)?),
+        Some("discover") => run_discover(DiscoverArgs::parse(args)?),
         Some("discover-probe") => run_discover_probe(DiscoverProbeArgs::parse(args)?),
         _ => Err(usage()),
     }
@@ -224,6 +225,72 @@ impl ProbeArgs {
             root_id,
             payload,
             frame_max_bytes,
+        })
+    }
+}
+
+#[derive(Debug)]
+struct DiscoverArgs {
+    discovery_target: String,
+    network_id: String,
+    node_id: String,
+    timeout: Duration,
+    require_signed_discovery: bool,
+    advertisement_output: Option<PathBuf>,
+    connect_output: Option<PathBuf>,
+}
+
+impl DiscoverArgs {
+    fn parse(args: impl Iterator<Item = String>) -> Result<Self, String> {
+        let mut discovery_target = None;
+        let mut network_id = DEFAULT_DISCOVERY_NETWORK_ID.to_string();
+        let mut node_id = format!("requester_{}", std::process::id());
+        let mut timeout_ms = DEFAULT_DISCOVERY_TIMEOUT_MS;
+        let mut require_signed_discovery = false;
+        let mut advertisement_output = None;
+        let mut connect_output = None;
+        let mut args = args.peekable();
+
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--discovery-target" => {
+                    discovery_target = Some(next_value(&mut args, "--discovery-target")?)
+                }
+                "--network-id" => network_id = next_value(&mut args, "--network-id")?,
+                "--node-id" => node_id = next_value(&mut args, "--node-id")?,
+                "--timeout-ms" => {
+                    timeout_ms = parse_u64(&next_value(&mut args, "--timeout-ms")?, "--timeout-ms")?
+                }
+                "--require-signed-discovery" => require_signed_discovery = true,
+                "--advertisement-output" => {
+                    advertisement_output = Some(PathBuf::from(next_value(
+                        &mut args,
+                        "--advertisement-output",
+                    )?))
+                }
+                "--connect-output" => {
+                    connect_output = Some(PathBuf::from(next_value(&mut args, "--connect-output")?))
+                }
+                "-h" | "--help" => return Err(usage()),
+                _ => return Err(format!("unknown discover argument: {arg}\n\n{}", usage())),
+            }
+        }
+
+        let discovery_target = discovery_target.ok_or_else(|| {
+            format!(
+                "discover requires --discovery-target with a host:port endpoint\n\n{}",
+                usage()
+            )
+        })?;
+
+        Ok(Self {
+            discovery_target,
+            network_id,
+            node_id,
+            timeout: Duration::from_millis(timeout_ms),
+            require_signed_discovery,
+            advertisement_output,
+            connect_output,
         })
     }
 }
@@ -430,6 +497,36 @@ fn run_probe(args: ProbeArgs) -> Result<(), String> {
     )
 }
 
+fn run_discover(args: DiscoverArgs) -> Result<(), String> {
+    let peers = discover_profile_sync_peers(
+        args.discovery_target.as_str(),
+        args.network_id.as_str(),
+        args.node_id.as_str(),
+        args.timeout,
+        8,
+    )
+    .map_err(|error| format!("discover profile-sync peers: {error}"))?;
+    let peer = select_discovered_peer(peers, args.require_signed_discovery)?;
+    let connect_addr = peer
+        .connect_addr()
+        .map_err(|error| format!("resolve discovered peer connect address: {error}"))?;
+    eprintln!(
+        "DISCOVERED_PROFILE_SYNC_PEER node_id={} provider_id={} membership_epoch={} signed={} source={} connect={}",
+        peer.advertisement.node_id,
+        peer.advertisement.provider_id,
+        peer.advertisement.membership_epoch,
+        peer.advertisement.identity_signature.is_some(),
+        peer.source_addr,
+        connect_addr
+    );
+    write_discovered_peer_outputs(
+        &peer,
+        connect_addr.as_str(),
+        args.advertisement_output.as_ref(),
+        args.connect_output.as_ref(),
+    )
+}
+
 fn run_discover_probe(args: DiscoverProbeArgs) -> Result<(), String> {
     let peers = discover_profile_sync_peers(
         args.discovery_target.as_str(),
@@ -463,6 +560,38 @@ fn run_discover_probe(args: DiscoverProbeArgs) -> Result<(), String> {
         &args.root_id,
         args.payload.into_bytes(),
     )
+}
+
+fn write_discovered_peer_outputs(
+    peer: &DiscoveredProfileSyncPeer,
+    connect_addr: &str,
+    advertisement_output: Option<&PathBuf>,
+    connect_output: Option<&PathBuf>,
+) -> Result<(), String> {
+    let mut advertisement_json = serde_json::to_vec_pretty(&peer.advertisement)
+        .map_err(|error| format!("encode discovered advertisement JSON: {error}"))?;
+    advertisement_json.push(b'\n');
+    if let Some(path) = advertisement_output {
+        fs::write(path, advertisement_json).map_err(|error| {
+            format!("write discovered advertisement {}: {error}", path.display())
+        })?;
+    } else {
+        println!(
+            "{}",
+            String::from_utf8(advertisement_json)
+                .map_err(|error| format!("encode discovered advertisement as UTF-8: {error}"))?
+        );
+    }
+
+    if let Some(path) = connect_output {
+        fs::write(path, format!("{connect_addr}\n")).map_err(|error| {
+            format!(
+                "write discovered connect address {}: {error}",
+                path.display()
+            )
+        })?;
+    }
+    Ok(())
 }
 
 fn select_discovered_peer(
@@ -758,6 +887,7 @@ fn usage() -> String {
     "usage:
   slate-broadwebd-net-probe serve --state-root <dir> [--bind <addr:port>] [--ready-file <path>] [--max-requests <n>] [--frame-max-bytes <bytes>] [--runtime-profile-sync] [--discovery-bind <addr:port>] [--discovery-ready-file <path>] [--discovery-network <id>] [--discovery-node <id>] [--discovery-provider <id>] [--discovery-membership-epoch <n>] [--discovery-advertisement-file <path>] [--discovery-multicast <ipv4>]
   slate-broadwebd-net-probe probe --connect <host:port> [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>]
+  slate-broadwebd-net-probe discover --discovery-target <host:port> [--network-id <id>] [--node-id <id>] [--timeout-ms <ms>] [--require-signed-discovery] [--advertisement-output <path>] [--connect-output <path>]
   slate-broadwebd-net-probe discover-probe --discovery-target <host:port> [--network-id <id>] [--node-id <id>] [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>] [--timeout-ms <ms>] [--require-signed-discovery]"
         .to_string()
 }
@@ -883,6 +1013,44 @@ mod tests {
     }
 
     #[test]
+    fn discover_args_accept_capture_outputs() {
+        let args = DiscoverArgs::parse(
+            [
+                "--discovery-target",
+                "127.0.0.1:47883",
+                "--network-id",
+                "manual-net",
+                "--node-id",
+                "local-node",
+                "--timeout-ms",
+                "125",
+                "--require-signed-discovery",
+                "--advertisement-output",
+                "advertisement.json",
+                "--connect-output",
+                "connect.txt",
+            ]
+            .into_iter()
+            .map(str::to_string),
+        )
+        .expect("parse discover args");
+
+        assert_eq!(args.discovery_target, "127.0.0.1:47883");
+        assert_eq!(args.network_id, "manual-net");
+        assert_eq!(args.node_id, "local-node");
+        assert_eq!(args.timeout, Duration::from_millis(125));
+        assert!(args.require_signed_discovery);
+        assert_eq!(
+            args.advertisement_output.as_deref(),
+            Some(std::path::Path::new("advertisement.json"))
+        );
+        assert_eq!(
+            args.connect_output.as_deref(),
+            Some(std::path::Path::new("connect.txt"))
+        );
+    }
+
+    #[test]
     fn discover_probe_signed_selection_skips_unsigned_candidates() {
         let unsigned = DiscoveredProfileSyncPeer {
             advertisement: ProfileSyncPeerAdvertisement::new(
@@ -917,5 +1085,52 @@ mod tests {
 
         assert_eq!(selected.advertisement.node_id, "node-signed");
         assert!(selected.advertisement.identity_signature.is_some());
+    }
+
+    #[test]
+    fn discover_writes_selected_advertisement_and_connect_addr() {
+        let output_dir = std::env::current_dir()
+            .unwrap()
+            .join("target/tmp/broadwebd-net-probe-tests");
+        fs::create_dir_all(&output_dir).expect("create output dir");
+        let advertisement_output = output_dir.join(format!(
+            "selected-advertisement-{}.json",
+            std::process::id()
+        ));
+        let connect_output =
+            output_dir.join(format!("selected-connect-{}.txt", std::process::id()));
+        let peer = DiscoveredProfileSyncPeer {
+            advertisement: ProfileSyncPeerAdvertisement::new(
+                "signednet",
+                "node-signed",
+                "provider-signed",
+                "127.0.0.1:9552",
+                2,
+            )
+            .expect("advertisement"),
+            source_addr: "127.0.0.1:41001".parse().unwrap(),
+        };
+
+        write_discovered_peer_outputs(
+            &peer,
+            "127.0.0.1:9552",
+            Some(&advertisement_output),
+            Some(&connect_output),
+        )
+        .expect("write discover outputs");
+
+        let loaded = serde_json::from_str::<ProfileSyncPeerAdvertisement>(
+            fs::read_to_string(&advertisement_output)
+                .expect("read advertisement")
+                .as_str(),
+        )
+        .expect("decode advertisement");
+        let connect = fs::read_to_string(&connect_output).expect("read connect output");
+
+        assert_eq!(loaded, peer.advertisement);
+        assert_eq!(connect, "127.0.0.1:9552\n");
+
+        let _ = fs::remove_file(advertisement_output);
+        let _ = fs::remove_file(connect_output);
     }
 }

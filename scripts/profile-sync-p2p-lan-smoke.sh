@@ -33,6 +33,8 @@ local_tmp_dir=${SLATE_P2P_LAN_LOCAL_TMPDIR:-target/tmp}
 remote_dir=
 remote_pid=
 generated_discovery_advertisement_file=
+captured_discovery_advertisement_file=
+captured_discovery_connect_file=
 
 if [ -z "$ssh_target" ]; then
     printf 'usage: %s <ssh-target>\n' "$0" >&2
@@ -50,6 +52,12 @@ fi
 cleanup() {
     if [ -n "${generated_discovery_advertisement_file:-}" ]; then
         rm -f -- "$generated_discovery_advertisement_file" >/dev/null 2>&1 || true
+    fi
+    if [ -n "${captured_discovery_advertisement_file:-}" ]; then
+        rm -f -- "$captured_discovery_advertisement_file" >/dev/null 2>&1 || true
+    fi
+    if [ -n "${captured_discovery_connect_file:-}" ]; then
+        rm -f -- "$captured_discovery_connect_file" >/dev/null 2>&1 || true
     fi
     if [ -n "${remote_dir:-}" ]; then
         ssh "$ssh_target" "set +e; if [ -n '${remote_pid:-}' ]; then kill '${remote_pid:-}' 2>/dev/null; fi; rm -rf -- '$remote_dir'" >/dev/null 2>&1 || true
@@ -148,27 +156,6 @@ if [ -n "$discovery_check_db" ]; then
         printf 'SLATE_P2P_LAN_DISCOVERY_CHECK_DB does not exist: %s\n' "$discovery_check_db" >&2
         exit 2
     fi
-    if [ -z "$discovery_advertisement_file" ]; then
-        printf 'SLATE_P2P_LAN_DISCOVERY_CHECK_DB requires SLATE_P2P_LAN_DISCOVERY_ADVERTISEMENT_FILE or SLATE_P2P_LAN_DISCOVERY_KEY_FILE\n' >&2
-        exit 2
-    fi
-    set -- \
-        "$discovery_check_binary" \
-        --settings-db "$discovery_check_db" \
-        --network-id "$network_id" \
-        --protocol "$discovery_check_protocol" \
-        --advertisement-file "$discovery_advertisement_file" \
-        --require-trusted
-    if [ -n "$discovery_check_profile" ]; then
-        set -- "$@" --profile "$discovery_check_profile"
-    fi
-    if [ -n "$discovery_check_local_device_id" ]; then
-        set -- "$@" --local-device-id "$discovery_check_local_device_id"
-    fi
-    if [ -n "$discovery_check_report" ]; then
-        set -- "$@" --output "$discovery_check_report"
-    fi
-    SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh "$@"
 fi
 
 remote_dir=$(
@@ -202,16 +189,67 @@ if ! ssh "$ssh_target" "set +e; test -s '$remote_dir/ready' && test -s '$remote_
     exit 1
 fi
 
-if ! SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh \
-    "$binary" discover-probe \
-    --discovery-target "$discovery_target" \
-    --network-id "$network_id" \
-    --node-id local_probe \
-    --payload "$payload" \
-    --frame-max-bytes "$frame_max_bytes" \
-    $require_signed_discovery_arg; then
-    ssh "$ssh_target" "set +e; cat '$remote_dir/server.log'" >&2 || true
-    exit 1
+if [ -n "$discovery_check_db" ]; then
+    mkdir -p "$local_tmp_dir"
+    captured_discovery_advertisement_file=$(mktemp "$local_tmp_dir/slate-profile-sync-discovered.XXXXXX.json")
+    captured_discovery_connect_file=$(mktemp "$local_tmp_dir/slate-profile-sync-connect.XXXXXX.txt")
+    if ! SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh \
+        "$binary" discover \
+        --discovery-target "$discovery_target" \
+        --network-id "$network_id" \
+        --node-id local_probe \
+        --timeout-ms 2500 \
+        --require-signed-discovery \
+        --advertisement-output "$captured_discovery_advertisement_file" \
+        --connect-output "$captured_discovery_connect_file"; then
+        ssh "$ssh_target" "set +e; cat '$remote_dir/server.log'" >&2 || true
+        exit 1
+    fi
+    set -- \
+        "$discovery_check_binary" \
+        --settings-db "$discovery_check_db" \
+        --network-id "$network_id" \
+        --protocol "$discovery_check_protocol" \
+        --advertisement-file "$captured_discovery_advertisement_file" \
+        --require-trusted
+    if [ -n "$discovery_check_profile" ]; then
+        set -- "$@" --profile "$discovery_check_profile"
+    fi
+    if [ -n "$discovery_check_local_device_id" ]; then
+        set -- "$@" --local-device-id "$discovery_check_local_device_id"
+    fi
+    if [ -n "$discovery_check_report" ]; then
+        set -- "$@" --output "$discovery_check_report"
+    fi
+    if ! SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh "$@"; then
+        ssh "$ssh_target" "set +e; cat '$remote_dir/server.log'" >&2 || true
+        exit 1
+    fi
+    IFS= read -r checked_connect_addr < "$captured_discovery_connect_file" || checked_connect_addr=
+    if [ -z "$checked_connect_addr" ]; then
+        printf 'trusted discovered peer did not produce a connect address\n' >&2
+        exit 1
+    fi
+    if ! SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh \
+        "$binary" probe \
+        --connect "$checked_connect_addr" \
+        --payload "$payload" \
+        --frame-max-bytes "$frame_max_bytes"; then
+        ssh "$ssh_target" "set +e; cat '$remote_dir/server.log'" >&2 || true
+        exit 1
+    fi
+else
+    if ! SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh \
+        "$binary" discover-probe \
+        --discovery-target "$discovery_target" \
+        --network-id "$network_id" \
+        --node-id local_probe \
+        --payload "$payload" \
+        --frame-max-bytes "$frame_max_bytes" \
+        $require_signed_discovery_arg; then
+        ssh "$ssh_target" "set +e; cat '$remote_dir/server.log'" >&2 || true
+        exit 1
+    fi
 fi
 
 ssh "$ssh_target" "set +e; kill '$remote_pid' 2>/dev/null; rm -rf -- '$remote_dir'"
