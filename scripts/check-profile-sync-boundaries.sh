@@ -266,9 +266,25 @@ require_text \
     'SlateSyncSecretExport::from_bytes' \
     'signed discovery advertisement tooling must use the existing enrollment-key export boundary.'
 require_text \
+    crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
+    'filter_trusted_profile_sync_peer_discovery_results' \
+    'profile-sync must own manual discovery trust checks against slate-settings.db.'
+require_text \
+    crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
+    '--settings-db' \
+    'manual discovery trust checks must take an explicit slate-settings.db path.'
+require_text \
+    crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
+    '--advertisement-file' \
+    'manual discovery trust checks must consume captured or generated discovery advertisement files.'
+require_text \
     Makefile \
     'profile-sync-advertisement-tool' \
     'manual profile-sync harnesses must expose a low-memory build target for signed advertisement generation.'
+require_text \
+    Makefile \
+    'profile-sync-discovery-check-tool' \
+    'manual profile-sync harnesses must expose a low-memory build target for signed discovery trust checks.'
 require_text \
     crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
     '--require-signed-discovery' \
@@ -301,6 +317,14 @@ require_text \
     scripts/profile-sync-p2p-lan-smoke.sh \
     'SLATE_P2P_LAN_LOCAL_TMPDIR' \
     'P2P LAN smoke helpers must keep generated local advertisement files under caller-controlled temporary storage.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    'SLATE_P2P_LAN_DISCOVERY_CHECK_DB' \
+    'P2P LAN smoke helpers must optionally trust-check signed advertisements against slate-settings.db before staging them.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    'SLATE_P2P_LAN_DISCOVERY_CHECK_BINARY' \
+    'P2P LAN smoke helpers must keep manual discovery trust checks in the profile-sync layer.'
 require_text \
     scripts/profile-sync-p2p-lan-smoke.sh \
     'SLATE_P2P_LAN_DISCOVERY_MEMBERSHIP_EPOCH' \

@@ -216,36 +216,7 @@ fn settings_sync_stored_provider_metadata_issue_kind_name(
 fn profile_sync_peer_discovery_trust_rejection_name(
     reason: ProfileSyncPeerDiscoveryTrustRejection,
 ) -> &'static str {
-    match reason {
-        ProfileSyncPeerDiscoveryTrustRejection::WrongNetwork => "wrong_network",
-        ProfileSyncPeerDiscoveryTrustRejection::LocalDevice => "local_device",
-        ProfileSyncPeerDiscoveryTrustRejection::MissingProfileSyncServiceFrameCapability => {
-            "missing_profile_sync_service_frame_capability"
-        }
-        ProfileSyncPeerDiscoveryTrustRejection::StaleDiscoverySequence => {
-            "stale_discovery_sequence"
-        }
-        ProfileSyncPeerDiscoveryTrustRejection::ReplayedDiscoverySequence => {
-            "replayed_discovery_sequence"
-        }
-        ProfileSyncPeerDiscoveryTrustRejection::UnknownDevicePublicKey => {
-            "unknown_device_public_key"
-        }
-        ProfileSyncPeerDiscoveryTrustRejection::UntrustedDevicePublicKey => {
-            "untrusted_device_public_key"
-        }
-        ProfileSyncPeerDiscoveryTrustRejection::MissingSignedIdentity => "missing_signed_identity",
-        ProfileSyncPeerDiscoveryTrustRejection::SignatureDeviceMismatch => {
-            "signature_device_mismatch"
-        }
-        ProfileSyncPeerDiscoveryTrustRejection::SignaturePublicKeyMismatch => {
-            "signature_public_key_mismatch"
-        }
-        ProfileSyncPeerDiscoveryTrustRejection::SignerMembershipEpochTooNew => {
-            "signer_membership_epoch_too_new"
-        }
-        ProfileSyncPeerDiscoveryTrustRejection::InvalidSignature => "invalid_signature",
-    }
+    reason.as_str()
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -36,8 +36,9 @@ SLATE_SHARED_DEBUG_LIB_PATH := $(SLATE_SHARED_TARGET_DIR)/debug/deps:$(SLATE_SHA
 SLATE_SHARED_RELEASE_LIB_PATH := $(SLATE_SHARED_TARGET_DIR)/release/deps:$(SLATE_SHARED_TARGET_DIR)/release
 SLATE_BROADWEBD_NET_PROBE_BIN ?= target/debug/slate-broadwebd-net-probe
 SLATE_PROFILE_SYNC_ADVERTISEMENT_BIN ?= target/debug/slate-profile-sync-advertisement
+SLATE_PROFILE_SYNC_DISCOVERY_CHECK_BIN ?= target/debug/slate-profile-sync-discovery-check
 
-.PHONY: check chrome-verify profile-sync-boundary-check profile-sync-boundary-static-check check-tools setup-local-rust ensure-local-rust slate-bin slate-release-bin slate-shared-bin slate-shared-release-bin release shared share shared-release share-release run run-release run-shared run-share run-shared-release run-share-release test-broadwebd test-network test-external-network profile-sync-net-probe profile-sync-advertisement-tool profile-sync-lan-smoke profile-sync-p2p-lan-smoke clean-slate-bin clean-object-data
+.PHONY: check chrome-verify profile-sync-boundary-check profile-sync-boundary-static-check check-tools setup-local-rust ensure-local-rust slate-bin slate-release-bin slate-shared-bin slate-shared-release-bin release shared share shared-release share-release run run-release run-shared run-share run-shared-release run-share-release test-broadwebd test-network test-external-network profile-sync-net-probe profile-sync-advertisement-tool profile-sync-discovery-check-tool profile-sync-lan-smoke profile-sync-p2p-lan-smoke clean-slate-bin clean-object-data
 
 check: ensure-local-rust
 	$(SLATE_LIMITED_CARGO) check --workspace -j "$(CARGO_BUILD_JOBS)"
@@ -152,6 +153,9 @@ profile-sync-net-probe: ensure-local-rust
 
 profile-sync-advertisement-tool: ensure-local-rust
 	$(SLATE_LIMITED_CARGO) build -j "$(CARGO_BUILD_JOBS)" -p slate-profile-sync --bin slate-profile-sync-advertisement
+
+profile-sync-discovery-check-tool: ensure-local-rust
+	$(SLATE_LIMITED_CARGO) build -j "$(CARGO_BUILD_JOBS)" -p slate-profile-sync --bin slate-profile-sync-discovery-check
 
 profile-sync-lan-smoke: profile-sync-net-probe
 	SLATE_LAN_SMOKE_BINARY="$(SLATE_BROADWEBD_NET_PROBE_BIN)" "$(CURDIR)/scripts/profile-sync-lan-smoke.sh" "$(SLATE_LAN_SMOKE_SSH)"

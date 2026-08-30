@@ -3,6 +3,7 @@ set -eu
 
 binary=${SLATE_P2P_LAN_SMOKE_BINARY:-target/debug/slate-broadwebd-net-probe}
 advertisement_binary=${SLATE_P2P_LAN_ADVERTISEMENT_BINARY:-target/debug/slate-profile-sync-advertisement}
+discovery_check_binary=${SLATE_P2P_LAN_DISCOVERY_CHECK_BINARY:-target/debug/slate-profile-sync-discovery-check}
 ssh_target=${1:-${SLATE_P2P_LAN_SMOKE_SSH:-}}
 frame_max_bytes=${SLATE_P2P_LAN_FRAME_MAX_BYTES:-1048576}
 remote_memory_mb=${SLATE_P2P_LAN_REMOTE_MEMORY_MB:-256}
@@ -22,6 +23,11 @@ discovery_node_id=${SLATE_P2P_LAN_DISCOVERY_NODE_ID:-remote_probe}
 discovery_provider_id=${SLATE_P2P_LAN_DISCOVERY_PROVIDER_ID:-remote_probe_provider}
 discovery_membership_epoch=${SLATE_P2P_LAN_DISCOVERY_MEMBERSHIP_EPOCH:-1}
 discovery_sequence=${SLATE_P2P_LAN_DISCOVERY_SEQUENCE:-$(date +%s)}
+discovery_check_db=${SLATE_P2P_LAN_DISCOVERY_CHECK_DB:-}
+discovery_check_profile=${SLATE_P2P_LAN_DISCOVERY_CHECK_PROFILE:-}
+discovery_check_local_device_id=${SLATE_P2P_LAN_DISCOVERY_CHECK_LOCAL_DEVICE_ID:-}
+discovery_check_protocol=${SLATE_P2P_LAN_DISCOVERY_CHECK_PROTOCOL:-local-simulation}
+discovery_check_report=${SLATE_P2P_LAN_DISCOVERY_CHECK_REPORT:-}
 require_signed_discovery=${SLATE_P2P_LAN_REQUIRE_SIGNED_DISCOVERY:-0}
 local_tmp_dir=${SLATE_P2P_LAN_LOCAL_TMPDIR:-target/tmp}
 remote_dir=
@@ -129,6 +135,40 @@ if [ -n "$discovery_key_file" ]; then
             --output "$generated_discovery_advertisement_file"
     fi
     discovery_advertisement_file=$generated_discovery_advertisement_file
+fi
+
+if [ -n "$discovery_check_db" ]; then
+    if [ ! -x "$discovery_check_binary" ]; then
+        printf 'profile-sync discovery check binary is missing or not executable: %s\n' "$discovery_check_binary" >&2
+        printf 'build it first with the low-memory wrapper, for example:\n' >&2
+        printf '  make profile-sync-discovery-check-tool\n' >&2
+        exit 2
+    fi
+    if [ ! -f "$discovery_check_db" ]; then
+        printf 'SLATE_P2P_LAN_DISCOVERY_CHECK_DB does not exist: %s\n' "$discovery_check_db" >&2
+        exit 2
+    fi
+    if [ -z "$discovery_advertisement_file" ]; then
+        printf 'SLATE_P2P_LAN_DISCOVERY_CHECK_DB requires SLATE_P2P_LAN_DISCOVERY_ADVERTISEMENT_FILE or SLATE_P2P_LAN_DISCOVERY_KEY_FILE\n' >&2
+        exit 2
+    fi
+    set -- \
+        "$discovery_check_binary" \
+        --settings-db "$discovery_check_db" \
+        --network-id "$network_id" \
+        --protocol "$discovery_check_protocol" \
+        --advertisement-file "$discovery_advertisement_file" \
+        --require-trusted
+    if [ -n "$discovery_check_profile" ]; then
+        set -- "$@" --profile "$discovery_check_profile"
+    fi
+    if [ -n "$discovery_check_local_device_id" ]; then
+        set -- "$@" --local-device-id "$discovery_check_local_device_id"
+    fi
+    if [ -n "$discovery_check_report" ]; then
+        set -- "$@" --output "$discovery_check_report"
+    fi
+    SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh "$@"
 fi
 
 remote_dir=$(

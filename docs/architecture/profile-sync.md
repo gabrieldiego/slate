@@ -1365,6 +1365,16 @@ The generated file is local temp state only and is removed after the manual
 smoke run; the remote process still receives only the already-signed
 advertisement.
 
+`slate-profile-sync-discovery-check` is the companion manual trust preflight.
+It reads one or more captured or generated advertisement files, opens an
+explicit `slate-settings.db`, wraps the files as protocol-neutral discovery
+candidates, and applies the same local membership/signature trust filter used
+by schedulers. The P2P LAN helper can run this check with
+`SLATE_P2P_LAN_DISCOVERY_CHECK_DB` before staging an advertisement to a remote
+smoke host. This is still not the final automatic live-discovery gate: future
+transport harnesses should pass discovered candidates into the same
+profile-sync trust layer before connecting.
+
 ## Privacy Boundaries
 
 - Sync must be opt-in per profile.

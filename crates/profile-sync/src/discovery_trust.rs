@@ -55,6 +55,27 @@ pub enum ProfileSyncPeerDiscoveryTrustRejection {
     InvalidSignature,
 }
 
+impl ProfileSyncPeerDiscoveryTrustRejection {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::WrongNetwork => "wrong_network",
+            Self::LocalDevice => "local_device",
+            Self::MissingProfileSyncServiceFrameCapability => {
+                "missing_profile_sync_service_frame_capability"
+            }
+            Self::StaleDiscoverySequence => "stale_discovery_sequence",
+            Self::ReplayedDiscoverySequence => "replayed_discovery_sequence",
+            Self::UnknownDevicePublicKey => "unknown_device_public_key",
+            Self::UntrustedDevicePublicKey => "untrusted_device_public_key",
+            Self::MissingSignedIdentity => "missing_signed_identity",
+            Self::SignatureDeviceMismatch => "signature_device_mismatch",
+            Self::SignaturePublicKeyMismatch => "signature_public_key_mismatch",
+            Self::SignerMembershipEpochTooNew => "signer_membership_epoch_too_new",
+            Self::InvalidSignature => "invalid_signature",
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum ProfileSyncPeerAdvertisementSignatureError {
     Broadwebd(BroadwebdError),
