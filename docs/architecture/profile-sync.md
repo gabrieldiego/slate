@@ -658,7 +658,10 @@ setting through framed clients on two local fixture devices, proving the runtime
 cycle path can cross the byte boundary before the final daemon IPC transport is
 chosen. Selected retention-provider coverage also wraps the provider handle in
 a framed client, so retention and availability checks cross the same byte
-boundary as normal device sync calls.
+boundary as normal device sync calls. A materializer regression now also builds
+that framed provider client from the socketless service-frame endpoint registry,
+so selected deferred endpoint refs can be exercised through the same connector
+shape future live broadweb transports must implement.
 The publisher also has a retained dependency/root helper for publish flows that
 must upload snapshot or tail objects before publishing the manifest root.
 For settings tails, the bridge can convert local `SyncChangeRecord` values into

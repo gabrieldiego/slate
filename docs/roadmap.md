@@ -1899,6 +1899,10 @@ Current baseline:
   libp2p/IPNS/Iroh endpoint refs to in-process `BroadwebdClient` handlers while
   still exchanging bounded service-frame bytes over the same connector
   interface that future real transports must implement.
+- `slate-profile-sync` materializer coverage now also consumes a provider
+  client built from that socketless endpoint registry, proving selected
+  deferred endpoint refs can become framed `BroadwebdClient` handles without
+  bypassing the connector boundary.
 - The manual `slate-broadwebd-net-probe discover` harness now reports the
   selected connector kind and can capture deferred p2p/IPNS/Iroh service
   advertisements without connecting. The `discover-probe` path stays TCP-only

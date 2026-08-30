@@ -915,6 +915,18 @@ require_text \
     'envelope-only `BroadwebdClient` regression' \
     'Roadmap must record envelope-only profile-sync bridge coverage.'
 require_text \
+    crates/profile-sync/src/lib.rs \
+    'protocol_provider_materializer_accepts_registry_backed_framed_deferred_endpoint' \
+    'profile-sync must prove selected deferred provider endpoint refs can materialize through registry-backed framed clients.'
+require_text \
+    docs/architecture/profile-sync.md \
+    'framed provider client from the socketless service-frame endpoint registry' \
+    'Profile-sync architecture must document registry-backed framed provider materialization.'
+require_text \
+    docs/roadmap.md \
+    'client built from that socketless endpoint registry' \
+    'Roadmap must record registry-backed framed provider materialization.'
+require_text \
     docs/architecture/profile-sync.md \
     'checks the chrome synced-settings watcher wiring' \
     'Profile-sync architecture must document the low-memory chrome watcher verification strategy.'

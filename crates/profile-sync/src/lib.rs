@@ -11248,9 +11248,9 @@ mod tests {
     };
     use slate_broadwebd::{
         BroadwebStatusSnapshot, BroadwebdClient, BroadwebdError,
-        DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+        ConnectorServiceFrameBroadwebdClient, DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
         DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH, DaemonHealth, DaemonLifecycle,
-        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+        InProcessServiceFrameEndpointRegistry, PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
         PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
         PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER, ProfileSyncPeerAdvertisement,
         ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryProvider,
@@ -11263,7 +11263,7 @@ mod tests {
         ProfileSyncResponse as BroadwebdProfileSyncResponse,
         ProfileSyncRootCandidate as BroadwebdProfileSyncRootCandidate,
         ProfileSyncRootHealth as BroadwebdProfileSyncRootHealth, ResourceBudget,
-        ServiceFrameBroadwebdClient, ServiceRequest as BroadwebdServiceRequest,
+        ServiceFrameBroadwebdClient, ServiceFrameCodec, ServiceRequest as BroadwebdServiceRequest,
         ServiceResponse as BroadwebdServiceResponse, TemporaryDownloadRecord,
         test_fixtures::{
             InProcessBroadwebNetwork, InternalKuboRpcResponse, ProfileSyncFixtureCapacity,
@@ -12020,6 +12020,88 @@ mod tests {
         let _ = std::fs::remove_dir_all(iroh_state_root);
         let _ = std::fs::remove_dir_all(mismatch_state_root);
         let _ = std::fs::remove_dir_all(duplicate_state_root);
+    }
+
+    #[test]
+    fn protocol_provider_materializer_accepts_registry_backed_framed_deferred_endpoint() {
+        let network = InProcessBroadwebNetwork::new();
+        let provider_state_root = test_state_root("protocol-materializer-endpoint-registry");
+        let provider_id = "registry-iroh-provider";
+        let provider_endpoint_ref = "iroh-node:registry-profile-sync-node";
+        let provider_daemon = network
+            .daemon_for_provider_with_roles(
+                &provider_state_root,
+                ResourceBudget::default(),
+                provider_id,
+                "socketless-registry-provider",
+                BroadwebdProfileSyncProviderRoles::availability_provider(),
+            )
+            .expect("start socketless registry provider daemon");
+
+        let mut endpoint_registry = InProcessServiceFrameEndpointRegistry::new();
+        endpoint_registry
+            .register(provider_endpoint_ref, &provider_daemon)
+            .expect("register deferred endpoint with socketless frame registry");
+        let provider_connector = endpoint_registry
+            .connector(provider_endpoint_ref)
+            .expect("build endpoint-registry connector");
+        let provider_client = ConnectorServiceFrameBroadwebdClient::with_codec(
+            provider_connector,
+            ServiceFrameCodec::new(4096),
+        );
+        let plan = super::SettingsSyncSelectedProtocolMaterializationPlan {
+            deferred_protocol_requests: vec![
+                super::SettingsSyncSelectedDeferredProtocolMaterializationRequest {
+                    provider_id: provider_id.to_string(),
+                    protocol: super::PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL.to_string(),
+                    target: "registry-profile-sync-node".to_string(),
+                },
+            ],
+            ..super::SettingsSyncSelectedProtocolMaterializationPlan::default()
+        };
+        let materializer = super::SettingsSyncSocketlessProtocolProviderMaterializer::new(
+            super::SettingsSyncProtocolProviderMaterializerPolicy::local_deterministic_simulation(),
+            vec![super::SettingsSyncProtocolProviderDaemon::new(
+                provider_id,
+                provider_endpoint_ref,
+                &provider_client,
+            )],
+        );
+
+        let materialization = materializer.materialize_protocol_providers(&plan);
+
+        assert_eq!(materialization.materialized_provider_count(), 1);
+        assert_eq!(materialization.blocked_provider_count(), 0);
+        assert!(materialization.all_providers_materialized());
+        assert_eq!(
+            materialization.report(),
+            super::SettingsSyncProtocolProviderMaterializationReport {
+                materialized_provider_ids: vec![provider_id.to_string()],
+                missing_provider_ids: Vec::new(),
+                endpoint_mismatch_provider_ids: Vec::new(),
+                duplicate_provider_ids: Vec::new(),
+                unsupported_provider_ids: Vec::new(),
+                capacity_exceeded_provider_ids: Vec::new(),
+            }
+        );
+        let handles = materialization.retention_provider_handles();
+        assert_eq!(handles.len(), 1);
+        assert_eq!(handles[0].provider_id, provider_id);
+        assert_eq!(handles[0].endpoint_ref, Some(provider_endpoint_ref));
+        let retained = handles[0]
+            .daemon
+            .profile_sync(BroadwebdProfileSyncRequest::ListRetainedObjects(
+                BroadwebdProfileSyncProfileRequest::new(DEFAULT_PROFILE_ID),
+            ))
+            .expect("list retained objects through registry-backed framed client");
+        assert_eq!(
+            retained,
+            BroadwebdProfileSyncResponse::RetainedObjects {
+                object_ids: Vec::new(),
+            }
+        );
+
+        let _ = std::fs::remove_dir_all(provider_state_root);
     }
 
     #[test]
