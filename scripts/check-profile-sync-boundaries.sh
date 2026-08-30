@@ -254,6 +254,18 @@ require_text \
     '--runtime-profile-sync' \
     'manual broadwebd profile-sync probes must require an explicit flag before using runtime profile-sync backend configuration.'
 require_text \
+    crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
+    '--discovery-advertisement-file' \
+    'manual broadwebd discovery probes must be able to carry a caller-supplied signed advertisement DTO without signing inside broadwebd.'
+require_text \
+    crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
+    '--require-signed-discovery' \
+    'manual broadwebd discovery probes must be able to reject unsigned candidates before connecting in signed-harness runs.'
+require_text \
+    crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
+    '--discovery-membership-epoch' \
+    'manual broadwebd discovery probes must expose membership epoch metadata for generated advertisements.'
+require_text \
     scripts/profile-sync-lan-smoke.sh \
     'SLATE_LAN_SMOKE_RUNTIME_PROFILE_SYNC' \
     'LAN smoke helpers must keep runtime profile-sync backend selection opt-in.'
@@ -261,6 +273,22 @@ require_text \
     scripts/profile-sync-p2p-lan-smoke.sh \
     'SLATE_P2P_LAN_RUNTIME_PROFILE_SYNC' \
     'P2P LAN smoke helpers must keep runtime profile-sync backend selection opt-in.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    'SLATE_P2P_LAN_DISCOVERY_ADVERTISEMENT_FILE' \
+    'P2P LAN smoke helpers must allow signed discovery advertisement files to be staged explicitly.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    'SLATE_P2P_LAN_DISCOVERY_MEMBERSHIP_EPOCH' \
+    'P2P LAN smoke helpers must expose membership epoch metadata for generated discovery advertisements.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    'SLATE_P2P_LAN_SERVER_BIND' \
+    'P2P LAN smoke helpers must allow a fixed service-frame bind address for signed discovery advertisements.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    'SLATE_P2P_LAN_REQUIRE_SIGNED_DISCOVERY' \
+    'P2P LAN smoke helpers must allow manual runs to require signed discovery advertisements.'
 require_text \
     crates/broadwebd/src/lib.rs \
     'daemon_dispatches_profile_sync_through_service_request_envelope' \

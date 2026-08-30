@@ -8,10 +8,14 @@ remote_memory_mb=${SLATE_P2P_LAN_REMOTE_MEMORY_MB:-256}
 local_memory_mb=${SLATE_P2P_LAN_LOCAL_MEMORY_MB:-256}
 payload=${SLATE_P2P_LAN_PAYLOAD:-slate broadwebd p2p LAN profile sync smoke}
 network_id=${SLATE_P2P_LAN_NETWORK_ID:-slate_p2p_$$}
+server_bind=${SLATE_P2P_LAN_SERVER_BIND:-0.0.0.0:0}
 multicast_group=${SLATE_P2P_LAN_MULTICAST_GROUP:-239.255.85.83}
 discovery_port=${SLATE_P2P_LAN_DISCOVERY_PORT:-47883}
 discovery_target=${SLATE_P2P_LAN_DISCOVERY_TARGET:-$multicast_group:$discovery_port}
 runtime_profile_sync=${SLATE_P2P_LAN_RUNTIME_PROFILE_SYNC:-0}
+discovery_advertisement_file=${SLATE_P2P_LAN_DISCOVERY_ADVERTISEMENT_FILE:-}
+discovery_membership_epoch=${SLATE_P2P_LAN_DISCOVERY_MEMBERSHIP_EPOCH:-1}
+require_signed_discovery=${SLATE_P2P_LAN_REQUIRE_SIGNED_DISCOVERY:-0}
 
 if [ -z "$ssh_target" ]; then
     printf 'usage: %s <ssh-target>\n' "$0" >&2
@@ -39,6 +43,24 @@ case "$runtime_profile_sync" in
         ;;
 esac
 
+require_signed_discovery_arg=
+case "$require_signed_discovery" in
+    1 | true | yes)
+        require_signed_discovery_arg="--require-signed-discovery"
+        ;;
+    0 | false | no | "")
+        ;;
+    *)
+        printf 'SLATE_P2P_LAN_REQUIRE_SIGNED_DISCOVERY must be 1, true, yes, 0, false, no, or empty\n' >&2
+        exit 2
+        ;;
+esac
+
+if [ -n "$discovery_advertisement_file" ] && [ ! -f "$discovery_advertisement_file" ]; then
+    printf 'SLATE_P2P_LAN_DISCOVERY_ADVERTISEMENT_FILE does not exist: %s\n' "$discovery_advertisement_file" >&2
+    exit 2
+fi
+
 remote_dir=$(
     ssh "$ssh_target" 'set -eu; base=${TMPDIR:-/tmp}; dir=$(mktemp -d "$base/slate-broadwebd-p2p-lan.XXXXXX"); printf "%s\n" "$dir"'
 )
@@ -54,7 +76,13 @@ trap cleanup EXIT INT TERM
 scp -q "$binary" "$ssh_target:$remote_dir/slate-broadwebd-net-probe"
 ssh "$ssh_target" "set -eu; chmod 700 '$remote_dir/slate-broadwebd-net-probe'"
 
-ssh "$ssh_target" "set -eu; ulimit -v $((remote_memory_mb * 1024)) 2>/dev/null || true; '$remote_dir/slate-broadwebd-net-probe' serve --bind 0.0.0.0:0 --state-root '$remote_dir/state' --ready-file '$remote_dir/ready' --max-requests 16 --frame-max-bytes '$frame_max_bytes' $runtime_profile_sync_arg --discovery-bind 0.0.0.0:'$discovery_port' --discovery-ready-file '$remote_dir/discovery-ready' --discovery-network '$network_id' --discovery-node remote_probe --discovery-multicast '$multicast_group' > '$remote_dir/server.log' 2>&1 & printf '%s\n' "'$!'" > '$remote_dir/server.pid'"
+discovery_advertisement_arg=
+if [ -n "$discovery_advertisement_file" ]; then
+    scp -q "$discovery_advertisement_file" "$ssh_target:$remote_dir/discovery-advertisement.json"
+    discovery_advertisement_arg="--discovery-advertisement-file '$remote_dir/discovery-advertisement.json'"
+fi
+
+ssh "$ssh_target" "set -eu; ulimit -v $((remote_memory_mb * 1024)) 2>/dev/null || true; '$remote_dir/slate-broadwebd-net-probe' serve --bind '$server_bind' --state-root '$remote_dir/state' --ready-file '$remote_dir/ready' --max-requests 16 --frame-max-bytes '$frame_max_bytes' $runtime_profile_sync_arg --discovery-bind 0.0.0.0:'$discovery_port' --discovery-ready-file '$remote_dir/discovery-ready' --discovery-network '$network_id' --discovery-node remote_probe --discovery-membership-epoch '$discovery_membership_epoch' $discovery_advertisement_arg --discovery-multicast '$multicast_group' > '$remote_dir/server.log' 2>&1 & printf '%s\n' "'$!'" > '$remote_dir/server.pid'"
 remote_pid=$(ssh "$ssh_target" "set -eu; cat '$remote_dir/server.pid'")
 
 attempt=0
@@ -78,7 +106,8 @@ if ! SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh \
     --network-id "$network_id" \
     --node-id local_probe \
     --payload "$payload" \
-    --frame-max-bytes "$frame_max_bytes"; then
+    --frame-max-bytes "$frame_max_bytes" \
+    $require_signed_discovery_arg; then
     ssh "$ssh_target" "set +e; cat '$remote_dir/server.log'" >&2 || true
     exit 1
 fi

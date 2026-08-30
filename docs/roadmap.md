@@ -350,6 +350,13 @@ Current baseline:
   explicit `--runtime-profile-sync` flag and matching script environment
   switches are required before it reads runtime profile-sync backend settings
   such as a local Kubo RPC endpoint.
+- The P2P LAN probe can now carry a full `ProfileSyncPeerAdvertisement` JSON
+  file, including `identity_signature`, and `discover-probe` has an explicit
+  signed-discovery requirement flag. broadwebd still only validates and
+  transports the advertisement DTO; `slate-profile-sync` remains responsible
+  for producing signatures and checking membership trust. The helper script can
+  also pin the remote service-frame bind address for signed advertisements,
+  whose service address is part of the signature payload.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the
@@ -2016,9 +2023,11 @@ Next:
 - Add a libp2p rendezvous/Kademlia discovery adapter behind
   `ProfileSyncPeerDiscoveryProvider` if its dependency footprint remains
   acceptable under Slate's low-memory development profile.
-- Update the opt-in LAN discovery smoke to produce and consume signed peer
-  advertisements with membership epochs before treating it as representative of
-  automatic enrolled-account discovery.
+- Extend the opt-in LAN discovery smoke from signed-advertisement carrier
+  support into full profile-sync trust verification: produce signed records
+  from enrolled test profiles, reject untrusted membership epochs before
+  connecting, and only then treat it as representative of automatic
+  enrolled-account discovery.
 - Continue splitting sync backends into discovery, connectivity, transfer,
   availability, and mutable-root implementations so different broadweb
   protocols can be combined behind the typed provider role records.

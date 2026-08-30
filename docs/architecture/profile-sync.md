@@ -1337,6 +1337,20 @@ remote memory, use temporary remote state, and clean up on exit. Their
 `SLATE_*_RUNTIME_PROFILE_SYNC=1` switches forward `--runtime-profile-sync` to
 the remote server for manual backend experiments.
 
+The P2P LAN probe can now carry the signed discovery shape without making
+broadwebd responsible for signing or trusting account identities. `serve` may
+advertise a generated record with `--discovery-membership-epoch`, or load a full
+`ProfileSyncPeerAdvertisement` JSON file with `--discovery-advertisement-file`.
+If that file contains `identity_signature`, the datagram responder preserves it
+byte-for-byte after normal DTO validation. `discover-probe
+--require-signed-discovery` filters out unsigned candidates before connecting,
+but full membership and signature trust still belongs in `slate-profile-sync`.
+Signed advertisement files therefore need to be produced by the profile-sync
+layer, and their advertised service address must match the manually selected
+server bind address. The P2P LAN helper keeps its random port default for
+ordinary smoke tests, but `SLATE_P2P_LAN_SERVER_BIND=0.0.0.0:<port>` can pin
+the remote service-frame port for signed advertisement files.
+
 ## Privacy Boundaries
 
 - Sync must be opt-in per profile.

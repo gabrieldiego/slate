@@ -1,17 +1,18 @@
 #![forbid(unsafe_code)]
 
 use slate_broadwebd::{
-    BroadwebDaemon, BroadwebdClient, IpfsConfig, PluginRegistry, ProfileSyncObjectRequest,
-    ProfileSyncPeerAdvertisement, ProfileSyncProfileRequest, ProfileSyncPutObjectRequest,
-    ProfileSyncRequest, ProfileSyncResponse, ProfileSyncRootHealthRequest, ProfileSyncRootRequest,
-    ProfileSyncRootUpdate, ProfileSyncRuntimeConfig, ResourceBudget, ServiceFrameCodec,
-    TcpServiceFrameBroadwebdClient, default_session_status_reporter, discover_profile_sync_peers,
+    BroadwebDaemon, BroadwebdClient, DiscoveredProfileSyncPeer, IpfsConfig, PluginRegistry,
+    ProfileSyncObjectRequest, ProfileSyncPeerAdvertisement, ProfileSyncProfileRequest,
+    ProfileSyncPutObjectRequest, ProfileSyncRequest, ProfileSyncResponse,
+    ProfileSyncRootHealthRequest, ProfileSyncRootRequest, ProfileSyncRootUpdate,
+    ProfileSyncRuntimeConfig, ResourceBudget, ServiceFrameCodec, TcpServiceFrameBroadwebdClient,
+    default_session_status_reporter, discover_profile_sync_peers,
     respond_to_profile_sync_peer_solicit, serve_one_service_frame_request_over_stream,
 };
 use std::env;
 use std::fs;
 use std::io;
-use std::net::{Ipv4Addr, TcpListener, TcpStream, UdpSocket};
+use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::{
@@ -63,6 +64,8 @@ struct ServerArgs {
     discovery_node_id: String,
     discovery_provider_id: String,
     discovery_multicast: Option<Ipv4Addr>,
+    discovery_advertisement_file: Option<PathBuf>,
+    discovery_membership_epoch: i64,
     runtime_profile_sync: bool,
 }
 
@@ -79,6 +82,8 @@ impl ServerArgs {
         let mut discovery_node_id = format!("probe_{}", std::process::id());
         let mut discovery_provider_id = DEFAULT_DISCOVERY_PROVIDER_ID.to_string();
         let mut discovery_multicast = None;
+        let mut discovery_advertisement_file = None;
+        let mut discovery_membership_epoch = 1;
         let mut runtime_profile_sync = false;
         let mut args = args.peekable();
 
@@ -119,6 +124,18 @@ impl ServerArgs {
                 "--discovery-provider" => {
                     discovery_provider_id = next_value(&mut args, "--discovery-provider")?
                 }
+                "--discovery-advertisement-file" => {
+                    discovery_advertisement_file = Some(PathBuf::from(next_value(
+                        &mut args,
+                        "--discovery-advertisement-file",
+                    )?))
+                }
+                "--discovery-membership-epoch" => {
+                    discovery_membership_epoch = parse_i64(
+                        &next_value(&mut args, "--discovery-membership-epoch")?,
+                        "--discovery-membership-epoch",
+                    )?
+                }
                 "--discovery-multicast" => {
                     let group = next_value(&mut args, "--discovery-multicast")?;
                     discovery_multicast = Some(
@@ -152,6 +169,8 @@ impl ServerArgs {
             discovery_node_id,
             discovery_provider_id,
             discovery_multicast,
+            discovery_advertisement_file,
+            discovery_membership_epoch,
             runtime_profile_sync,
         })
     }
@@ -219,6 +238,7 @@ struct DiscoverProbeArgs {
     payload: String,
     frame_max_bytes: usize,
     timeout: Duration,
+    require_signed_discovery: bool,
 }
 
 impl DiscoverProbeArgs {
@@ -231,6 +251,7 @@ impl DiscoverProbeArgs {
         let mut payload = DEFAULT_PAYLOAD.to_string();
         let mut frame_max_bytes = DEFAULT_FRAME_MAX_BYTES;
         let mut timeout_ms = DEFAULT_DISCOVERY_TIMEOUT_MS;
+        let mut require_signed_discovery = false;
         let mut args = args.peekable();
 
         while let Some(arg) = args.next() {
@@ -252,6 +273,7 @@ impl DiscoverProbeArgs {
                 "--timeout-ms" => {
                     timeout_ms = parse_u64(&next_value(&mut args, "--timeout-ms")?, "--timeout-ms")?
                 }
+                "--require-signed-discovery" => require_signed_discovery = true,
                 "-h" | "--help" => return Err(usage()),
                 _ => {
                     return Err(format!(
@@ -278,6 +300,7 @@ impl DiscoverProbeArgs {
             payload,
             frame_max_bytes,
             timeout: Duration::from_millis(timeout_ms),
+            require_signed_discovery,
         })
     }
 }
@@ -305,14 +328,7 @@ fn run_server(args: ServerArgs) -> Result<(), String> {
             discovery_bind,
             args.discovery_ready_file.as_ref(),
             args.discovery_multicast,
-            ProfileSyncPeerAdvertisement::new(
-                args.discovery_network_id,
-                args.discovery_node_id,
-                args.discovery_provider_id,
-                local_addr.to_string(),
-                1,
-            )
-            .map_err(|error| format!("create peer discovery advertisement: {error}"))?,
+            server_discovery_advertisement(&args, local_addr)?,
         )?)
     } else {
         None
@@ -423,15 +439,18 @@ fn run_discover_probe(args: DiscoverProbeArgs) -> Result<(), String> {
         8,
     )
     .map_err(|error| format!("discover profile-sync peers: {error}"))?;
-    let peer = peers
-        .first()
-        .ok_or_else(|| "discover-probe found no profile-sync peers".to_string())?;
+    let peer = select_discovered_peer(peers, args.require_signed_discovery)?;
     let connect_addr = peer
         .connect_addr()
         .map_err(|error| format!("resolve discovered peer connect address: {error}"))?;
     println!(
-        "DISCOVERED_PROFILE_SYNC_PEER node_id={} provider_id={} source={} connect={}",
-        peer.advertisement.node_id, peer.advertisement.provider_id, peer.source_addr, connect_addr
+        "DISCOVERED_PROFILE_SYNC_PEER node_id={} provider_id={} membership_epoch={} signed={} source={} connect={}",
+        peer.advertisement.node_id,
+        peer.advertisement.provider_id,
+        peer.advertisement.membership_epoch,
+        peer.advertisement.identity_signature.is_some(),
+        peer.source_addr,
+        connect_addr
     );
     let client = TcpServiceFrameBroadwebdClient::with_codec(
         connect_addr,
@@ -444,6 +463,61 @@ fn run_discover_probe(args: DiscoverProbeArgs) -> Result<(), String> {
         &args.root_id,
         args.payload.into_bytes(),
     )
+}
+
+fn select_discovered_peer(
+    peers: Vec<DiscoveredProfileSyncPeer>,
+    require_signed_discovery: bool,
+) -> Result<DiscoveredProfileSyncPeer, String> {
+    peers
+        .into_iter()
+        .filter(|peer| !require_signed_discovery || peer.advertisement.identity_signature.is_some())
+        .next()
+        .ok_or_else(|| {
+            if require_signed_discovery {
+                "discover-probe found no signed profile-sync peers".to_string()
+            } else {
+                "discover-probe found no profile-sync peers".to_string()
+            }
+        })
+}
+
+fn server_discovery_advertisement(
+    args: &ServerArgs,
+    local_addr: SocketAddr,
+) -> Result<ProfileSyncPeerAdvertisement, String> {
+    if let Some(path) = &args.discovery_advertisement_file {
+        return load_discovery_advertisement(path);
+    }
+
+    ProfileSyncPeerAdvertisement::new(
+        args.discovery_network_id.as_str(),
+        args.discovery_node_id.as_str(),
+        args.discovery_provider_id.as_str(),
+        local_addr.to_string(),
+        1,
+    )
+    .and_then(|advertisement| advertisement.with_membership_epoch(args.discovery_membership_epoch))
+    .map_err(|error| format!("create peer discovery advertisement: {error}"))
+}
+
+fn load_discovery_advertisement(path: &PathBuf) -> Result<ProfileSyncPeerAdvertisement, String> {
+    let text = fs::read_to_string(path)
+        .map_err(|error| format!("read discovery advertisement {}: {error}", path.display()))?;
+    let advertisement = serde_json::from_str::<ProfileSyncPeerAdvertisement>(text.as_str())
+        .map_err(|error| {
+            format!(
+                "decode discovery advertisement {} as JSON: {error}",
+                path.display()
+            )
+        })?;
+    advertisement.validate().map_err(|error| {
+        format!(
+            "validate discovery advertisement {}: {error}",
+            path.display()
+        )
+    })?;
+    Ok(advertisement)
 }
 
 fn run_profile_sync_probe(
@@ -667,6 +741,12 @@ fn parse_u64(value: &str, name: &str) -> Result<u64, String> {
         .map_err(|error| format!("invalid {name} value {value:?}: {error}"))
 }
 
+fn parse_i64(value: &str, name: &str) -> Result<i64, String> {
+    value
+        .parse::<i64>()
+        .map_err(|error| format!("invalid {name} value {value:?}: {error}"))
+}
+
 fn is_udp_timeout_error(error: &slate_broadwebd::BroadwebdError) -> bool {
     let message = error.to_string();
     message.contains("timed out")
@@ -676,8 +756,166 @@ fn is_udp_timeout_error(error: &slate_broadwebd::BroadwebdError) -> bool {
 
 fn usage() -> String {
     "usage:
-  slate-broadwebd-net-probe serve --state-root <dir> [--bind <addr:port>] [--ready-file <path>] [--max-requests <n>] [--frame-max-bytes <bytes>] [--runtime-profile-sync] [--discovery-bind <addr:port>] [--discovery-ready-file <path>] [--discovery-network <id>] [--discovery-node <id>] [--discovery-provider <id>] [--discovery-multicast <ipv4>]
+  slate-broadwebd-net-probe serve --state-root <dir> [--bind <addr:port>] [--ready-file <path>] [--max-requests <n>] [--frame-max-bytes <bytes>] [--runtime-profile-sync] [--discovery-bind <addr:port>] [--discovery-ready-file <path>] [--discovery-network <id>] [--discovery-node <id>] [--discovery-provider <id>] [--discovery-membership-epoch <n>] [--discovery-advertisement-file <path>] [--discovery-multicast <ipv4>]
   slate-broadwebd-net-probe probe --connect <host:port> [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>]
-  slate-broadwebd-net-probe discover-probe --discovery-target <host:port> [--network-id <id>] [--node-id <id>] [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>] [--timeout-ms <ms>]"
+  slate-broadwebd-net-probe discover-probe --discovery-target <host:port> [--network-id <id>] [--node-id <id>] [--profile <profile>] [--root-id <root>] [--payload <text>] [--frame-max-bytes <bytes>] [--timeout-ms <ms>] [--require-signed-discovery]"
         .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slate_broadwebd::ProfileSyncPeerAdvertisementSignature;
+
+    #[test]
+    fn server_args_accept_signed_discovery_controls() {
+        let args = ServerArgs::parse(
+            [
+                "--state-root",
+                "/tmp/slate-probe-state",
+                "--discovery-bind",
+                "127.0.0.1:0",
+                "--discovery-membership-epoch",
+                "9",
+                "--discovery-advertisement-file",
+                "/tmp/slate-peer-advertisement.json",
+            ]
+            .into_iter()
+            .map(str::to_string),
+        )
+        .expect("parse server args");
+
+        assert_eq!(args.discovery_membership_epoch, 9);
+        assert_eq!(
+            args.discovery_advertisement_file.as_deref(),
+            Some(std::path::Path::new("/tmp/slate-peer-advertisement.json"))
+        );
+    }
+
+    #[test]
+    fn server_discovery_advertisement_applies_generated_membership_epoch() {
+        let args = ServerArgs::parse(
+            [
+                "--state-root",
+                "/tmp/slate-probe-state",
+                "--discovery-network",
+                "signednet",
+                "--discovery-node",
+                "node-a",
+                "--discovery-provider",
+                "provider-a",
+                "--discovery-membership-epoch",
+                "4",
+            ]
+            .into_iter()
+            .map(str::to_string),
+        )
+        .expect("parse server args");
+
+        let advertisement =
+            server_discovery_advertisement(&args, "127.0.0.1:9443".parse().unwrap())
+                .expect("create discovery advertisement");
+
+        assert_eq!(advertisement.network_id, "signednet");
+        assert_eq!(advertisement.node_id, "node-a");
+        assert_eq!(advertisement.provider_id, "provider-a");
+        assert_eq!(advertisement.service_addr, "127.0.0.1:9443");
+        assert_eq!(advertisement.membership_epoch, 4);
+        assert!(advertisement.identity_signature.is_none());
+    }
+
+    #[test]
+    fn server_discovery_advertisement_loads_signed_file_without_resigning() {
+        let path = std::env::temp_dir().join(format!(
+            "slate-broadwebd-net-probe-advertisement-{}.json",
+            std::process::id()
+        ));
+        let signature =
+            ProfileSyncPeerAdvertisementSignature::ed25519("node-signed", vec![7; 32], vec![8; 64])
+                .expect("signature envelope");
+        let advertisement = ProfileSyncPeerAdvertisement::new(
+            "signednet",
+            "node-signed",
+            "provider-signed",
+            "127.0.0.1:9553",
+            12,
+        )
+        .expect("advertisement")
+        .with_membership_epoch(5)
+        .expect("membership epoch")
+        .with_identity_signature(signature)
+        .expect("signed advertisement envelope");
+        fs::write(&path, serde_json::to_string(&advertisement).unwrap())
+            .expect("write advertisement fixture");
+        let args = ServerArgs::parse(
+            [
+                "--state-root",
+                "/tmp/slate-probe-state",
+                "--discovery-advertisement-file",
+                path.to_str().unwrap(),
+            ]
+            .into_iter()
+            .map(str::to_string),
+        )
+        .expect("parse server args");
+
+        let loaded = server_discovery_advertisement(&args, "127.0.0.1:9443".parse().unwrap())
+            .expect("load discovery advertisement");
+
+        assert_eq!(loaded, advertisement);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn discover_probe_args_accept_require_signed_discovery() {
+        let args = DiscoverProbeArgs::parse(
+            [
+                "--discovery-target",
+                "127.0.0.1:47883",
+                "--require-signed-discovery",
+            ]
+            .into_iter()
+            .map(str::to_string),
+        )
+        .expect("parse discover-probe args");
+
+        assert!(args.require_signed_discovery);
+    }
+
+    #[test]
+    fn discover_probe_signed_selection_skips_unsigned_candidates() {
+        let unsigned = DiscoveredProfileSyncPeer {
+            advertisement: ProfileSyncPeerAdvertisement::new(
+                "signednet",
+                "node-unsigned",
+                "provider-unsigned",
+                "127.0.0.1:9551",
+                1,
+            )
+            .expect("unsigned advertisement"),
+            source_addr: "127.0.0.1:41000".parse().unwrap(),
+        };
+        let signature =
+            ProfileSyncPeerAdvertisementSignature::ed25519("node-signed", vec![7; 32], vec![8; 64])
+                .expect("signature envelope");
+        let signed = DiscoveredProfileSyncPeer {
+            advertisement: ProfileSyncPeerAdvertisement::new(
+                "signednet",
+                "node-signed",
+                "provider-signed",
+                "127.0.0.1:9552",
+                2,
+            )
+            .expect("signed advertisement")
+            .with_identity_signature(signature)
+            .expect("signed advertisement envelope"),
+            source_addr: "127.0.0.1:41001".parse().unwrap(),
+        };
+
+        let selected =
+            select_discovered_peer(vec![unsigned, signed], true).expect("select signed peer");
+
+        assert_eq!(selected.advertisement.node_id, "node-signed");
+        assert!(selected.advertisement.identity_signature.is_some());
+    }
 }
