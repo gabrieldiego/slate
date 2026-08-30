@@ -1127,10 +1127,18 @@ require_text \
     resources/resource_protocol/slate-settings.html \
     'Import enrollment key' \
     'Slate settings page must expose one enrollment key import action.'
-require_text \
+reject_protocol_model_leak \
     resources/resource_protocol/slate-settings.html \
     'Local diagnostics' \
-    'Slate settings page must keep local profile-sync diagnostics behind an expandable section.'
+    'Slate settings page must keep diagnostic controls out of the simple enrollment-key flow.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'setProfileSyncEnrollmentBusy' \
+    'Slate settings page must disable enrollment actions while an import or download is being prepared.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'Preparing enrollment key' \
+    'Slate settings page must show progress when preparing an enrollment-key download.'
 require_text \
     crates/chrome/src/desktop/protocols/slate.rs \
     'settings/profile-sync/key/export' \

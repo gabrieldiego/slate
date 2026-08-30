@@ -141,6 +141,11 @@
       color: #fffefa;
     }
 
+    button:disabled {
+      cursor: default;
+      opacity: 0.58;
+    }
+
     .keybinding-list {
       display: grid;
       gap: 14px;
@@ -253,22 +258,6 @@
       pointer-events: none;
     }
 
-    .profile-sync-diagnostics {
-      margin-top: 18px;
-      border-top: 1px solid #eeeae3;
-      padding-top: 14px;
-    }
-
-    .profile-sync-diagnostics summary {
-      cursor: pointer;
-      color: #393a37;
-      font-weight: 600;
-    }
-
-    .profile-sync-diagnostics .actions {
-      margin-top: 14px;
-    }
-
     .shortcut-row {
       display: grid;
       grid-template-columns: minmax(140px, 1fr) minmax(180px, 260px);
@@ -351,11 +340,6 @@
     <section>
       <h2>Profile Sync</h2>
       <div id="profile-sync-status" class="profile-sync-status">Not enrolled</div>
-      <div
-        id="profile-sync-details"
-        class="profile-sync-details"
-        aria-live="polite"
-      ></div>
       <input
         id="profile-sync-enrollment-key-file"
         class="profile-sync-file"
@@ -367,17 +351,11 @@
         <button id="profile-sync-key-download" class="primary">Download enrollment key</button>
         <button id="profile-sync-key-import">Import enrollment key</button>
       </div>
-      <details class="profile-sync-diagnostics">
-        <summary>Local diagnostics</summary>
-        <div class="actions">
-          <button id="profile-sync-create">Create local key</button>
-          <button id="profile-sync-provider">Add local test provider</button>
-          <button id="profile-sync-check">Check local sync</button>
-          <button id="profile-sync-run-current">Sync current settings</button>
-          <button id="profile-sync-run-local">Run local trial</button>
-          <button id="profile-sync-run-local-two-device">Run two-device trial</button>
-        </div>
-      </details>
+      <div
+        id="profile-sync-details"
+        class="profile-sync-details"
+        aria-live="polite"
+      ></div>
     </section>
 
     <section>
@@ -462,12 +440,6 @@
     const resetShortcutsButton = document.getElementById("reset-shortcuts");
     const profileSyncStatus = document.getElementById("profile-sync-status");
     const profileSyncDetails = document.getElementById("profile-sync-details");
-    const profileSyncCreateButton = document.getElementById("profile-sync-create");
-    const profileSyncProviderButton = document.getElementById("profile-sync-provider");
-    const profileSyncCheckButton = document.getElementById("profile-sync-check");
-    const profileSyncRunCurrentButton = document.getElementById("profile-sync-run-current");
-    const profileSyncRunLocalButton = document.getElementById("profile-sync-run-local");
-    const profileSyncRunLocalTwoDeviceButton = document.getElementById("profile-sync-run-local-two-device");
     const profileSyncEnrollmentKeyFile = document.getElementById("profile-sync-enrollment-key-file");
     const profileSyncKeyDownloadButton = document.getElementById("profile-sync-key-download");
     const profileSyncKeyImportButton = document.getElementById("profile-sync-key-import");
@@ -937,9 +909,9 @@
         return "loaded";
       }
       if (state.metadata_ready) {
-        return "metadata only";
+        return "import needed";
       }
-      return "missing";
+      return "created on download";
     }
 
     function profileSyncEnabledAppDomainStatus(state) {
@@ -1430,10 +1402,6 @@
         });
     }
 
-    function createProfileSyncSecret() {
-      fetchProfileSyncState("create");
-    }
-
     function ensureProfileSyncKeyForDownload(state) {
       if (!state) {
         return Promise.resolve(state);
@@ -1451,27 +1419,14 @@
       return fetchProfileSyncState("create");
     }
 
-    function checkProfileSyncReadiness() {
-      fetchProfileSyncState("check");
-    }
-
-    function addProfileSyncLocalProvider() {
-      fetchProfileSyncState("local-provider");
-    }
-
-    function runProfileSyncCurrentSync() {
-      fetchProfileSyncState("run-current");
-    }
-
-    function runProfileSyncLocalTrial() {
-      fetchProfileSyncState("run-local");
-    }
-
-    function runProfileSyncLocalTwoDeviceTrial() {
-      fetchProfileSyncState("run-local-two-device");
+    function setProfileSyncEnrollmentBusy(busy) {
+      profileSyncKeyDownloadButton.disabled = busy;
+      profileSyncKeyImportButton.disabled = busy;
     }
 
     function importProfileSyncEnrollmentKey() {
+      setProfileSyncEnrollmentBusy(true);
+      profileSyncStatus.textContent = "Importing enrollment key...";
       readSelectedProfileSyncFile(
         profileSyncEnrollmentKeyFile,
         "enrollment key",
@@ -1491,6 +1446,7 @@
       }).catch((error) => {
         setProfileSyncState({ last_error: String(error) });
       }).then(() => {
+        setProfileSyncEnrollmentBusy(false);
         profileSyncEnrollmentKeyFile.value = "";
       });
     }
@@ -1541,6 +1497,7 @@
 
     function triggerProfileSyncEnrollmentKeyDownload(state) {
       const targetUrl = profileSyncUrl("key/export", { download: "1" });
+      profileSyncStatus.textContent = `Saving ${enrollmentKeyFilename(state)}...`;
       window.location.href = slateDownloadUrl(targetUrl, enrollmentKeyFilename(state));
     }
 
@@ -1549,12 +1506,16 @@
         triggerProfileSyncEnrollmentKeyDownload(null);
         return;
       }
+      setProfileSyncEnrollmentBusy(true);
+      profileSyncStatus.textContent = "Preparing enrollment key...";
       fetchProfileSyncState("state").then(ensureProfileSyncKeyForDownload).then((state) => {
         if (!state || state.last_error) {
+          setProfileSyncEnrollmentBusy(false);
           return;
         }
         triggerProfileSyncEnrollmentKeyDownload(state);
       }).catch((error) => {
+        setProfileSyncEnrollmentBusy(false);
         setProfileSyncState({ last_error: String(error) });
       });
     }
@@ -1576,12 +1537,6 @@
     slider.addEventListener("keydown", stepSlider);
     saveButton.addEventListener("click", saveSettings);
     saveShortcutsButton.addEventListener("click", saveSettings);
-    profileSyncCreateButton.addEventListener("click", createProfileSyncSecret);
-    profileSyncProviderButton.addEventListener("click", addProfileSyncLocalProvider);
-    profileSyncCheckButton.addEventListener("click", checkProfileSyncReadiness);
-    profileSyncRunCurrentButton.addEventListener("click", runProfileSyncCurrentSync);
-    profileSyncRunLocalButton.addEventListener("click", runProfileSyncLocalTrial);
-    profileSyncRunLocalTwoDeviceButton.addEventListener("click", runProfileSyncLocalTwoDeviceTrial);
     profileSyncKeyImportButton.addEventListener("click", chooseProfileSyncEnrollmentKey);
     profileSyncKeyDownloadButton.addEventListener("click", downloadProfileSyncEnrollmentKey);
     profileSyncEnrollmentKeyFile.addEventListener("change", () => {

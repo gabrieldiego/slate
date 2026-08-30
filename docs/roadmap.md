@@ -1858,12 +1858,14 @@ Current baseline:
   Production multi-device use still needs QR rendering, encrypted
   handoff/recovery files, real provider daemons, conflict handling, and cadence
   policy.
-- `slate://settings` now presents the profile-sync enrollment surface as two
-  primary actions: download the current profile's enrollment key or import an
-  enrollment key from a JSON file. The diagnostic local-key, provider,
-  preflight, and local-trial controls remain available under an expandable
-  local diagnostics section for development without crowding the normal
-  user-facing flow.
+- `slate://settings` now presents the profile-sync enrollment surface as a
+  two-action file flow: download the current profile's enrollment key or import
+  an enrollment key from a JSON file. The visible page no longer exposes the
+  diagnostic local-key, provider, preflight, and local-trial buttons; those
+  lower-level protocol routes remain for deterministic tests and future
+  development-only tools. Metadata-only profiles still fail closed for
+  re-export because the root enrollment secret is intentionally not persisted
+  in `slate-settings.db`.
 - The profile-sync boundary script now has a static-only mode for constrained
   development runs. With `SLATE_PROFILE_SYNC_BOUNDARY_RUN_TESTS=0`, it verifies
   the socketless service-frame stream boundary, explicit runtime probe opt-in,
