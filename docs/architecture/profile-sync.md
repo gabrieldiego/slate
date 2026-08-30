@@ -1062,7 +1062,8 @@ stored-provider fixture readiness. The signed broadweb-style advertisement can
 therefore be trusted and selected while its discovered multiaddr remains
 pending protocol materialization; the socketless fixture handle used for the
 local run is reported as runnable stored-provider state, not as the advertised
-network endpoint. Preview report JSON serialization also lives in
+network endpoint. Preview report DTOs and string summary adapters live in
+`crates/profile-sync/src/preview_report.rs`, and JSON serialization lives in
 `crates/profile-sync/src/preview_json.rs`, not the Servo-backed chrome resource
 protocol module, so the Settings sync data contract can be tested under the
 low-memory profile.

@@ -1969,10 +1969,14 @@ Current baseline:
   and the low-memory boundary script rejects reintroducing duplicated discovery
   JSON helpers there, so the Settings sync data contract can be tested without
   compiling Servo.
+- Profile-sync preview report DTOs and string summary adapters now live in
+  `crates/profile-sync/src/preview_report.rs`, leaving `lib.rs` to expose the
+  stable public API and runtime orchestration paths while the preview-specific
+  local fixture reporting stays testable in a narrow module.
 
 Next:
 
-- Continue extending the protocol-neutral `profile-sync` application service.
+- Continue extending the protocol-neutral `profile-sync` application service
   toward real protocol-backed provider materialization.
 - Extend the Settings discovery preflight from the local-simulation provider to
   configured IPNS, libp2p, Iroh, mDNS, or LAN discovery providers, then add
