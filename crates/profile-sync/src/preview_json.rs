@@ -449,8 +449,8 @@ mod tests {
             blocked_reason: None,
             pulled_membership_application_count: 0,
             discovery_protocols: vec![
-                "libp2p-rendezvous".to_string(),
                 "ipns".to_string(),
+                "libp2p-rendezvous".to_string(),
                 "local-simulation".to_string(),
             ],
             discovery_trusted_peer_count: 1,
@@ -575,8 +575,8 @@ mod tests {
             true
         );
         assert_eq!(json["discovery_trusted_peer_count"], 1);
-        assert_eq!(json["discovery_protocols"][0], "libp2p-rendezvous");
-        assert_eq!(json["discovery_protocols"][1], "ipns");
+        assert_eq!(json["discovery_protocols"][0], "ipns");
+        assert_eq!(json["discovery_protocols"][1], "libp2p-rendezvous");
         assert_eq!(json["discovery_protocols"][2], "local-simulation");
         assert_eq!(json["discovery_rejected_peer_count"], 1);
         assert_eq!(json["discovery_selected_retention_provider_count"], 1);

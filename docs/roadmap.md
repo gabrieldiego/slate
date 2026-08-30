@@ -418,10 +418,12 @@ Current baseline:
   rejects a Kubo response that points at a different object id than the one Slate
   requested, so a mismatched root cannot be accepted by the backend client.
 - The Settings local profile-sync preview now exercises composed discovery
-  across libp2p-rendezvous, IPNS, and local-simulation protocol models. The
-  trusted preview provider is published and resolved through the socketless
-  Kubo/IPNS model, and preview JSON exposes `discovery_protocols` so the UI can
-  show which broadweb discovery models were active without opening sockets.
+  across IPNS, libp2p-rendezvous, and local-simulation protocol models. The
+  trusted preview provider is published through both socketless Kubo/IPNS and
+  libp2p-shaped providers, and preview JSON exposes `discovery_protocols` so
+  the UI can show which broadweb discovery models were active without opening
+  sockets. Composite discovery now de-duplicates the same advertised peer
+  across protocol providers while preserving query priority order.
 - broadwebd's `profile-sync` service can now be constructed with a socketless
   Kubo fixture backend. Normal `ProfileSyncRequest` calls for put, get, retain,
   verify, release, publish, resolve, and provider discovery are translated into

@@ -9006,6 +9006,11 @@ fn local_settings_sync_preview_discovery_summary(
         )?,
         &provider_signer,
     )?;
+    libp2p_discovery_provider.publish_profile_sync_peer(
+        ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
+        DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+        advertisement.clone(),
+    )?;
     ipns_discovery_provider.publish_profile_sync_peer(
         ProfileSyncPeerDiscoveryProtocol::Ipns,
         DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
@@ -9075,8 +9080,8 @@ fn local_settings_sync_preview_discovery_summary(
 #[cfg(feature = "local-preview-fixtures")]
 fn local_settings_sync_preview_discovery_protocols() -> [ProfileSyncPeerDiscoveryProtocol; 3] {
     [
-        ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
         ProfileSyncPeerDiscoveryProtocol::Ipns,
+        ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
         ProfileSyncPeerDiscoveryProtocol::LocalSimulation,
     ]
 }
@@ -15405,8 +15410,8 @@ mod tests {
         assert_eq!(
             report.discovery_protocols,
             vec![
-                "libp2p-rendezvous".to_string(),
                 "ipns".to_string(),
+                "libp2p-rendezvous".to_string(),
                 "local-simulation".to_string()
             ]
         );
@@ -15498,8 +15503,8 @@ mod tests {
         assert_eq!(
             report.discovery_protocols,
             vec![
-                "libp2p-rendezvous".to_string(),
                 "ipns".to_string(),
+                "libp2p-rendezvous".to_string(),
                 "local-simulation".to_string()
             ]
         );
@@ -15602,8 +15607,8 @@ mod tests {
         assert_eq!(
             report.discovery_protocols,
             vec![
-                "libp2p-rendezvous".to_string(),
                 "ipns".to_string(),
+                "libp2p-rendezvous".to_string(),
                 "local-simulation".to_string()
             ]
         );

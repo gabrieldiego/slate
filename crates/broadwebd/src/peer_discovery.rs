@@ -451,8 +451,8 @@ impl ProfileSyncPeerDiscoveryProvider for CompositeProfileSyncPeerDiscoveryProvi
                         continue;
                     }
                     let seen_key = (
-                        result.protocol,
                         result.namespace.clone(),
+                        result.advertisement.network_id.clone(),
                         result.advertisement.node_id.clone(),
                         result.advertisement.provider_id.clone(),
                     );
@@ -1133,6 +1133,20 @@ mod tests {
                 .expect("duplicate libp2p advertisement"),
             )
             .expect("publish duplicate libp2p advertisement");
+        libp2p_provider
+            .publish_profile_sync_peer(
+                ProfileSyncPeerDiscoveryProtocol::Libp2pKademlia,
+                DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+                ProfileSyncPeerAdvertisement::new(
+                    "account-a",
+                    "node-iroh",
+                    "provider-iroh",
+                    "/p2p/node-iroh/x/cross-protocol-duplicate",
+                    1,
+                )
+                .expect("cross-protocol duplicate advertisement"),
+            )
+            .expect("publish cross-protocol duplicate advertisement");
         let composite = CompositeProfileSyncPeerDiscoveryProvider::new([
             &libp2p_provider as &dyn ProfileSyncPeerDiscoveryProvider,
             &rendezvous_provider as &dyn ProfileSyncPeerDiscoveryProvider,
