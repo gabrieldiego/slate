@@ -203,6 +203,26 @@ require_text \
     'broadwebd must keep service-frame client exchanges at a swappable Read/Write stream boundary.'
 require_text \
     crates/broadwebd/src/service_frame.rs \
+    'pub trait ServiceFrameConnector' \
+    'broadwebd must expose a connector boundary so socketless fixtures and future p2p transports can swap in below service frames.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'pub struct ConnectorServiceFrameBroadwebdClient' \
+    'broadwebd must expose a generic service-frame client over swappable connectors.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'pub struct InProcessServiceFrameConnector' \
+    'broadwebd must keep a socketless connector for deterministic profile-sync fixture tests.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'pub struct TcpServiceFrameConnector' \
+    'broadwebd must keep TCP as an opt-in connector, not as the only service-frame client transport.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'connector_service_frame_client_uses_swappable_stream_boundary' \
+    'broadwebd must test the generic connector client over a socketless in-process stream.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
     'pub fn serve_one_service_frame_request_over_stream' \
     'broadwebd must keep service-frame server dispatch at a swappable Read/Write stream boundary.'
 require_text \

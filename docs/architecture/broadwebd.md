@@ -439,6 +439,13 @@ it implements `BroadwebdClient` by round-tripping service requests and responses
 through the bounded frame codec before and after dispatching to an inner client.
 This gives local tests an IPC-shaped byte boundary without opening loopback
 ports or choosing the final daemon transport.
+`ServiceFrameConnector` is the lowest current swap-in transport boundary for
+that codec. A connector returns a one-request `Read + Write` stream, and the
+shared `ConnectorServiceFrameBroadwebdClient` performs the same bounded
+request/response exchange over it. The in-process connector is used for
+socketless fixtures; the TCP connector is only a manual network harness. Future
+libp2p, Iroh, IPFS, or OS-local IPC clients should plug in at this connector
+boundary so profile-sync scheduling and trust policy do not learn about sockets.
 The codec now also has length-prefixed read/write helpers and an opt-in
 `TcpServiceFrameBroadwebdClient` for manual LAN smoke tests. This TCP client is
 not the default Slate-to-broadwebd IPC design and does not provide daemon

@@ -1875,6 +1875,11 @@ Current baseline:
   references. Fixture and protocol materializers can still hand over in-process
   daemons during tests, but the scheduler path no longer assumes Slate is linked
   directly to an in-process daemon when retaining published objects.
+- broadwebd service frames now have an explicit `ServiceFrameConnector`
+  boundary beneath the client abstraction. Socketless fixtures can provide an
+  in-process `Read + Write` stream, the manual LAN harness can provide a TCP
+  stream, and future libp2p/Iroh/IPFS or OS-local IPC integrations can plug in
+  without teaching profile-sync scheduling about sockets or live network setup.
 - The Settings Profile Sync Preview now separates sync health from issue
   details. After the current-settings or local trial action, the page reports
   whether the latest local fixture run is healthy, still degraded, or recovered

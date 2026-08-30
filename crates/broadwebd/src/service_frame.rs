@@ -87,6 +87,21 @@ pub fn dispatch_service_frame_request_over_stream<S: Read + Write>(
     codec.read_response(stream)
 }
 
+pub trait ServiceFrameConnector {
+    type Stream: Read + Write;
+
+    fn connect(&self, codec: ServiceFrameCodec) -> Result<Self::Stream, BroadwebdError>;
+}
+
+pub fn dispatch_service_frame_request_with_connector<C: ServiceFrameConnector>(
+    codec: ServiceFrameCodec,
+    connector: &C,
+    request: &ServiceRequest,
+) -> Result<ServiceResponse, BroadwebdError> {
+    let mut stream = connector.connect(codec)?;
+    dispatch_service_frame_request_over_stream(codec, &mut stream, request)
+}
+
 pub fn serve_one_service_frame_request_over_stream<S: Read + Write>(
     codec: ServiceFrameCodec,
     handler: &dyn BroadwebdClient,
@@ -165,6 +180,25 @@ impl Write for InProcessServiceFrameStream<'_> {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct InProcessServiceFrameConnector<'a> {
+    handler: &'a dyn BroadwebdClient,
+}
+
+impl<'a> InProcessServiceFrameConnector<'a> {
+    pub fn new(handler: &'a dyn BroadwebdClient) -> Self {
+        Self { handler }
+    }
+}
+
+impl<'a> ServiceFrameConnector for InProcessServiceFrameConnector<'a> {
+    type Stream = InProcessServiceFrameStream<'a>;
+
+    fn connect(&self, codec: ServiceFrameCodec) -> Result<Self::Stream, BroadwebdError> {
+        Ok(InProcessServiceFrameStream::new(self.handler, codec))
+    }
+}
+
 pub struct ServiceFrameBroadwebdClient<'a> {
     inner: &'a dyn BroadwebdClient,
     codec: ServiceFrameCodec,
@@ -197,8 +231,8 @@ impl BroadwebdClient for ServiceFrameBroadwebdClient<'_> {
         &self,
         request: ServiceRequest,
     ) -> Result<ServiceResponse, BroadwebdError> {
-        let mut stream = InProcessServiceFrameStream::new(self.inner, self.codec);
-        dispatch_service_frame_request_over_stream(self.codec, &mut stream, &request)
+        let connector = InProcessServiceFrameConnector::new(self.inner);
+        dispatch_service_frame_request_with_connector(self.codec, &connector, &request)
     }
 
     fn temporary_downloads(
@@ -210,6 +244,111 @@ impl BroadwebdClient for ServiceFrameBroadwebdClient<'_> {
 
     fn downloads(&self, profile: &str) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
         self.inner.downloads(profile)
+    }
+}
+
+pub struct ConnectorServiceFrameBroadwebdClient<C> {
+    connector: C,
+    codec: ServiceFrameCodec,
+}
+
+impl<C> ConnectorServiceFrameBroadwebdClient<C> {
+    pub fn new(connector: C) -> Self {
+        Self::with_codec(connector, ServiceFrameCodec::default())
+    }
+
+    pub fn with_codec(connector: C, codec: ServiceFrameCodec) -> Self {
+        Self { connector, codec }
+    }
+
+    pub fn connector(&self) -> &C {
+        &self.connector
+    }
+
+    pub fn codec(&self) -> ServiceFrameCodec {
+        self.codec
+    }
+}
+
+impl<C: ServiceFrameConnector> BroadwebdClient for ConnectorServiceFrameBroadwebdClient<C> {
+    fn health(&self) -> DaemonHealth {
+        DaemonHealth {
+            lifecycle: DaemonLifecycle::Ready,
+            plugins: Vec::new(),
+        }
+    }
+
+    fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+        BroadwebStatusSnapshot::idle()
+    }
+
+    fn dispatch_service_request(
+        &self,
+        request: ServiceRequest,
+    ) -> Result<ServiceResponse, BroadwebdError> {
+        dispatch_service_frame_request_with_connector(self.codec, &self.connector, &request)
+    }
+
+    fn temporary_downloads(
+        &self,
+        _profile: &str,
+    ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+        Err(BroadwebdError::UnsupportedRequest(
+            "temporary download listing is not exposed through service-frame connectors yet"
+                .to_string(),
+        ))
+    }
+
+    fn downloads(&self, _profile: &str) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+        Err(BroadwebdError::UnsupportedRequest(
+            "download listing is not exposed through service-frame connectors yet".to_string(),
+        ))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TcpServiceFrameConnector {
+    address: String,
+    timeout: Duration,
+}
+
+impl TcpServiceFrameConnector {
+    pub fn new(address: impl Into<String>) -> Self {
+        Self {
+            address: address.into(),
+            timeout: Duration::from_secs(12),
+        }
+    }
+
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    pub fn address(&self) -> &str {
+        &self.address
+    }
+
+    pub fn timeout(&self) -> Duration {
+        self.timeout
+    }
+}
+
+impl ServiceFrameConnector for TcpServiceFrameConnector {
+    type Stream = TcpStream;
+
+    fn connect(&self, _codec: ServiceFrameCodec) -> Result<Self::Stream, BroadwebdError> {
+        let mut addresses = self.address.to_socket_addrs()?;
+        let address = addresses.next().ok_or_else(|| {
+            BroadwebdError::Request(format!(
+                "TCP service-frame endpoint resolved no socket addresses: {}",
+                self.address
+            ))
+        })?;
+        let stream = TcpStream::connect_timeout(&address, self.timeout)?;
+        stream.set_read_timeout(Some(self.timeout))?;
+        stream.set_write_timeout(Some(self.timeout))?;
+        Ok(stream)
     }
 }
 
@@ -267,17 +406,9 @@ impl BroadwebdClient for TcpServiceFrameBroadwebdClient {
         &self,
         request: ServiceRequest,
     ) -> Result<ServiceResponse, BroadwebdError> {
-        let mut addresses = self.address.to_socket_addrs()?;
-        let address = addresses.next().ok_or_else(|| {
-            BroadwebdError::Request(format!(
-                "TCP service-frame endpoint resolved no socket addresses: {}",
-                self.address
-            ))
-        })?;
-        let mut stream = TcpStream::connect_timeout(&address, self.timeout)?;
-        stream.set_read_timeout(Some(self.timeout))?;
-        stream.set_write_timeout(Some(self.timeout))?;
-        dispatch_service_frame_request_over_stream(self.codec, &mut stream, &request)
+        let connector =
+            TcpServiceFrameConnector::new(self.address.clone()).with_timeout(self.timeout);
+        dispatch_service_frame_request_with_connector(self.codec, &connector, &request)
     }
 
     fn temporary_downloads(
@@ -536,6 +667,74 @@ mod tests {
             ServiceResponse::ProfileSync(ProfileSyncResponse::RetainedObjects {
                 object_ids: vec!["socket-shim-object".to_string()],
             })
+        );
+    }
+
+    #[test]
+    fn connector_service_frame_client_uses_swappable_stream_boundary() {
+        struct EchoClient;
+
+        impl BroadwebdClient for EchoClient {
+            fn health(&self) -> DaemonHealth {
+                DaemonHealth {
+                    lifecycle: DaemonLifecycle::Ready,
+                    plugins: Vec::new(),
+                }
+            }
+
+            fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+                BroadwebStatusSnapshot::idle()
+            }
+
+            fn dispatch_service_request(
+                &self,
+                request: ServiceRequest,
+            ) -> Result<ServiceResponse, BroadwebdError> {
+                assert_eq!(
+                    request,
+                    ServiceRequest::ProfileSync(ProfileSyncRequest::DiscoverProviders(
+                        ProfileSyncProfileRequest::new("default")
+                    ))
+                );
+                Ok(ServiceResponse::ProfileSync(
+                    ProfileSyncResponse::RetainedObjects {
+                        object_ids: vec!["connector-object".to_string()],
+                    },
+                ))
+            }
+
+            fn temporary_downloads(
+                &self,
+                _profile: &str,
+            ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+                Ok(Vec::new())
+            }
+
+            fn downloads(
+                &self,
+                _profile: &str,
+            ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+                Ok(Vec::new())
+            }
+        }
+
+        let handler = EchoClient;
+        let connector = InProcessServiceFrameConnector::new(&handler);
+        let client = ConnectorServiceFrameBroadwebdClient::with_codec(
+            connector,
+            ServiceFrameCodec::new(4096),
+        );
+        let response = client
+            .profile_sync(ProfileSyncRequest::DiscoverProviders(
+                ProfileSyncProfileRequest::new("default"),
+            ))
+            .expect("exchange request through connector-backed service-frame client");
+
+        assert_eq!(
+            response,
+            ProfileSyncResponse::RetainedObjects {
+                object_ids: vec!["connector-object".to_string()],
+            }
         );
     }
 }

@@ -150,9 +150,11 @@ pub use registry::{
     ProtocolService, TransportPlugin,
 };
 pub use service_frame::{
-    DEFAULT_SERVICE_FRAME_MAX_BYTES, InProcessServiceFrameStream, ServiceFrameBroadwebdClient,
-    ServiceFrameCodec, TcpServiceFrameBroadwebdClient, dispatch_service_frame_request_over_stream,
-    serve_one_service_frame_request_over_stream,
+    ConnectorServiceFrameBroadwebdClient, DEFAULT_SERVICE_FRAME_MAX_BYTES,
+    InProcessServiceFrameConnector, InProcessServiceFrameStream, ServiceFrameBroadwebdClient,
+    ServiceFrameCodec, ServiceFrameConnector, TcpServiceFrameBroadwebdClient,
+    TcpServiceFrameConnector, dispatch_service_frame_request_over_stream,
+    dispatch_service_frame_request_with_connector, serve_one_service_frame_request_over_stream,
 };
 pub use services::{
     http_fetch::HttpFetchService,
