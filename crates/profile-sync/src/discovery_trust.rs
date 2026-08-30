@@ -206,6 +206,22 @@ pub fn filter_trusted_profile_sync_peer_discovery_results(
     network_id: &str,
     candidates: impl IntoIterator<Item = ProfileSyncPeerDiscoveryResult>,
 ) -> Result<TrustedProfileSyncPeerDiscoveryReport, StorageError> {
+    filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities(
+        database,
+        profile,
+        network_id,
+        &[],
+        candidates,
+    )
+}
+
+pub fn filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    network_id: &str,
+    required_capabilities: &[String],
+    candidates: impl IntoIterator<Item = ProfileSyncPeerDiscoveryResult>,
+) -> Result<TrustedProfileSyncPeerDiscoveryReport, StorageError> {
     let mut report = TrustedProfileSyncPeerDiscoveryReport::default();
     let mut trusted_candidates = Vec::new();
     for candidate in candidates {
@@ -219,9 +235,64 @@ pub fn filter_trusted_profile_sync_peer_discovery_results(
             trusted_candidates.push(candidate);
         }
     }
-    report.trusted_peers =
-        freshest_trusted_profile_sync_peer_discovery_results(trusted_candidates, &mut report);
-    Ok(report)
+    let fresh_report = TrustedProfileSyncPeerDiscoveryReport {
+        trusted_peers: freshest_trusted_profile_sync_peer_discovery_results(
+            trusted_candidates,
+            &mut report,
+        ),
+        rejected_peers: report.rejected_peers,
+    };
+    Ok(require_profile_sync_peer_discovery_capabilities(
+        fresh_report,
+        required_capabilities,
+    ))
+}
+
+pub fn require_profile_sync_peer_discovery_capabilities(
+    report: TrustedProfileSyncPeerDiscoveryReport,
+    required_capabilities: &[String],
+) -> TrustedProfileSyncPeerDiscoveryReport {
+    if required_capabilities.is_empty() {
+        return report;
+    }
+
+    let mut filtered = TrustedProfileSyncPeerDiscoveryReport {
+        trusted_peers: Vec::new(),
+        rejected_peers: report.rejected_peers,
+    };
+    for peer in report.trusted_peers {
+        if required_capabilities
+            .iter()
+            .all(|capability| peer.advertisement.has_capability(capability))
+        {
+            filtered.trusted_peers.push(peer);
+        } else {
+            filtered.rejected_peers.push(rejected_discovery_candidate(
+                peer,
+                ProfileSyncPeerDiscoveryTrustRejection::MissingRequiredCapability,
+            ));
+        }
+    }
+    filtered
+}
+
+pub fn discover_trusted_profile_sync_peers_with_required_capabilities(
+    database: &SlateProfileDatabase,
+    profile: &str,
+    provider: &(impl ProfileSyncPeerDiscoveryProvider + ?Sized),
+    query: &ProfileSyncPeerDiscoveryQuery,
+    required_capabilities: &[String],
+) -> Result<TrustedProfileSyncPeerDiscoveryReport, ProfileSyncPeerDiscoveryError> {
+    let candidates = provider.discover_profile_sync_peers(query)?;
+    Ok(
+        filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities(
+            database,
+            profile,
+            query.network_id.as_str(),
+            required_capabilities,
+            candidates,
+        )?,
+    )
 }
 
 pub fn discover_trusted_profile_sync_peers(
@@ -230,13 +301,13 @@ pub fn discover_trusted_profile_sync_peers(
     provider: &(impl ProfileSyncPeerDiscoveryProvider + ?Sized),
     query: &ProfileSyncPeerDiscoveryQuery,
 ) -> Result<TrustedProfileSyncPeerDiscoveryReport, ProfileSyncPeerDiscoveryError> {
-    let candidates = provider.discover_profile_sync_peers(query)?;
-    Ok(filter_trusted_profile_sync_peer_discovery_results(
+    discover_trusted_profile_sync_peers_with_required_capabilities(
         database,
         profile,
-        query.network_id.as_str(),
-        candidates,
-    )?)
+        provider,
+        query,
+        &[],
+    )
 }
 
 fn profile_sync_peer_discovery_trust_rejection(
@@ -392,12 +463,16 @@ fn rejected_discovery_candidate(
 mod tests {
     use super::{
         ProfileSyncPeerAdvertisementSignatureError, ProfileSyncPeerDiscoveryTrustRejection,
-        discover_trusted_profile_sync_peers, filter_trusted_profile_sync_peer_discovery_results,
-        sign_profile_sync_peer_advertisement,
+        discover_trusted_profile_sync_peers,
+        discover_trusted_profile_sync_peers_with_required_capabilities,
+        filter_trusted_profile_sync_peer_discovery_results, sign_profile_sync_peer_advertisement,
     };
     use slate_broadwebd::{
         DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
-        DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH, ProfileSyncPeerAdvertisement,
+        DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER, ProfileSyncPeerAdvertisement,
         ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryProvider,
         ProfileSyncPeerDiscoveryQuery, ProfileSyncPeerDiscoveryResult,
         test_fixtures::SimulatedProfileSyncPeerDiscoveryNetwork,
@@ -795,6 +870,100 @@ mod tests {
         let _ = std::fs::remove_dir_all(db_root);
     }
 
+    #[test]
+    fn trusted_profile_sync_peer_discovery_can_require_role_capabilities() {
+        let db_root = test_state_root("trusted-peer-discovery-provider-roles-db");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "peer-trust-provider-roles-local-device",
+        )
+        .expect("open peer discovery roles database");
+        let profile = "peertrustproviderrolesprofile";
+        let network_id = "peertrustproviderrolesnetwork";
+        let trusted_signer = ProfileSyncDeviceSigner::generate("peer-trust-provider-roles-remote")
+            .expect("trusted role signer");
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: trusted_signer.public_key().expect("trusted public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register trusted discovery role signer");
+
+        let network = SimulatedProfileSyncPeerDiscoveryNetwork::new();
+        let provider = network.provider();
+        provider
+            .publish_profile_sync_peer(
+                ProfileSyncPeerDiscoveryProtocol::IrohRendezvous,
+                DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+                test_signed_discovery_advertisement_with_capabilities(
+                    network_id,
+                    &trusted_signer,
+                    "peer-trust-provider-roles-transfer-only",
+                    "/dnsaddr/iroh-rendezvous.local/tcp/443/wss/p2p/transfer-only",
+                    [
+                        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+                        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+                    ],
+                ),
+            )
+            .expect("publish transfer-only advertisement");
+        provider
+            .publish_profile_sync_peer(
+                ProfileSyncPeerDiscoveryProtocol::IrohRendezvous,
+                DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+                test_signed_discovery_advertisement_with_capabilities(
+                    network_id,
+                    &trusted_signer,
+                    "peer-trust-provider-roles-retention",
+                    "/dnsaddr/iroh-rendezvous.local/tcp/443/wss/p2p/retention",
+                    [
+                        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+                        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+                        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+                    ],
+                ),
+            )
+            .expect("publish retention advertisement");
+
+        let query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
+            network_id,
+            "peer-trust-provider-roles-local-device",
+            [ProfileSyncPeerDiscoveryProtocol::IrohRendezvous],
+            8,
+        )
+        .expect("discovery query");
+        let required_capabilities = vec![
+            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER.to_string(),
+            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION.to_string(),
+        ];
+        let report = discover_trusted_profile_sync_peers_with_required_capabilities(
+            &database,
+            profile,
+            &provider,
+            &query,
+            required_capabilities.as_slice(),
+        )
+        .expect("discover and filter trusted peers with required roles");
+
+        assert_eq!(report.trusted_peer_count(), 1);
+        assert_eq!(report.rejected_peer_count(), 1);
+        assert_eq!(
+            report.trusted_peers[0].advertisement.provider_id,
+            "peer-trust-provider-roles-retention"
+        );
+        assert_eq!(
+            report.rejected_peers[0].provider_id,
+            "peer-trust-provider-roles-transfer-only"
+        );
+        assert_eq!(
+            report.rejected_peers[0].reason,
+            ProfileSyncPeerDiscoveryTrustRejection::MissingRequiredCapability
+        );
+
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
     fn test_discovery_result(
         network_id: &str,
         node_id: &str,
@@ -864,6 +1033,28 @@ mod tests {
             )
             .expect("sign profile-sync discovery test advertisement"),
         }
+    }
+
+    fn test_signed_discovery_advertisement_with_capabilities(
+        network_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        provider_id: &str,
+        service_addr: &str,
+        capabilities: impl IntoIterator<Item = &'static str>,
+    ) -> ProfileSyncPeerAdvertisement {
+        sign_profile_sync_peer_advertisement(
+            ProfileSyncPeerAdvertisement::with_capabilities(
+                network_id,
+                signer.device_id(),
+                provider_id,
+                service_addr,
+                capabilities,
+                1,
+            )
+            .expect("build profile-sync discovery test advertisement"),
+            signer,
+        )
+        .expect("sign profile-sync discovery test advertisement")
     }
 
     fn test_state_root(name: &str) -> std::path::PathBuf {

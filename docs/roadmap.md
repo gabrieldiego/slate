@@ -387,7 +387,10 @@ Current baseline:
   `--require-capability` or
   `SLATE_P2P_LAN_DISCOVERY_CHECK_REQUIRED_CAPABILITIES`, so a signed and
   trusted discovery candidate can still be rejected before connection if it
-  cannot serve the role being tested.
+  cannot serve the role being tested. The role filter now lives in
+  `slate-profile-sync`'s discovery-trust library API, so future runtime
+  discovery paths can enforce the same requirement before dialing a broadweb
+  peer.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the

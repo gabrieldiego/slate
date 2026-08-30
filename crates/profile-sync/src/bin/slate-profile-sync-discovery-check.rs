@@ -18,8 +18,8 @@ use slate_broadwebd::{
     validate_profile_sync_peer_discovery_capability,
 };
 use slate_profile_sync::{
-    ProfileSyncPeerDiscoveryTrustRejection, RejectedProfileSyncPeerDiscoveryCandidate,
-    TrustedProfileSyncPeerDiscoveryReport, filter_trusted_profile_sync_peer_discovery_results,
+    RejectedProfileSyncPeerDiscoveryCandidate, TrustedProfileSyncPeerDiscoveryReport,
+    filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities,
 };
 use slate_storage::{DEFAULT_PROFILE_ID, SlateProfileDatabase};
 
@@ -182,57 +182,14 @@ fn trusted_discovery_report_from_advertisement_files(
     })?;
 
     let candidates = advertisement_file_candidates(args)?;
-    let report = filter_trusted_profile_sync_peer_discovery_results(
+    filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities(
         &database,
         args.profile.as_str(),
         args.network_id.as_str(),
+        args.required_capabilities.as_slice(),
         candidates,
     )
-    .map_err(|error| format!("check discovery candidates against local trust: {error}"))?;
-    Ok(require_advertised_capabilities(
-        report,
-        args.required_capabilities.as_slice(),
-    ))
-}
-
-fn require_advertised_capabilities(
-    report: TrustedProfileSyncPeerDiscoveryReport,
-    required_capabilities: &[String],
-) -> TrustedProfileSyncPeerDiscoveryReport {
-    if required_capabilities.is_empty() {
-        return report;
-    }
-
-    let mut filtered = TrustedProfileSyncPeerDiscoveryReport {
-        trusted_peers: Vec::new(),
-        rejected_peers: report.rejected_peers,
-    };
-    for peer in report.trusted_peers {
-        if required_capabilities
-            .iter()
-            .all(|capability| peer.advertisement.has_capability(capability))
-        {
-            filtered.trusted_peers.push(peer);
-        } else {
-            filtered
-                .rejected_peers
-                .push(rejected_missing_required_capability_peer(peer));
-        }
-    }
-    filtered
-}
-
-fn rejected_missing_required_capability_peer(
-    peer: ProfileSyncPeerDiscoveryResult,
-) -> RejectedProfileSyncPeerDiscoveryCandidate {
-    RejectedProfileSyncPeerDiscoveryCandidate {
-        protocol: peer.protocol,
-        namespace: peer.namespace,
-        network_id: peer.advertisement.network_id,
-        node_id: peer.advertisement.node_id,
-        provider_id: peer.advertisement.provider_id,
-        reason: ProfileSyncPeerDiscoveryTrustRejection::MissingRequiredCapability,
-    }
+    .map_err(|error| format!("check discovery candidates against local trust: {error}"))
 }
 
 fn advertisement_file_candidates(

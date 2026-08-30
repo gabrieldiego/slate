@@ -291,8 +291,16 @@ require_text \
     'signed discovery advertisement tooling must keep the service-frame capability while adding role capabilities.'
 require_text \
     crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
-    'filter_trusted_profile_sync_peer_discovery_results' \
-    'profile-sync must own manual discovery trust checks against slate-settings.db.'
+    'filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities' \
+    'manual discovery trust checks must call the reusable profile-sync role-aware trust policy.'
+require_text \
+    crates/profile-sync/src/discovery_trust.rs \
+    'filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities' \
+    'profile-sync must expose reusable role-aware discovery trust filtering for future runtime transports.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'discover_trusted_profile_sync_peers_with_required_capabilities' \
+    'profile-sync must export reusable role-aware trusted discovery for future runtime transports.'
 require_text \
     crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
     '--settings-db' \
@@ -306,9 +314,9 @@ require_text \
     '--require-capability' \
     'manual discovery trust checks must support role capability requirements before probes connect.'
 require_text \
-    crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
+    crates/profile-sync/src/discovery_trust.rs \
     'MissingRequiredCapability' \
-    'manual discovery trust checks must reject otherwise trusted peers that lack required role capabilities.'
+    'reusable discovery trust policy must reject otherwise trusted peers that lack required role capabilities.'
 require_text \
     crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
     'required_capabilities' \

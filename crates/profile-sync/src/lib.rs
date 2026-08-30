@@ -88,7 +88,10 @@ pub use discovery_trust::{
     ProfileSyncPeerAdvertisementSignatureError, ProfileSyncPeerDiscoveryError,
     ProfileSyncPeerDiscoveryTrustRejection, RejectedProfileSyncPeerDiscoveryCandidate,
     TrustedProfileSyncPeerDiscoveryReport, discover_trusted_profile_sync_peers,
-    filter_trusted_profile_sync_peer_discovery_results, sign_profile_sync_peer_advertisement,
+    discover_trusted_profile_sync_peers_with_required_capabilities,
+    filter_trusted_profile_sync_peer_discovery_results,
+    filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities,
+    require_profile_sync_peer_discovery_capabilities, sign_profile_sync_peer_advertisement,
 };
 pub use errors::{
     ProfileSyncCredentialError, ProfileSyncCycleError, ProfileSyncCycleWithHealthError,
