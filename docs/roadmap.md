@@ -1948,14 +1948,15 @@ Current baseline:
   modules while keeping the public crate re-exports stable. Each extracted
   module owns focused unit tests so future scheduler/protocol work can change
   those pieces without relying only on the large integration-style test module.
-- The Settings Profile Sync Preview now runs a socketless signed-discovery
-  preflight before each local fixture sync run. The preview publishes a bounded
-  local-simulation provider advertisement, applies the same membership-epoch
-  trust filter used by the scheduler, and surfaces trusted, selected, rejected,
-  and rejection-reason counts in `slate://settings`. The actual current-setting
-  and trial sync paths still use the existing membership-log retention-provider
-  path, so this remains a diagnostic/user-facing bridge rather than automatic
-  real-network discovery.
+- The Settings Profile Sync Preview now runs a composed socketless
+  signed-discovery preflight before each local fixture sync run. The preview
+  publishes a bounded libp2p-rendezvous-shaped provider advertisement into the
+  local model, keeps a local-simulation source available as a fallback model,
+  applies the same membership-epoch trust filter used by the scheduler, and
+  surfaces trusted, selected, rejected, and rejection-reason counts in
+  `slate://settings`. The actual current-setting and trial sync paths still use
+  the existing membership-log retention-provider path, so this remains a
+  diagnostic/user-facing bridge rather than automatic real-network discovery.
 - The Settings Profile Sync Preview now also reports endpoint materialization
   status for trusted-discovery results separately from stored-provider fixture
   readiness. Local fixture runs can show that a signed broadweb-style provider

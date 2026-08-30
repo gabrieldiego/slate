@@ -9,7 +9,8 @@ use slate_broadwebd::test_fixtures::LocalProfileSyncFixture;
 #[cfg(feature = "local-preview-fixtures")]
 use slate_broadwebd::test_fixtures::SimulatedProfileSyncPeerDiscoveryNetwork;
 use slate_broadwebd::{
-    BroadwebdClient, BroadwebdError, IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
+    BroadwebdClient, BroadwebdError, CompositeProfileSyncPeerDiscoveryProvider,
+    IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
     ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
     ProfileSyncPeerDiscoveryProvider, ProfileSyncPeerDiscoveryQuery,
     ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
@@ -9345,8 +9346,10 @@ fn local_settings_sync_preview_discovery_summary(
     device_daemon: &dyn BroadwebdClient,
     provider_daemon: &dyn BroadwebdClient,
 ) -> Result<LocalSettingsSyncDiscoverySummary, LocalSettingsSyncPreviewError> {
-    let discovery_network = SimulatedProfileSyncPeerDiscoveryNetwork::new();
-    let discovery_provider = discovery_network.provider();
+    let libp2p_discovery_network = SimulatedProfileSyncPeerDiscoveryNetwork::new();
+    let libp2p_discovery_provider = libp2p_discovery_network.provider();
+    let local_discovery_network = SimulatedProfileSyncPeerDiscoveryNetwork::new();
+    let local_discovery_provider = local_discovery_network.provider();
     let provider_signer = sync_secret.derive_profile_sync_device_signer(
         profile,
         DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
@@ -9362,15 +9365,22 @@ fn local_settings_sync_preview_discovery_summary(
         )?,
         &provider_signer,
     )?;
-    discovery_provider.publish_profile_sync_peer(
-        ProfileSyncPeerDiscoveryProtocol::LocalSimulation,
+    libp2p_discovery_provider.publish_profile_sync_peer(
+        ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
         DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
         advertisement,
     )?;
+    let discovery_provider = CompositeProfileSyncPeerDiscoveryProvider::new([
+        &libp2p_discovery_provider as &dyn ProfileSyncPeerDiscoveryProvider,
+        &local_discovery_provider as &dyn ProfileSyncPeerDiscoveryProvider,
+    ]);
     let discovery_query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
         LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID,
         preparation.local_device_id.as_str(),
-        [ProfileSyncPeerDiscoveryProtocol::LocalSimulation],
+        [
+            ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
+            ProfileSyncPeerDiscoveryProtocol::LocalSimulation,
+        ],
         8,
     )?;
     let discovery_report = discover_trusted_profile_sync_peers(
