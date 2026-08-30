@@ -7,6 +7,10 @@ use slate_broadwebd::BroadwebDaemon;
 #[cfg(feature = "local-preview-fixtures")]
 use slate_broadwebd::CompositeProfileSyncPeerDiscoveryProvider;
 #[cfg(feature = "local-preview-fixtures")]
+use slate_broadwebd::test_fixtures::InProcessBroadwebNetwork;
+#[cfg(feature = "local-preview-fixtures")]
+use slate_broadwebd::test_fixtures::InternalKuboRpcTransportShim;
+#[cfg(feature = "local-preview-fixtures")]
 use slate_broadwebd::test_fixtures::LocalProfileSyncFixture;
 #[cfg(feature = "local-preview-fixtures")]
 use slate_broadwebd::test_fixtures::SimulatedProfileSyncPeerDiscoveryNetwork;
@@ -28,8 +32,9 @@ use slate_broadwebd::{
 };
 #[cfg(feature = "local-preview-fixtures")]
 use slate_broadwebd::{
-    DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE, PluginRegistry, ProfileSyncPeerAdvertisement,
-    ProfileSyncPeerDiscoveryProtocol, ProfileSyncProviderRoles, ResourceBudget,
+    DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE, IpnsProfileSyncPeerDiscoveryProvider, PluginRegistry,
+    ProfileSyncPeerAdvertisement, ProfileSyncPeerDiscoveryProtocol, ProfileSyncProviderRoles,
+    ResourceBudget,
 };
 use slate_routing::{Multiaddr, RoutingMode, RoutingPlan};
 #[cfg(feature = "local-preview-fixtures")]
@@ -139,6 +144,9 @@ pub const LOCAL_SETTINGS_SYNC_PREVIEW_RECEIVER_DEVICE_ID: &str = "local-preview-
 #[cfg(feature = "local-preview-fixtures")]
 const LOCAL_SETTINGS_SYNC_PREVIEW_DISCOVERY_SERVICE_ADDR: &str =
     "/dnsaddr/profile-sync-preview.local/tcp/443/wss/p2p/local-preview-provider";
+#[cfg(feature = "local-preview-fixtures")]
+const LOCAL_SETTINGS_SYNC_PREVIEW_IPNS_DISCOVERY_KEY: &str =
+    "slate-profile-sync-preview/local-preview-provider";
 pub const PROFILE_SYNC_DEFERRED_PROVIDER_PROTOCOL: &str = "provider";
 pub const PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL: &str = "iroh-node";
 const PROFILE_SYNC_PROVIDER_MULTIADDR_PRIVACY_BOUNDARY: &str =
@@ -8895,6 +8903,7 @@ struct LocalSettingsSyncFixtureCycleSummary {
     ready_for_manual_sync: bool,
     blocked_reason: Option<String>,
     pulled_membership_application_count: usize,
+    discovery_protocols: Vec<String>,
     discovery_trusted_peer_count: usize,
     discovery_rejected_peer_count: usize,
     discovery_selected_retention_provider_count: usize,
@@ -8973,6 +8982,15 @@ fn local_settings_sync_preview_discovery_summary(
     let libp2p_discovery_provider = libp2p_discovery_network.provider();
     let local_discovery_network = SimulatedProfileSyncPeerDiscoveryNetwork::new();
     let local_discovery_provider = local_discovery_network.provider();
+    let ipns_discovery_network = InProcessBroadwebNetwork::new();
+    let ipns_kubo = ipns_discovery_network.kubo_profile_sync_model();
+    let ipns_discovery_provider = IpnsProfileSyncPeerDiscoveryProvider::new(
+        ipns_kubo.profile_sync_rpc()?,
+        InternalKuboRpcTransportShim,
+        ResourceBudget::default(),
+    )
+    .with_publish_key_id(LOCAL_SETTINGS_SYNC_PREVIEW_IPNS_DISCOVERY_KEY)
+    .with_resolve_name(LOCAL_SETTINGS_SYNC_PREVIEW_IPNS_DISCOVERY_KEY);
     let provider_signer = sync_secret.derive_profile_sync_device_signer(
         profile,
         DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
@@ -8988,22 +9006,20 @@ fn local_settings_sync_preview_discovery_summary(
         )?,
         &provider_signer,
     )?;
-    libp2p_discovery_provider.publish_profile_sync_peer(
-        ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
+    ipns_discovery_provider.publish_profile_sync_peer(
+        ProfileSyncPeerDiscoveryProtocol::Ipns,
         DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
         advertisement,
     )?;
     let discovery_provider = CompositeProfileSyncPeerDiscoveryProvider::new([
         &libp2p_discovery_provider as &dyn ProfileSyncPeerDiscoveryProvider,
+        &ipns_discovery_provider as &dyn ProfileSyncPeerDiscoveryProvider,
         &local_discovery_provider as &dyn ProfileSyncPeerDiscoveryProvider,
     ]);
     let discovery_query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
         LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID,
         preparation.local_device_id.as_str(),
-        [
-            ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
-            ProfileSyncPeerDiscoveryProtocol::LocalSimulation,
-        ],
+        local_settings_sync_preview_discovery_protocols(),
         8,
     )?;
     let discovery_report = discover_trusted_profile_sync_peers(
@@ -9038,6 +9054,7 @@ fn local_settings_sync_preview_discovery_summary(
     )?;
 
     Ok(LocalSettingsSyncDiscoverySummary {
+        protocols: local_settings_sync_preview_discovery_protocol_names(),
         trusted_peer_count: discovery_report.trusted_peer_count(),
         rejected_peer_count: discovery_report.rejected_peer_count(),
         selected_retention_provider_count: plan.selected_retention_provider_count(),
@@ -9053,6 +9070,23 @@ fn local_settings_sync_preview_discovery_summary(
         retention_provider_selection_issue_count: plan.retention_provider_selection_issue_count(),
         rejections: local_settings_sync_discovery_rejection_summaries(&discovery_report),
     })
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+fn local_settings_sync_preview_discovery_protocols() -> [ProfileSyncPeerDiscoveryProtocol; 3] {
+    [
+        ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
+        ProfileSyncPeerDiscoveryProtocol::Ipns,
+        ProfileSyncPeerDiscoveryProtocol::LocalSimulation,
+    ]
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+fn local_settings_sync_preview_discovery_protocol_names() -> Vec<String> {
+    local_settings_sync_preview_discovery_protocols()
+        .iter()
+        .map(|protocol| protocol.as_str().to_string())
+        .collect()
 }
 
 #[cfg(feature = "local-preview-fixtures")]
@@ -9150,6 +9184,7 @@ fn run_local_settings_sync_fixture_cycle(
         ready_for_manual_sync: readiness.ready_for_manual_sync,
         blocked_reason: readiness.blocked_reason,
         pulled_membership_application_count: run.pulled_membership_application_count(),
+        discovery_protocols: discovery_summary.protocols,
         discovery_trusted_peer_count: discovery_summary.trusted_peer_count,
         discovery_rejected_peer_count: discovery_summary.rejected_peer_count,
         discovery_selected_retention_provider_count: discovery_summary
@@ -9217,6 +9252,7 @@ pub fn run_local_settings_sync_current_cycle(
         ready_for_manual_sync: summary.ready_for_manual_sync,
         blocked_reason: summary.blocked_reason,
         pulled_membership_application_count: summary.pulled_membership_application_count,
+        discovery_protocols: summary.discovery_protocols,
         discovery_trusted_peer_count: summary.discovery_trusted_peer_count,
         discovery_rejected_peer_count: summary.discovery_rejected_peer_count,
         discovery_selected_retention_provider_count: summary
@@ -9302,6 +9338,7 @@ pub fn run_local_settings_sync_preview_cycle(
         ready_for_manual_sync: summary.ready_for_manual_sync,
         blocked_reason: summary.blocked_reason,
         pulled_membership_application_count: summary.pulled_membership_application_count,
+        discovery_protocols: summary.discovery_protocols,
         discovery_trusted_peer_count: summary.discovery_trusted_peer_count,
         discovery_rejected_peer_count: summary.discovery_rejected_peer_count,
         discovery_selected_retention_provider_count: summary
@@ -9545,6 +9582,7 @@ pub fn run_local_settings_sync_two_device_preview_cycle(
             .len(),
         receiver_pulled_membership_application_count: receiver_run
             .pulled_membership_application_count(),
+        discovery_protocols: discovery_summary.protocols,
         discovery_trusted_peer_count: discovery_summary.trusted_peer_count,
         discovery_rejected_peer_count: discovery_summary.rejected_peer_count,
         discovery_selected_retention_provider_count: discovery_summary
@@ -15364,6 +15402,14 @@ mod tests {
             "slate-fixture-profile-sync://preview/local-preview-provider"
         );
         assert_eq!(report.discovery_trusted_peer_count, 1);
+        assert_eq!(
+            report.discovery_protocols,
+            vec![
+                "libp2p-rendezvous".to_string(),
+                "ipns".to_string(),
+                "local-simulation".to_string()
+            ]
+        );
         assert_eq!(report.discovery_rejected_peer_count, 0);
         assert_eq!(report.discovery_selected_retention_provider_count, 1);
         assert_eq!(report.discovery_endpoint_ready_provider_count, 0);
@@ -15449,6 +15495,14 @@ mod tests {
         );
         assert_eq!(report.pulled_membership_application_count, 0);
         assert_eq!(report.discovery_trusted_peer_count, 1);
+        assert_eq!(
+            report.discovery_protocols,
+            vec![
+                "libp2p-rendezvous".to_string(),
+                "ipns".to_string(),
+                "local-simulation".to_string()
+            ]
+        );
         assert_eq!(report.discovery_rejected_peer_count, 0);
         assert_eq!(report.discovery_selected_retention_provider_count, 1);
         assert_eq!(report.discovery_endpoint_ready_provider_count, 0);
@@ -15545,6 +15599,14 @@ mod tests {
             super::LOCAL_SETTINGS_SYNC_PREVIEW_REMOTE_SETTING_KEY
         );
         assert_eq!(report.discovery_trusted_peer_count, 1);
+        assert_eq!(
+            report.discovery_protocols,
+            vec![
+                "libp2p-rendezvous".to_string(),
+                "ipns".to_string(),
+                "local-simulation".to_string()
+            ]
+        );
         assert_eq!(report.discovery_rejected_peer_count, 0);
         assert_eq!(report.discovery_selected_retention_provider_count, 1);
         assert_eq!(report.discovery_endpoint_ready_provider_count, 0);

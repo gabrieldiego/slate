@@ -1060,18 +1060,19 @@ when stored metadata claims it can retain data. That keeps simulated discovery
 and transfer behavior from bypassing the real provider-role contract.
 
 The local Settings preview now uses composed socketless discovery before each
-fixture sync run. It publishes a signed libp2p-rendezvous-shaped advertisement
-into the local model, keeps a local-simulation source available as a fallback
-model, and reports trusted-discovery endpoint materialization separately from
-stored-provider fixture readiness. The signed broadweb-style advertisement can
-therefore be trusted and selected while its discovered multiaddr remains
-pending protocol materialization; the socketless fixture handle used for the
-local run is reported as runnable stored-provider state, not as the advertised
-network endpoint. Preview report DTOs and string summary adapters live in
-`crates/profile-sync/src/preview_report.rs`, and JSON serialization lives in
-`crates/profile-sync/src/preview_json.rs`, not the Servo-backed chrome resource
-protocol module, so the Settings sync data contract can be tested under the
-low-memory profile.
+fixture sync run. It queries libp2p-rendezvous, IPNS, and local-simulation
+providers behind the same discovery trait, while the trusted preview provider
+is published and resolved through the socketless Kubo/IPNS model. The signed
+broadweb-style advertisement can therefore be trusted and selected while its
+discovered multiaddr remains pending protocol materialization; the socketless
+fixture handle used for the local run is reported as runnable stored-provider
+state, not as the advertised network endpoint. Preview report DTOs and string
+summary adapters live in `crates/profile-sync/src/preview_report.rs`, and JSON
+serialization lives in `crates/profile-sync/src/preview_json.rs`, not the
+Servo-backed chrome resource protocol module, so the Settings sync data
+contract can be tested under the low-memory profile. Preview JSON also exposes
+the modeled `discovery_protocols` list so the Settings page can report which
+local-only broadweb discovery routes were exercised.
 
 The rule for these internal broadweb models is strict: they may replace socket
 I/O with deterministic in-process communication shims, but they must not

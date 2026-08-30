@@ -35,6 +35,7 @@ pub struct LocalSettingsSyncDiscoveryRejectionSummary {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct LocalSettingsSyncDiscoverySummary {
+    pub protocols: Vec<String>,
     pub trusted_peer_count: usize,
     pub rejected_peer_count: usize,
     pub selected_retention_provider_count: usize,
@@ -258,6 +259,7 @@ pub struct LocalSettingsSyncPreviewCycleReport {
     pub ready_for_manual_sync: bool,
     pub blocked_reason: Option<String>,
     pub pulled_membership_application_count: usize,
+    pub discovery_protocols: Vec<String>,
     pub discovery_trusted_peer_count: usize,
     pub discovery_rejected_peer_count: usize,
     pub discovery_selected_retention_provider_count: usize,
@@ -302,6 +304,7 @@ pub struct LocalSettingsSyncCurrentCycleReport {
     pub ready_for_manual_sync: bool,
     pub blocked_reason: Option<String>,
     pub pulled_membership_application_count: usize,
+    pub discovery_protocols: Vec<String>,
     pub discovery_trusted_peer_count: usize,
     pub discovery_rejected_peer_count: usize,
     pub discovery_selected_retention_provider_count: usize,
@@ -353,6 +356,7 @@ pub struct LocalSettingsSyncTwoDevicePreviewCycleReport {
     pub receiver_device_request_device_id: String,
     pub receiver_enrollment_bundle_record_count: usize,
     pub receiver_pulled_membership_application_count: usize,
+    pub discovery_protocols: Vec<String>,
     pub discovery_trusted_peer_count: usize,
     pub discovery_rejected_peer_count: usize,
     pub discovery_selected_retention_provider_count: usize,

@@ -15,6 +15,7 @@ pub fn local_settings_sync_current_cycle_report_json(
         "provider_endpoint_ref": report.provider_endpoint_ref.as_str(),
         "ready_for_manual_sync": report.ready_for_manual_sync,
         "pulled_membership_application_count": report.pulled_membership_application_count,
+        "discovery_protocols": report.discovery_protocols.as_slice(),
         "discovery_trusted_peer_count": report.discovery_trusted_peer_count,
         "discovery_rejected_peer_count": report.discovery_rejected_peer_count,
         "discovery_selected_retention_provider_count": report.discovery_selected_retention_provider_count,
@@ -63,6 +64,7 @@ pub fn local_settings_sync_preview_cycle_report_json(
         "preview_setting_revision": report.preview_setting_revision,
         "ready_for_manual_sync": report.ready_for_manual_sync,
         "pulled_membership_application_count": report.pulled_membership_application_count,
+        "discovery_protocols": report.discovery_protocols.as_slice(),
         "discovery_trusted_peer_count": report.discovery_trusted_peer_count,
         "discovery_rejected_peer_count": report.discovery_rejected_peer_count,
         "discovery_selected_retention_provider_count": report.discovery_selected_retention_provider_count,
@@ -165,6 +167,11 @@ pub fn local_settings_sync_two_device_preview_cycle_report_json(
         &mut object,
         "receiver_pulled_membership_application_count",
         report.receiver_pulled_membership_application_count,
+    );
+    local_settings_sync_json_insert(
+        &mut object,
+        "discovery_protocols",
+        report.discovery_protocols.as_slice(),
     );
     local_settings_sync_json_insert(
         &mut object,
@@ -441,6 +448,11 @@ mod tests {
             ready_for_manual_sync: true,
             blocked_reason: None,
             pulled_membership_application_count: 0,
+            discovery_protocols: vec![
+                "libp2p-rendezvous".to_string(),
+                "ipns".to_string(),
+                "local-simulation".to_string(),
+            ],
             discovery_trusted_peer_count: 1,
             discovery_rejected_peer_count: 1,
             discovery_selected_retention_provider_count: 1,
@@ -563,6 +575,9 @@ mod tests {
             true
         );
         assert_eq!(json["discovery_trusted_peer_count"], 1);
+        assert_eq!(json["discovery_protocols"][0], "libp2p-rendezvous");
+        assert_eq!(json["discovery_protocols"][1], "ipns");
+        assert_eq!(json["discovery_protocols"][2], "local-simulation");
         assert_eq!(json["discovery_rejected_peer_count"], 1);
         assert_eq!(json["discovery_selected_retention_provider_count"], 1);
         assert_eq!(json["discovery_endpoint_ready_provider_count"], 0);

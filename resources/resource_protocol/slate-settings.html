@@ -1222,7 +1222,16 @@
       const rejected = Number.isFinite(run.discovery_rejected_peer_count) ?
         run.discovery_rejected_peer_count :
         0;
+      const protocols = Array.isArray(run.discovery_protocols) ?
+        run.discovery_protocols
+          .map((protocol) => profileSyncText(protocol, ""))
+          .filter((protocol) => protocol.length > 0)
+          .join(", ") :
+        "";
       const details = [`${trusted} trusted`, `${selected} selected`];
+      if (protocols.length > 0) {
+        details.push(`via ${protocols}`);
+      }
       if (ready > 0) {
         details.push(`${ready} endpoint ready`);
       }
