@@ -165,11 +165,15 @@ wrong local device before mutation, applies the signed membership records, and
 then activates key-derived local sync metadata. This is a preview handoff
 primitive, not the final encrypted recovery-file design: the artifact contains
 root sync secret material and must be treated like a login key.
-The Settings preview exposes this as a file-only PC-to-PC flow: create/download
-one enrollment JSON file from an enrolled browser, then select that file on the
-target browser to import it. The page does not display or cache the raw
-secret-bearing handoff JSON in a normal text control; QR-code and unbound
-enrollment variants remain future design work.
+The normal Settings surface exposes profile enrollment as a two-action
+file-only flow: download the current profile's enrollment key file from an
+enrolled browser, then select that file on another browser to import it.
+First-use download may create and activate a local key when no sync metadata
+exists yet. Devices that only have sync metadata fail closed because
+`slate-settings.db` intentionally does not store the root secret. The page does
+not display or cache the raw secret-bearing JSON in a normal text control; the
+older target-specific handoff bundle remains a lower-level fixture primitive,
+and QR-code or unbound enrollment variants remain future design work.
 
 `slate-settings.db` now has the first local persistence primitive for that
 authority set: signed membership records are stored by profile, record id,

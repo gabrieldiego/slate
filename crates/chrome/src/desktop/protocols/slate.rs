@@ -364,6 +364,38 @@ impl SlateProtocolHandler {
             self.refresh_profile_sync_preview_metadata(&mut state);
             match state.active_export.clone() {
                 Some(export) => export,
+                None if !state.metadata_ready => {
+                    let (sync_secret, export) = match state
+                        .create_secret_export_for_unenrolled_profile(
+                            DEFAULT_PROFILE_ID,
+                            unix_time_seconds(),
+                        ) {
+                        Ok((sync_secret, export)) => (sync_secret, export),
+                        Err(error) => {
+                            state.last_error = Some(error.to_string());
+                            let readiness =
+                                self.profile_sync_local_readiness_report().ok().flatten();
+                            return json_response(request, 500, state.to_json(readiness.as_ref()));
+                        }
+                    };
+                    match self.activate_profile_sync_preview_from_secret(&sync_secret) {
+                        Ok(Some(activation)) => {
+                            state.mark_secret_activation_ready(&activation);
+                            export
+                        }
+                        Ok(None) => {
+                            state.last_error =
+                                Some("settings database is not available".to_string());
+                            return json_response(request, 500, state.to_json(None));
+                        }
+                        Err(error) => {
+                            state.last_error = Some(error.to_string());
+                            let readiness =
+                                self.profile_sync_local_readiness_report().ok().flatten();
+                            return json_response(request, 500, state.to_json(readiness.as_ref()));
+                        }
+                    }
+                }
                 None => {
                     state.last_error = Some(
                         "profile enrollment key is not loaded on this device; import it before downloading it again"
@@ -900,6 +932,19 @@ impl ProfileSyncPreviewState {
         self.last_two_device_trial = None;
         self.last_error = None;
         Ok(secret)
+    }
+
+    fn create_secret_export_for_unenrolled_profile(
+        &mut self,
+        profile: &str,
+        created_at: i64,
+    ) -> Result<(SlateSyncSecret, SlateSyncSecretExport), SyncObjectError> {
+        let sync_secret = self.create_secret(profile, created_at)?;
+        let export = self
+            .active_export
+            .clone()
+            .expect("create_secret stores an active export");
+        Ok((sync_secret, export))
     }
 
     fn import_secret(
@@ -1827,7 +1872,7 @@ mod tests {
     use slate_storage::PROFILE_SYNC_SECRET_HANDOFF_BUNDLE_MAX_BYTES;
     use slate_storage::{
         DEFAULT_PROFILE_ID, IncomingSyncSettingText, SYNC_DOMAIN_CALENDAR, SYNC_DOMAIN_SETTINGS,
-        SlateProfileDatabase,
+        SlateProfileDatabase, SlateSyncSecret,
     };
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -2195,6 +2240,39 @@ mod tests {
     }
 
     #[test]
+    fn profile_sync_preview_state_creates_downloadable_key_for_first_use() {
+        let mut state = super::ProfileSyncPreviewState::default();
+        let (sync_secret, export) = state
+            .create_secret_export_for_unenrolled_profile(DEFAULT_PROFILE_ID, 123)
+            .expect("create first-use enrollment key");
+
+        assert_eq!(export.profile, DEFAULT_PROFILE_ID);
+        assert_eq!(export.created_at, 123);
+        assert_eq!(state.active_export.as_ref(), Some(&export));
+        let decoded_secret = SlateSyncSecret::from_export_for_profile(&export, DEFAULT_PROFILE_ID)
+            .expect("decode exported sync secret");
+        assert_eq!(decoded_secret, sync_secret);
+
+        let ordinary_state: serde_json::Value =
+            serde_json::from_str(&state.to_json(None)).expect("ordinary state json");
+        assert!(
+            !ordinary_state
+                .as_object()
+                .unwrap()
+                .contains_key("key_export_text")
+        );
+
+        let export_state: serde_json::Value =
+            serde_json::from_str(&state.to_json_with_key_export(None)).expect("export state json");
+        assert!(
+            export_state["key_export_text"]
+                .as_str()
+                .expect("key export text")
+                .contains("\"secret\"")
+        );
+    }
+
+    #[test]
     fn profile_sync_preview_state_exports_only_explicit_handoff_file() {
         let mut source = super::ProfileSyncPreviewState::default();
         let sync_secret = source.create_secret(DEFAULT_PROFILE_ID, 123).unwrap();
@@ -2515,25 +2593,32 @@ mod tests {
         assert!(settings_page.contains("id=\"profile-sync-run-current\""));
         assert!(settings_page.contains("id=\"profile-sync-run-local\""));
         assert!(settings_page.contains("id=\"profile-sync-run-local-two-device\""));
-        assert!(settings_page.contains("id=\"profile-sync-handoff-file\""));
-        assert!(settings_page.contains("id=\"profile-sync-handoff-download\""));
-        assert!(settings_page.contains("id=\"profile-sync-handoff-import\""));
-        assert!(settings_page.contains("PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES"));
+        assert!(settings_page.contains("id=\"profile-sync-enrollment-key-file\""));
+        assert!(settings_page.contains("id=\"profile-sync-key-download\""));
+        assert!(settings_page.contains("id=\"profile-sync-key-import\""));
+        assert!(settings_page.contains("PROFILE_SYNC_ENROLLMENT_KEY_MAX_BYTES"));
         assert!(settings_page.contains("profileSyncBoundedFileText"));
         assert!(settings_page.contains("Download enrollment key"));
         assert!(settings_page.contains("Import enrollment key"));
         assert!(settings_page.contains("triggerProfileSyncEnrollmentKeyDownload"));
-        assert!(settings_page.contains("key_export_text"));
-        assert!(settings_page.contains("window.URL.createObjectURL"));
-        assert!(settings_page.contains("data:application/json"));
-        assert!(settings_page.contains("chooseProfileSyncHandoffBundle"));
-        assert!(settings_page.contains("profileSyncHandoffFile.click()"));
+        assert!(settings_page.contains("download: \"1\""));
+        assert!(settings_page.contains("chooseProfileSyncEnrollmentKey"));
+        assert!(settings_page.contains("profileSyncEnrollmentKeyFile.click()"));
         assert!(settings_page.contains("Enrollment key"));
         assert!(settings_page.contains("Local diagnostics"));
-        assert!(settings_page.contains("fetchProfileSyncState(\"key/export\""));
+        assert!(settings_page.contains("profileSyncUrl(\"key/export\""));
         assert!(settings_page.contains("fetchProfileSyncState(\"key/import\""));
+        assert!(!settings_page.contains("key_export_text"));
+        assert!(!settings_page.contains("window.URL.createObjectURL"));
+        assert!(!settings_page.contains("data:application/json"));
         assert!(!settings_page.contains("id=\"profile-sync-handoff-device\""));
         assert!(!settings_page.contains("profileSyncHandoffDevice"));
+        assert!(!settings_page.contains("id=\"profile-sync-handoff-file\""));
+        assert!(!settings_page.contains("id=\"profile-sync-handoff-download\""));
+        assert!(!settings_page.contains("id=\"profile-sync-handoff-import\""));
+        assert!(!settings_page.contains("PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES"));
+        assert!(!settings_page.contains("chooseProfileSyncHandoffBundle"));
+        assert!(!settings_page.contains("profileSyncHandoffFile"));
         assert!(!settings_page.contains("id=\"profile-sync-secret\""));
         assert!(!settings_page.contains("id=\"profile-sync-secret-file\""));
         assert!(!settings_page.contains("id=\"profile-sync-download\""));

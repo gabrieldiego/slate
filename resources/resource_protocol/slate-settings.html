@@ -192,6 +192,13 @@
       font-variant-numeric: tabular-nums;
     }
 
+    .profile-sync-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
     .profile-sync-details {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -287,6 +294,7 @@
 
     @media (max-width: 560px) {
       .profile-sync-details,
+      .profile-sync-actions,
       .keybinding-row,
       .shortcut-row {
         grid-template-columns: 1fr;
@@ -349,15 +357,15 @@
         aria-live="polite"
       ></div>
       <input
-        id="profile-sync-handoff-file"
+        id="profile-sync-enrollment-key-file"
         class="profile-sync-file"
         type="file"
         accept="application/json,.json"
         aria-label="Profile sync enrollment key"
       />
-      <div class="actions">
-        <button id="profile-sync-handoff-download" class="primary">Download enrollment key</button>
-        <button id="profile-sync-handoff-import">Import enrollment key</button>
+      <div class="profile-sync-actions">
+        <button id="profile-sync-key-download" class="primary">Download enrollment key</button>
+        <button id="profile-sync-key-import">Import enrollment key</button>
       </div>
       <details class="profile-sync-diagnostics">
         <summary>Local diagnostics</summary>
@@ -443,7 +451,7 @@
     const MIN_ZOOM = 75;
     const MAX_ZOOM = 115;
     const DEFAULT_ZOOM = 90;
-    const PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES = 64 * 1024;
+    const PROFILE_SYNC_ENROLLMENT_KEY_MAX_BYTES = 64 * 1024;
     const slider = document.getElementById("chrome-zoom");
     const fill = document.getElementById("chrome-zoom-fill");
     const thumb = document.getElementById("chrome-zoom-thumb");
@@ -460,9 +468,9 @@
     const profileSyncRunCurrentButton = document.getElementById("profile-sync-run-current");
     const profileSyncRunLocalButton = document.getElementById("profile-sync-run-local");
     const profileSyncRunLocalTwoDeviceButton = document.getElementById("profile-sync-run-local-two-device");
-    const profileSyncHandoffFile = document.getElementById("profile-sync-handoff-file");
-    const profileSyncHandoffDownloadButton = document.getElementById("profile-sync-handoff-download");
-    const profileSyncHandoffImportButton = document.getElementById("profile-sync-handoff-import");
+    const profileSyncEnrollmentKeyFile = document.getElementById("profile-sync-enrollment-key-file");
+    const profileSyncKeyDownloadButton = document.getElementById("profile-sync-key-download");
+    const profileSyncKeyImportButton = document.getElementById("profile-sync-key-import");
     const params = new URLSearchParams(window.location.search);
     const initial = Number.parseFloat(params.get("chrome_zoom"));
     const fallbackImage = new Image();
@@ -885,7 +893,7 @@
       return `slate://settings/profile-sync/${path}?${query.toString()}`;
     }
 
-    function handoffFilename(state) {
+    function enrollmentKeyFilename(state) {
       return state && state.key_export_filename ?
         state.key_export_filename :
         "slate-profile-enrollment-key.json";
@@ -1421,11 +1429,8 @@
       if (!state) {
         return Promise.resolve(state);
       }
-      if (state.has_secret && state.key_export_text) {
-        return Promise.resolve(state);
-      }
       if (state.has_secret) {
-        return fetchProfileSyncState("key/export");
+        return Promise.resolve(state);
       }
       if (state.metadata_ready) {
         const blockedState = Object.assign({}, state, {
@@ -1434,12 +1439,7 @@
         setProfileSyncState(blockedState);
         return Promise.resolve(blockedState);
       }
-      return fetchProfileSyncState("create").then((createdState) => {
-        if (!createdState || createdState.last_error) {
-          return createdState;
-        }
-        return fetchProfileSyncState("key/export");
-      });
+      return fetchProfileSyncState("create");
     }
 
     function checkProfileSyncReadiness() {
@@ -1462,11 +1462,11 @@
       fetchProfileSyncState("run-local-two-device");
     }
 
-    function importProfileSyncHandoffBundle() {
+    function importProfileSyncEnrollmentKey() {
       readSelectedProfileSyncFile(
-        profileSyncHandoffFile,
+        profileSyncEnrollmentKeyFile,
         "enrollment key",
-        PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES
+        PROFILE_SYNC_ENROLLMENT_KEY_MAX_BYTES
       ).then((fileText) => {
         if (!fileText) {
           throw new Error("choose an enrollment key to import");
@@ -1474,7 +1474,7 @@
         const keyText = profileSyncBoundedFileText(
           fileText.trim(),
           "enrollment key",
-          PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES
+          PROFILE_SYNC_ENROLLMENT_KEY_MAX_BYTES
         );
         return fetchProfileSyncState("key/import", {
           key: keyText
@@ -1482,13 +1482,13 @@
       }).catch((error) => {
         setProfileSyncState({ last_error: String(error) });
       }).then(() => {
-        profileSyncHandoffFile.value = "";
+        profileSyncEnrollmentKeyFile.value = "";
       });
     }
 
-    function chooseProfileSyncHandoffBundle() {
-      profileSyncHandoffFile.value = "";
-      profileSyncHandoffFile.click();
+    function chooseProfileSyncEnrollmentKey() {
+      profileSyncEnrollmentKeyFile.value = "";
+      profileSyncEnrollmentKeyFile.click();
     }
 
     function readSelectedProfileSyncFile(input, label, maxBytes) {
@@ -1531,33 +1531,19 @@
     }
 
     function triggerProfileSyncEnrollmentKeyDownload(state) {
-      const keyText = state && state.key_export_text ? String(state.key_export_text) : "";
-      if (!keyText) {
-        setProfileSyncState(Object.assign({}, state || {}, {
-          last_error: "enrollment key export was empty"
-        }));
-        return;
-      }
       const link = document.createElement("a");
-      let objectUrl = "";
-      link.download = handoffFilename(state);
-      if (window.Blob && window.URL && window.URL.createObjectURL) {
-        objectUrl = window.URL.createObjectURL(new Blob([keyText], {
-          type: "application/json"
-        }));
-        link.href = objectUrl;
-      } else {
-        link.href = `data:application/json;charset=utf-8,${encodeURIComponent(keyText)}`;
-      }
+      link.download = enrollmentKeyFilename(state);
+      link.href = profileSyncUrl("key/export", { download: "1" });
       document.body.appendChild(link);
       link.click();
       link.remove();
-      if (objectUrl && window.URL && window.URL.revokeObjectURL) {
-        window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 0);
-      }
     }
 
-    function downloadProfileSyncHandoffBundle() {
+    function downloadProfileSyncEnrollmentKey() {
+      if (!window.fetch) {
+        triggerProfileSyncEnrollmentKeyDownload(null);
+        return;
+      }
       fetchProfileSyncState("state").then(ensureProfileSyncKeyForDownload).then((state) => {
         if (!state || state.last_error) {
           return;
@@ -1591,26 +1577,26 @@
     profileSyncRunCurrentButton.addEventListener("click", runProfileSyncCurrentSync);
     profileSyncRunLocalButton.addEventListener("click", runProfileSyncLocalTrial);
     profileSyncRunLocalTwoDeviceButton.addEventListener("click", runProfileSyncLocalTwoDeviceTrial);
-    profileSyncHandoffImportButton.addEventListener("click", chooseProfileSyncHandoffBundle);
-    profileSyncHandoffDownloadButton.addEventListener("click", downloadProfileSyncHandoffBundle);
-    profileSyncHandoffFile.addEventListener("change", () => {
-      const file = profileSyncHandoffFile.files && profileSyncHandoffFile.files[0];
+    profileSyncKeyImportButton.addEventListener("click", chooseProfileSyncEnrollmentKey);
+    profileSyncKeyDownloadButton.addEventListener("click", downloadProfileSyncEnrollmentKey);
+    profileSyncEnrollmentKeyFile.addEventListener("change", () => {
+      const file = profileSyncEnrollmentKeyFile.files && profileSyncEnrollmentKeyFile.files[0];
       if (!file) {
         return;
       }
       if (
         file &&
-        Number.isFinite(PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES) &&
+        Number.isFinite(PROFILE_SYNC_ENROLLMENT_KEY_MAX_BYTES) &&
         Number.isFinite(file.size) &&
-        file.size > PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES
+        file.size > PROFILE_SYNC_ENROLLMENT_KEY_MAX_BYTES
       ) {
         setProfileSyncState({
-          last_error: `enrollment key is too large; maximum is ${PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES} bytes`
+          last_error: `enrollment key is too large; maximum is ${PROFILE_SYNC_ENROLLMENT_KEY_MAX_BYTES} bytes`
         });
-        profileSyncHandoffFile.value = "";
+        profileSyncEnrollmentKeyFile.value = "";
         return;
       }
-      importProfileSyncHandoffBundle();
+      importProfileSyncEnrollmentKey();
     });
     document.getElementById("reset").addEventListener("click", () => {
       setSliderValue(DEFAULT_ZOOM, true);

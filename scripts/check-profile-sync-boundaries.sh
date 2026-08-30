@@ -853,20 +853,32 @@ require_text \
     'Slate settings page must expose a single enrollment-key download action.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'id="profile-sync-handoff-import"' \
+    'id="profile-sync-key-import"' \
     'Slate settings page must expose profile-sync enrollment-key import.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
+    'id="profile-sync-key-download"' \
+    'Slate settings page must expose profile-sync enrollment-key download.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'key/export' \
     'Slate settings page must call the enrollment-key export route.'
 require_text \
     resources/resource_protocol/slate-settings.html \
+    'download: "1"' \
+    'Slate settings page must use the direct attachment download route for enrollment keys.'
+require_text \
+    resources/resource_protocol/slate-settings.html \
     'key/import' \
     'Slate settings page must call the enrollment-key import route.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES' \
+    'PROFILE_SYNC_ENROLLMENT_KEY_MAX_BYTES' \
     'Slate settings page must bound enrollment key reads before importing through the protocol URL.'
+reject_protocol_model_leak \
+    resources/resource_protocol/slate-settings.html \
+    'createObjectURL|data:application/json|key_export_text|profile-sync-handoff-file|profile-sync-handoff-download|profile-sync-handoff-import|PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES' \
+    'Slate settings page must use the direct enrollment-key attachment/import path instead of stale handoff or generated Blob download UI.'
 require_text \
     crates/chrome/src/desktop/settings_watcher.rs \
     'AppSyncDomainWatcher::new' \

@@ -1789,19 +1789,16 @@ Current baseline:
   the raw root secret in the database. The file itself is sensitive login
   material and still needs encrypted recovery/handoff policy before production
   use.
-- `slate://settings` now exposes that handoff primitive in the Profile Sync
-  Preview as the single visible PC-to-PC enrollment-file flow. An enrolled
-  session can download a target-specific
-  `slate-profile-enrollment-<device>.json` file, and a target device can import
-  a selected enrollment file to apply membership and activate the session
-  key-derived local metadata in one step. The page no longer exposes or caches
-  the raw secret-bearing handoff JSON in a visible text field. The lower-level
-  key-file, device-request, and non-secret enrollment-bundle storage primitives
-  remain for deterministic fixture logic, but their `slate://settings` protocol
-  routes and rendered controls have been removed until QR-code or unbound
-  onboarding semantics are designed deliberately. This remains a sensitive local
-  preview flow and still uses the existing query-string internal action
-  transport until POST/body-capable Slate protocol imports are added.
+- `slate://settings` now exposes the normal Profile Sync onboarding surface as
+  two actions: download the current profile's enrollment key file or import an
+  enrollment key file. First-use download creates and activates a local key when
+  no sync metadata exists yet, while metadata-only devices fail closed because
+  the root secret is intentionally not stored in `slate-settings.db`. Download
+  now uses the `key/export?download=1` attachment path instead of a generated
+  Blob/data URL. The file remains sensitive login material. The lower-level
+  target-specific handoff, device-request, and non-secret enrollment-bundle
+  primitives remain for deterministic fixture logic and future QR/unbound
+  onboarding design, but they are not the ordinary Settings UI.
 - The enrollment-file handoff path now has an explicit bounded-import guard
   while it remains on that query-string transport. The Settings page rejects
   oversized selected enrollment files before building the internal action URL,
