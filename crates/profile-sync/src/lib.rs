@@ -16,6 +16,8 @@ use slate_broadwebd::test_fixtures::LocalProfileSyncFixture;
 use slate_broadwebd::test_fixtures::SimulatedProfileSyncPeerDiscoveryNetwork;
 use slate_broadwebd::{
     BroadwebdClient, BroadwebdError, IN_PROCESS_PROFILE_SYNC_FIXTURE_ENDPOINT_PREFIX,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
     ProfileSyncObjectRequest as BroadwebdProfileSyncObjectRequest,
     ProfileSyncPeerDiscoveryProvider, ProfileSyncPeerDiscoveryQuery,
     ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
@@ -32,9 +34,9 @@ use slate_broadwebd::{
 };
 #[cfg(feature = "local-preview-fixtures")]
 use slate_broadwebd::{
-    DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE, IpnsProfileSyncPeerDiscoveryProvider, PluginRegistry,
-    ProfileSyncPeerAdvertisement, ProfileSyncPeerDiscoveryProtocol, ProfileSyncProviderRoles,
-    ResourceBudget,
+    DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE, IpnsProfileSyncPeerDiscoveryProvider,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY, PluginRegistry, ProfileSyncPeerAdvertisement,
+    ProfileSyncPeerDiscoveryProtocol, ProfileSyncProviderRoles, ResourceBudget,
 };
 use slate_routing::{Multiaddr, RoutingMode, RoutingPlan};
 #[cfg(feature = "local-preview-fixtures")]
@@ -4803,6 +4805,22 @@ fn trusted_discovered_endpoint_matches_handle_endpoint_ref(
     }
 }
 
+fn settings_sync_retention_discovery_required_capabilities() -> [&'static str; 2] {
+    [
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+    ]
+}
+
+#[cfg(feature = "local-preview-fixtures")]
+fn settings_sync_retention_discovery_advertisement_capabilities() -> [&'static str; 3] {
+    [
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+    ]
+}
+
 fn is_discovery_service_addr_comparable(endpoint_ref: &str) -> bool {
     endpoint_ref.parse::<std::net::SocketAddr>().is_ok()
         || Multiaddr::parse(endpoint_ref).is_ok_and(|multiaddr| multiaddr.segments().count() >= 2)
@@ -6577,11 +6595,13 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         discovery_provider: &(impl ProfileSyncPeerDiscoveryProvider + ?Sized),
         discovery_query: &ProfileSyncPeerDiscoveryQuery,
     ) -> Result<SettingsSyncTrustedDiscoveryCyclePlan, ProfileSyncCycleWithHealthError> {
-        let discovery_report = discover_trusted_profile_sync_peers(
+        let required_capabilities = settings_sync_retention_discovery_required_capabilities();
+        let discovery_report = discover_trusted_profile_sync_peers_with_required_capabilities(
             database,
             config.profile.as_str(),
             discovery_provider,
             discovery_query,
+            &required_capabilities,
         )
         .map_err(profile_sync_peer_discovery_error_to_cycle_with_health)?;
         self.plan_once_selecting_trusted_discovered_retention_provider_endpoints(
@@ -6601,11 +6621,13 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         discovery_query: &ProfileSyncPeerDiscoveryQuery,
         retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'provider>],
     ) -> Result<SettingsSyncTrustedDiscoveryCyclePlan, ProfileSyncCycleWithHealthError> {
-        let discovery_report = discover_trusted_profile_sync_peers(
+        let required_capabilities = settings_sync_retention_discovery_required_capabilities();
+        let discovery_report = discover_trusted_profile_sync_peers_with_required_capabilities(
             database,
             config.profile.as_str(),
             discovery_provider,
             discovery_query,
+            &required_capabilities,
         )
         .map_err(profile_sync_peer_discovery_error_to_cycle_with_health)?;
         let cycle = self.plan_once_selecting_trusted_discovered_retention_providers(
@@ -6989,11 +7011,13 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
         discovery_query: &ProfileSyncPeerDiscoveryQuery,
         retention_provider_handles: &[SettingsSyncRetentionProviderHandle<'provider>],
     ) -> Result<SettingsSyncTrustedDiscoveryCycleRun, ProfileSyncCycleWithHealthError> {
-        let discovery_report = discover_trusted_profile_sync_peers(
+        let required_capabilities = settings_sync_retention_discovery_required_capabilities();
+        let discovery_report = discover_trusted_profile_sync_peers_with_required_capabilities(
             database,
             config.profile.as_str(),
             discovery_provider,
             discovery_query,
+            &required_capabilities,
         )
         .map_err(profile_sync_peer_discovery_error_to_cycle_with_health)?;
         let cycle = self.run_once_selecting_trusted_discovered_retention_providers(
@@ -7025,11 +7049,13 @@ impl<'a> BroadwebdSettingsSyncScheduler<'a> {
     where
         Materializer: SettingsSyncProtocolProviderMaterializer<'provider>,
     {
-        let discovery_report = discover_trusted_profile_sync_peers(
+        let required_capabilities = settings_sync_retention_discovery_required_capabilities();
+        let discovery_report = discover_trusted_profile_sync_peers_with_required_capabilities(
             database,
             config.profile.as_str(),
             discovery_provider,
             discovery_query,
+            &required_capabilities,
         )
         .map_err(profile_sync_peer_discovery_error_to_cycle_with_health)?;
         self.run_once_selecting_trusted_discovered_protocol_retention_providers(
@@ -9009,11 +9035,12 @@ fn local_settings_sync_preview_discovery_summary(
         DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
     )?;
     let advertisement = sign_profile_sync_peer_advertisement(
-        ProfileSyncPeerAdvertisement::new(
+        ProfileSyncPeerAdvertisement::with_capabilities(
             LOCAL_SETTINGS_SYNC_PREVIEW_NETWORK_ID,
             provider_signer.device_id(),
             DEFAULT_PROFILE_SYNC_PREVIEW_PROVIDER_ID,
             LOCAL_SETTINGS_SYNC_PREVIEW_DISCOVERY_SERVICE_ADDR,
+            settings_sync_retention_discovery_advertisement_capabilities(),
             1,
         )?,
         &provider_signer,
@@ -9039,11 +9066,13 @@ fn local_settings_sync_preview_discovery_summary(
         local_settings_sync_preview_discovery_protocols(),
         8,
     )?;
-    let discovery_report = discover_trusted_profile_sync_peers(
+    let required_capabilities = settings_sync_retention_discovery_required_capabilities();
+    let discovery_report = discover_trusted_profile_sync_peers_with_required_capabilities(
         database,
         profile,
         &discovery_provider,
         &discovery_query,
+        &required_capabilities,
     )
     .map_err(profile_sync_peer_discovery_error_to_cycle_with_health)?;
     let scheduler = BroadwebdSettingsSyncScheduler::new(device_daemon);
@@ -11212,7 +11241,8 @@ mod tests {
         SettingsSyncScheduledMembershipCyclePlanAttemptCycle, SettingsSyncSchedulerConfig,
         SettingsSyncStoredProviderEndpointStatus,
         SettingsSyncStoredRetentionProviderMembershipPlanAttemptCycle,
-        filter_trusted_profile_sync_peer_discovery_results, settings_device_head_root_id,
+        filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities,
+        settings_device_head_root_id, settings_sync_retention_discovery_required_capabilities,
         sign_encrypted_json_object, sign_profile_sync_peer_advertisement,
         sync_membership_record_root_id,
     };
@@ -11220,9 +11250,11 @@ mod tests {
         BroadwebStatusSnapshot, BroadwebdClient, BroadwebdError,
         DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
         DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH, DaemonHealth, DaemonLifecycle,
-        ProfileSyncPeerAdvertisement, ProfileSyncPeerDiscoveryProtocol,
-        ProfileSyncPeerDiscoveryProvider, ProfileSyncPeerDiscoveryQuery,
-        ProfileSyncPeerDiscoveryResult,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER, ProfileSyncPeerAdvertisement,
+        ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryProvider,
+        ProfileSyncPeerDiscoveryQuery, ProfileSyncPeerDiscoveryResult,
         ProfileSyncProfileRequest as BroadwebdProfileSyncProfileRequest,
         ProfileSyncProviderHealth as BroadwebdProfileSyncProviderHealth,
         ProfileSyncProviderRecord as BroadwebdProfileSyncProviderRecord,
@@ -24703,22 +24735,49 @@ mod tests {
             "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/trusted-profile-sync-peer";
         let stale_trusted_provider_endpoint_ref =
             "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/stale-trusted-profile-sync-peer";
+        let transfer_only_provider_id =
+            "local-fixture-availability-runtime-scheduler-transfer-only-discovery-pinner";
         let discovery_candidates = vec![
             ProfileSyncPeerDiscoveryResult {
                 protocol: ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
                 namespace: DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE.to_string(),
                 advertisement: sign_profile_sync_peer_advertisement(
-                    ProfileSyncPeerAdvertisement::new(
+                    ProfileSyncPeerAdvertisement::with_capabilities(
                         network_id,
                         trusted_discovery_signer.device_id(),
                         trusted_provider_id,
                         trusted_provider_endpoint_ref,
+                        [
+                            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+                            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+                            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+                        ],
                         1,
                     )
                     .expect("trusted discovery advertisement"),
                     &trusted_discovery_signer,
                 )
                 .expect("sign trusted discovery advertisement"),
+            },
+            ProfileSyncPeerDiscoveryResult {
+                protocol: ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
+                namespace: DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE.to_string(),
+                advertisement: sign_profile_sync_peer_advertisement(
+                    ProfileSyncPeerAdvertisement::with_capabilities(
+                        network_id,
+                        trusted_discovery_signer.device_id(),
+                        transfer_only_provider_id,
+                        "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/transfer-only-profile-sync-peer",
+                        [
+                            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+                            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+                        ],
+                        1,
+                    )
+                    .expect("transfer-only discovery advertisement"),
+                    &trusted_discovery_signer,
+                )
+                .expect("sign transfer-only discovery advertisement"),
             },
             ProfileSyncPeerDiscoveryResult {
                 protocol: ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
@@ -24763,15 +24822,18 @@ mod tests {
                 )
                 .expect("publish scheduler discovery candidate");
         }
-        let discovery_report = filter_trusted_profile_sync_peer_discovery_results(
-            &database,
-            profile,
-            network_id,
-            discovery_candidates,
-        )
-        .expect("filter trusted discovery results");
+        let required_capabilities = settings_sync_retention_discovery_required_capabilities();
+        let discovery_report =
+            filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities(
+                &database,
+                profile,
+                network_id,
+                &required_capabilities,
+                discovery_candidates,
+            )
+            .expect("filter trusted discovery results");
         assert_eq!(discovery_report.trusted_peer_count(), 1);
-        assert_eq!(discovery_report.rejected_peer_count(), 2);
+        assert_eq!(discovery_report.rejected_peer_count(), 3);
         assert_eq!(
             discovery_report
                 .rejected_peers
@@ -24786,6 +24848,10 @@ mod tests {
                 (
                     future_epoch_provider_id,
                     ProfileSyncPeerDiscoveryTrustRejection::SignerMembershipEpochTooNew,
+                ),
+                (
+                    transfer_only_provider_id,
+                    ProfileSyncPeerDiscoveryTrustRejection::MissingRequiredCapability,
                 ),
             ]
         );
@@ -24835,7 +24901,7 @@ mod tests {
             .expect("plan after discovering trusted provider handles");
 
         assert_eq!(discovered_plan.trusted_peer_count(), 1);
-        assert_eq!(discovered_plan.rejected_peer_count(), 2);
+        assert_eq!(discovered_plan.rejected_peer_count(), 3);
         assert_eq!(
             discovered_plan.cycle.selected_retention_provider_ids,
             vec![trusted_provider_id.to_string()]
@@ -24869,7 +24935,7 @@ mod tests {
             .expect("run after discovering trusted provider handles");
 
         assert_eq!(run.trusted_peer_count(), 1);
-        assert_eq!(run.rejected_peer_count(), 2);
+        assert_eq!(run.rejected_peer_count(), 3);
         assert_eq!(
             run.cycle.selected_retention_provider_ids,
             vec![trusted_provider_id.to_string()]
@@ -24946,11 +25012,16 @@ mod tests {
 
         let discovery_provider = network.profile_sync_peer_discovery_provider();
         let advertisement = sign_profile_sync_peer_advertisement(
-            ProfileSyncPeerAdvertisement::new(
+            ProfileSyncPeerAdvertisement::with_capabilities(
                 network_id,
                 provider_signer.device_id(),
                 provider_id,
                 provider_endpoint,
+                [
+                    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+                    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+                    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+                ],
                 1,
             )
             .expect("trusted discovered protocol advertisement"),

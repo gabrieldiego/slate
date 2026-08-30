@@ -206,20 +206,23 @@ pub fn filter_trusted_profile_sync_peer_discovery_results(
     network_id: &str,
     candidates: impl IntoIterator<Item = ProfileSyncPeerDiscoveryResult>,
 ) -> Result<TrustedProfileSyncPeerDiscoveryReport, StorageError> {
+    let required_capabilities: &[&str] = &[];
     filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities(
         database,
         profile,
         network_id,
-        &[],
+        required_capabilities,
         candidates,
     )
 }
 
-pub fn filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities(
+pub fn filter_trusted_profile_sync_peer_discovery_results_with_required_capabilities<
+    Capability: AsRef<str>,
+>(
     database: &SlateProfileDatabase,
     profile: &str,
     network_id: &str,
-    required_capabilities: &[String],
+    required_capabilities: &[Capability],
     candidates: impl IntoIterator<Item = ProfileSyncPeerDiscoveryResult>,
 ) -> Result<TrustedProfileSyncPeerDiscoveryReport, StorageError> {
     let mut report = TrustedProfileSyncPeerDiscoveryReport::default();
@@ -248,9 +251,9 @@ pub fn filter_trusted_profile_sync_peer_discovery_results_with_required_capabili
     ))
 }
 
-pub fn require_profile_sync_peer_discovery_capabilities(
+pub fn require_profile_sync_peer_discovery_capabilities<Capability: AsRef<str>>(
     report: TrustedProfileSyncPeerDiscoveryReport,
-    required_capabilities: &[String],
+    required_capabilities: &[Capability],
 ) -> TrustedProfileSyncPeerDiscoveryReport {
     if required_capabilities.is_empty() {
         return report;
@@ -263,7 +266,7 @@ pub fn require_profile_sync_peer_discovery_capabilities(
     for peer in report.trusted_peers {
         if required_capabilities
             .iter()
-            .all(|capability| peer.advertisement.has_capability(capability))
+            .all(|capability| peer.advertisement.has_capability(capability.as_ref()))
         {
             filtered.trusted_peers.push(peer);
         } else {
@@ -276,12 +279,12 @@ pub fn require_profile_sync_peer_discovery_capabilities(
     filtered
 }
 
-pub fn discover_trusted_profile_sync_peers_with_required_capabilities(
+pub fn discover_trusted_profile_sync_peers_with_required_capabilities<Capability: AsRef<str>>(
     database: &SlateProfileDatabase,
     profile: &str,
     provider: &(impl ProfileSyncPeerDiscoveryProvider + ?Sized),
     query: &ProfileSyncPeerDiscoveryQuery,
-    required_capabilities: &[String],
+    required_capabilities: &[Capability],
 ) -> Result<TrustedProfileSyncPeerDiscoveryReport, ProfileSyncPeerDiscoveryError> {
     let candidates = provider.discover_profile_sync_peers(query)?;
     Ok(
@@ -301,12 +304,13 @@ pub fn discover_trusted_profile_sync_peers(
     provider: &(impl ProfileSyncPeerDiscoveryProvider + ?Sized),
     query: &ProfileSyncPeerDiscoveryQuery,
 ) -> Result<TrustedProfileSyncPeerDiscoveryReport, ProfileSyncPeerDiscoveryError> {
+    let required_capabilities: &[&str] = &[];
     discover_trusted_profile_sync_peers_with_required_capabilities(
         database,
         profile,
         provider,
         query,
-        &[],
+        required_capabilities,
     )
 }
 

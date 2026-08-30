@@ -302,6 +302,18 @@ require_text \
     'discover_trusted_profile_sync_peers_with_required_capabilities' \
     'profile-sync must export reusable role-aware trusted discovery for future runtime transports.'
 require_text \
+    crates/profile-sync/src/lib.rs \
+    'settings_sync_retention_discovery_required_capabilities' \
+    'profile-sync schedulers must centralize required discovery capabilities for retention providers.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER' \
+    'profile-sync schedulers must require discovered retention providers to advertise object transfer.'
+require_text \
+    crates/profile-sync/src/lib.rs \
+    'PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION' \
+    'profile-sync schedulers must require discovered retention providers to advertise local retention.'
+require_text \
     crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
     '--settings-db' \
     'manual discovery trust checks must take an explicit slate-settings.db path.'

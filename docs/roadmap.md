@@ -391,6 +391,10 @@ Current baseline:
   `slate-profile-sync`'s discovery-trust library API, so future runtime
   discovery paths can enforce the same requirement before dialing a broadweb
   peer.
+- Settings-sync schedulers now use that role-aware discovery API when selecting
+  discovered retention providers. A signed peer must advertise object-transfer
+  and local-retention roles before it can be selected as a durable retention
+  candidate, and the local preview fixture advertises the same roles explicitly.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the
