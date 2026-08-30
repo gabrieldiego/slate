@@ -7,6 +7,7 @@ use slate_broadwebd::{
 use slate_storage::{
     ProfileSyncDeviceSigner, SignedSyncObject, SlateProfileDatabase, StorageError, SyncObjectError,
 };
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TrustedProfileSyncPeerDiscoveryReport {
@@ -43,6 +44,8 @@ pub enum ProfileSyncPeerDiscoveryTrustRejection {
     WrongNetwork,
     LocalDevice,
     MissingProfileSyncServiceFrameCapability,
+    StaleDiscoverySequence,
+    ReplayedDiscoverySequence,
     UnknownDevicePublicKey,
     UntrustedDevicePublicKey,
     MissingSignedIdentity,
@@ -181,24 +184,20 @@ pub fn filter_trusted_profile_sync_peer_discovery_results(
     candidates: impl IntoIterator<Item = ProfileSyncPeerDiscoveryResult>,
 ) -> Result<TrustedProfileSyncPeerDiscoveryReport, StorageError> {
     let mut report = TrustedProfileSyncPeerDiscoveryReport::default();
+    let mut trusted_candidates = Vec::new();
     for candidate in candidates {
         if let Some(reason) =
             profile_sync_peer_discovery_trust_rejection(database, profile, network_id, &candidate)?
         {
             report
                 .rejected_peers
-                .push(RejectedProfileSyncPeerDiscoveryCandidate {
-                    protocol: candidate.protocol,
-                    namespace: candidate.namespace,
-                    network_id: candidate.advertisement.network_id,
-                    node_id: candidate.advertisement.node_id,
-                    provider_id: candidate.advertisement.provider_id,
-                    reason,
-                });
+                .push(rejected_discovery_candidate(candidate, reason));
         } else {
-            report.trusted_peers.push(candidate);
+            trusted_candidates.push(candidate);
         }
     }
+    report.trusted_peers =
+        freshest_trusted_profile_sync_peer_discovery_results(trusted_candidates, &mut report);
     Ok(report)
 }
 
@@ -286,6 +285,84 @@ fn profile_sync_peer_discovery_trust_rejection(
         ));
     }
     Ok(None)
+}
+
+fn freshest_trusted_profile_sync_peer_discovery_results(
+    candidates: Vec<ProfileSyncPeerDiscoveryResult>,
+    report: &mut TrustedProfileSyncPeerDiscoveryReport,
+) -> Vec<ProfileSyncPeerDiscoveryResult> {
+    let mut freshest_by_key = BTreeMap::<ProfileSyncPeerDiscoveryFreshnessKey, usize>::new();
+    let mut freshest = Vec::<Option<ProfileSyncPeerDiscoveryResult>>::new();
+
+    for candidate in candidates {
+        let key = ProfileSyncPeerDiscoveryFreshnessKey::from_result(&candidate);
+        let candidate_sequence = candidate.advertisement.sequence;
+        if let Some(existing_index) = freshest_by_key.get(&key).copied() {
+            let existing = freshest[existing_index]
+                .as_ref()
+                .expect("freshness key should point at an accepted discovery candidate");
+            let existing_sequence = existing.advertisement.sequence;
+            if candidate_sequence > existing_sequence {
+                let stale = freshest[existing_index]
+                    .replace(candidate)
+                    .expect("freshness key should point at an accepted discovery candidate");
+                report.rejected_peers.push(rejected_discovery_candidate(
+                    stale,
+                    ProfileSyncPeerDiscoveryTrustRejection::StaleDiscoverySequence,
+                ));
+            } else if candidate_sequence == existing_sequence {
+                report.rejected_peers.push(rejected_discovery_candidate(
+                    candidate,
+                    ProfileSyncPeerDiscoveryTrustRejection::ReplayedDiscoverySequence,
+                ));
+            } else {
+                report.rejected_peers.push(rejected_discovery_candidate(
+                    candidate,
+                    ProfileSyncPeerDiscoveryTrustRejection::StaleDiscoverySequence,
+                ));
+            }
+        } else {
+            freshest_by_key.insert(key, freshest.len());
+            freshest.push(Some(candidate));
+        }
+    }
+
+    freshest.into_iter().flatten().collect()
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct ProfileSyncPeerDiscoveryFreshnessKey {
+    protocol: ProfileSyncPeerDiscoveryProtocol,
+    namespace: String,
+    network_id: String,
+    node_id: String,
+    provider_id: String,
+}
+
+impl ProfileSyncPeerDiscoveryFreshnessKey {
+    fn from_result(result: &ProfileSyncPeerDiscoveryResult) -> Self {
+        Self {
+            protocol: result.protocol,
+            namespace: result.namespace.clone(),
+            network_id: result.advertisement.network_id.clone(),
+            node_id: result.advertisement.node_id.clone(),
+            provider_id: result.advertisement.provider_id.clone(),
+        }
+    }
+}
+
+fn rejected_discovery_candidate(
+    candidate: ProfileSyncPeerDiscoveryResult,
+    reason: ProfileSyncPeerDiscoveryTrustRejection,
+) -> RejectedProfileSyncPeerDiscoveryCandidate {
+    RejectedProfileSyncPeerDiscoveryCandidate {
+        protocol: candidate.protocol,
+        namespace: candidate.namespace,
+        network_id: candidate.advertisement.network_id,
+        node_id: candidate.advertisement.node_id,
+        provider_id: candidate.advertisement.provider_id,
+        reason,
+    }
 }
 
 #[cfg(test)]
@@ -532,6 +609,85 @@ mod tests {
     }
 
     #[test]
+    fn trusted_profile_sync_peer_discovery_prefers_fresh_sequence_and_rejects_replays() {
+        let db_root = test_state_root("trusted-peer-discovery-freshness-db");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            db_root.join(DEFAULT_DATABASE_FILE_NAME),
+            "peer-trust-freshness-local-device",
+        )
+        .expect("open peer freshness database");
+        let profile = "peerfreshnessprofile";
+        let network_id = "peerfreshnessnetwork";
+        let trusted_signer =
+            ProfileSyncDeviceSigner::generate("peer-trust-freshness-remote").expect("trusted");
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: profile.to_string(),
+                public_key: trusted_signer.public_key().expect("trusted public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register trusted discovery signer");
+
+        let candidates = vec![
+            test_signed_discovery_result_with_sequence(
+                network_id,
+                &trusted_signer,
+                "peer-trust-freshness-provider",
+                "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/stale-peer",
+                1,
+            ),
+            test_signed_discovery_result_with_sequence(
+                network_id,
+                &trusted_signer,
+                "peer-trust-freshness-provider",
+                "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/fresh-peer",
+                3,
+            ),
+            test_signed_discovery_result_with_sequence(
+                network_id,
+                &trusted_signer,
+                "peer-trust-freshness-provider",
+                "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/replayed-peer",
+                3,
+            ),
+            test_signed_discovery_result_with_sequence(
+                network_id,
+                &trusted_signer,
+                "peer-trust-freshness-provider",
+                "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/stale-peer-again",
+                2,
+            ),
+        ];
+
+        let report = filter_trusted_profile_sync_peer_discovery_results(
+            &database, profile, network_id, candidates,
+        )
+        .expect("filter trusted peer discovery freshness");
+
+        assert_eq!(report.trusted_peer_count(), 1);
+        assert_eq!(report.rejected_peer_count(), 3);
+        assert_eq!(report.trusted_peers[0].advertisement.sequence, 3);
+        assert_eq!(
+            report.trusted_peers[0].advertisement.service_addr,
+            "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/fresh-peer"
+        );
+        assert_eq!(
+            report
+                .rejected_peers
+                .iter()
+                .map(|rejection| rejection.reason)
+                .collect::<Vec<_>>(),
+            vec![
+                ProfileSyncPeerDiscoveryTrustRejection::StaleDiscoverySequence,
+                ProfileSyncPeerDiscoveryTrustRejection::ReplayedDiscoverySequence,
+                ProfileSyncPeerDiscoveryTrustRejection::StaleDiscoverySequence,
+            ]
+        );
+
+        let _ = std::fs::remove_dir_all(db_root);
+    }
+
+    #[test]
     fn trusted_profile_sync_peer_discovery_runs_provider_then_filters_signed_results() {
         let db_root = test_state_root("trusted-peer-discovery-provider-db");
         let database = SlateProfileDatabase::open_resolved_with_device_id(
@@ -659,6 +815,16 @@ mod tests {
         provider_id: &str,
         service_addr: &str,
     ) -> ProfileSyncPeerDiscoveryResult {
+        test_signed_discovery_result_with_sequence(network_id, signer, provider_id, service_addr, 1)
+    }
+
+    fn test_signed_discovery_result_with_sequence(
+        network_id: &str,
+        signer: &ProfileSyncDeviceSigner,
+        provider_id: &str,
+        service_addr: &str,
+        sequence: u64,
+    ) -> ProfileSyncPeerDiscoveryResult {
         ProfileSyncPeerDiscoveryResult {
             protocol: ProfileSyncPeerDiscoveryProtocol::Libp2pRendezvous,
             namespace: "slate-profile-sync".to_string(),
@@ -668,7 +834,7 @@ mod tests {
                     signer.device_id(),
                     provider_id,
                     service_addr,
-                    1,
+                    sequence,
                 )
                 .expect("build profile-sync discovery test advertisement"),
                 signer,

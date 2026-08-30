@@ -346,6 +346,12 @@ fn profile_sync_peer_discovery_trust_rejection_name(
         ProfileSyncPeerDiscoveryTrustRejection::MissingProfileSyncServiceFrameCapability => {
             "missing_profile_sync_service_frame_capability"
         }
+        ProfileSyncPeerDiscoveryTrustRejection::StaleDiscoverySequence => {
+            "stale_discovery_sequence"
+        }
+        ProfileSyncPeerDiscoveryTrustRejection::ReplayedDiscoverySequence => {
+            "replayed_discovery_sequence"
+        }
         ProfileSyncPeerDiscoveryTrustRejection::UnknownDevicePublicKey => {
             "unknown_device_public_key"
         }

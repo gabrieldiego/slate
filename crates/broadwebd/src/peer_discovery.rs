@@ -678,13 +678,15 @@ impl ProfileSyncPeerDiscoveryProvider for SimulatedProfileSyncPeerDiscoveryProvi
             advertisement.node_id.as_str(),
             advertisement.provider_id.as_str(),
         )?;
-        self.network
-            .records
-            .lock()
-            .map_err(|_| {
-                BroadwebdError::Request("peer discovery simulation lock poisoned".to_string())
-            })?
-            .insert(key, advertisement.clone());
+        let mut records = self.network.records.lock().map_err(|_| {
+            BroadwebdError::Request("peer discovery simulation lock poisoned".to_string())
+        })?;
+        if records
+            .get(&key)
+            .is_none_or(|stored| advertisement.sequence > stored.sequence)
+        {
+            records.insert(key, advertisement.clone());
+        }
         Ok(ProfileSyncPeerDiscoveryPublication {
             protocol,
             namespace: namespace.to_string(),
@@ -1042,5 +1044,58 @@ mod tests {
         );
         assert_eq!(discovered[0].advertisement.node_id, "node-a");
         assert_eq!(discovered[0].advertisement.provider_id, "provider-a");
+    }
+
+    #[test]
+    fn simulated_peer_discovery_keeps_freshest_record_without_sockets() {
+        let network = SimulatedProfileSyncPeerDiscoveryNetwork::new();
+        let provider = network.provider();
+
+        provider
+            .publish_profile_sync_peer(
+                ProfileSyncPeerDiscoveryProtocol::IrohRendezvous,
+                DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+                ProfileSyncPeerAdvertisement::new(
+                    "account-a",
+                    "node-a",
+                    "provider-a",
+                    "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/fresh-peer",
+                    3,
+                )
+                .expect("fresh advertisement"),
+            )
+            .expect("publish fresh advertisement");
+        provider
+            .publish_profile_sync_peer(
+                ProfileSyncPeerDiscoveryProtocol::IrohRendezvous,
+                DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+                ProfileSyncPeerAdvertisement::new(
+                    "account-a",
+                    "node-a",
+                    "provider-a",
+                    "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/stale-peer",
+                    1,
+                )
+                .expect("stale advertisement"),
+            )
+            .expect("publish stale advertisement");
+
+        let query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
+            "account-a",
+            "node-local",
+            [ProfileSyncPeerDiscoveryProtocol::IrohRendezvous],
+            8,
+        )
+        .expect("discovery query");
+        let discovered = provider
+            .discover_profile_sync_peers(&query)
+            .expect("discover simulated peers");
+
+        assert_eq!(discovered.len(), 1);
+        assert_eq!(discovered[0].advertisement.sequence, 3);
+        assert_eq!(
+            discovered[0].advertisement.service_addr,
+            "/dnsaddr/rendezvous.local/tcp/443/wss/p2p/fresh-peer"
+        );
     }
 }

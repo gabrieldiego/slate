@@ -348,6 +348,91 @@ fn ipns_profile_sync_peer_discovery_round_trips_through_kubo_model_without_socke
     );
 }
 
+#[test]
+fn ipns_profile_sync_peer_discovery_prefers_freshest_sequence_without_sockets() {
+    let network = InProcessBroadwebNetwork::new();
+    let kubo = network.kubo_profile_sync_model();
+    let rpc = kubo
+        .profile_sync_rpc()
+        .expect("fixture Kubo profile-sync RPC");
+    let old_publisher = IpnsProfileSyncPeerDiscoveryProvider::new(
+        rpc.clone(),
+        InternalKuboRpcTransportShim,
+        ResourceBudget::default(),
+    )
+    .with_publish_key_id("device-a-old");
+    let fresh_publisher = IpnsProfileSyncPeerDiscoveryProvider::new(
+        rpc.clone(),
+        InternalKuboRpcTransportShim,
+        ResourceBudget::default(),
+    )
+    .with_publish_key_id("device-a-fresh");
+    let resolver = IpnsProfileSyncPeerDiscoveryProvider::new(
+        rpc,
+        InternalKuboRpcTransportShim,
+        ResourceBudget::default(),
+    )
+    .with_resolve_names(["device-a-old", "device-a-fresh"]);
+    let signer = ProfileSyncDeviceSigner::generate("device-a")
+        .expect("generate IPNS discovery advertisement signer");
+
+    old_publisher
+        .publish_profile_sync_peer(
+            ProfileSyncPeerDiscoveryProtocol::Ipns,
+            DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+            sign_test_profile_sync_peer_advertisement(
+                ProfileSyncPeerAdvertisement::new(
+                    "profile-a",
+                    "device-a",
+                    "provider-a",
+                    "/dnsaddr/rendezvous.slate.test/tcp/443/wss/p2p/stale-device-a",
+                    1,
+                )
+                .expect("stale IPNS-discovered advertisement"),
+                &signer,
+            )
+            .expect("signed stale IPNS-discovered advertisement"),
+        )
+        .expect("publish stale IPNS discovery record through Kubo fixture");
+    fresh_publisher
+        .publish_profile_sync_peer(
+            ProfileSyncPeerDiscoveryProtocol::Ipns,
+            DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE,
+            sign_test_profile_sync_peer_advertisement(
+                ProfileSyncPeerAdvertisement::new(
+                    "profile-a",
+                    "device-a",
+                    "provider-a",
+                    "/dnsaddr/rendezvous.slate.test/tcp/443/wss/p2p/fresh-device-a",
+                    4,
+                )
+                .expect("fresh IPNS-discovered advertisement"),
+                &signer,
+            )
+            .expect("signed fresh IPNS-discovered advertisement"),
+        )
+        .expect("publish fresh IPNS discovery record through Kubo fixture");
+
+    let query = ProfileSyncPeerDiscoveryQuery::for_default_namespace(
+        "profile-a",
+        "device-local",
+        [ProfileSyncPeerDiscoveryProtocol::Ipns],
+        4,
+    )
+    .expect("IPNS discovery query");
+    let discovered = resolver
+        .discover_profile_sync_peers(&query)
+        .expect("discover freshest IPNS record through Kubo fixture");
+
+    assert_eq!(discovered.len(), 1);
+    assert_eq!(discovered[0].advertisement.sequence, 4);
+    assert_eq!(
+        discovered[0].advertisement.service_addr,
+        "/dnsaddr/rendezvous.slate.test/tcp/443/wss/p2p/fresh-device-a"
+    );
+    assert_eq!(kubo.finish().len(), 10);
+}
+
 fn sign_test_profile_sync_peer_advertisement(
     advertisement: ProfileSyncPeerAdvertisement,
     signer: &ProfileSyncDeviceSigner,

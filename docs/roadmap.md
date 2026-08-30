@@ -1914,6 +1914,14 @@ Current baseline:
   device key was introduced after the advertisement's claimed epoch, so local
   fixtures can model stale or pre-authorization discovery data before any
   automatic provider selection trusts it.
+- Discovery freshness is now modeled before real-network discovery is enabled.
+  The profile-sync trust filter keeps only the freshest signed advertisement
+  sequence per protocol, namespace, network, node, and provider during a
+  discovery run, and reports stale or replayed signed records as typed
+  rejections. The socketless local-simulation provider and Kubo/IPNS-shaped
+  fixture discovery path also retain the highest sequence for duplicate
+  provider records, so local tests can exercise replay/stale discovery behavior
+  without loopback sockets or external networks.
 - The `slate-profile-sync` crate is no longer a single source file. The first
   low-risk split extracts discovery trust filtering, shared object-id
   de-duplication helpers, root-id naming helpers, scheduler-facing health

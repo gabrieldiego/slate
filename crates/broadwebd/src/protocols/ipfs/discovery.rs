@@ -7,7 +7,7 @@ use crate::peer_discovery::{
 use crate::protocols::ipfs::kubo::{IpfsKuboProfileSyncRpc, IpfsKuboProfileSyncRpcExecutor};
 use crate::{BroadwebdError, ResourceBudget};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub struct IpnsProfileSyncPeerDiscoveryProvider<Executor> {
@@ -106,12 +106,9 @@ where
             return Ok(Vec::new());
         }
 
-        let mut results = Vec::new();
-        let mut seen = BTreeSet::new();
+        let mut results = Vec::<Option<ProfileSyncPeerDiscoveryResult>>::new();
+        let mut freshest_by_peer = BTreeMap::<(String, String), usize>::new();
         for name in &self.resolve_names {
-            if results.len() >= query.max_peers {
-                break;
-            }
             let object_id = self
                 .rpc
                 .resolve_root(&self.executor, name.as_str(), &self.budget)?;
@@ -131,16 +128,25 @@ where
                 advertisement.node_id.clone(),
                 advertisement.provider_id.clone(),
             );
-            if seen.insert(seen_key) {
-                results.push(ProfileSyncPeerDiscoveryResult {
-                    protocol: ProfileSyncPeerDiscoveryProtocol::Ipns,
-                    namespace: record.namespace,
-                    advertisement,
-                });
+            let candidate = ProfileSyncPeerDiscoveryResult {
+                protocol: ProfileSyncPeerDiscoveryProtocol::Ipns,
+                namespace: record.namespace,
+                advertisement,
+            };
+            if let Some(index) = freshest_by_peer.get(&seen_key).copied() {
+                let stored = results[index]
+                    .as_ref()
+                    .expect("IPNS discovery freshness key should point at a candidate");
+                if candidate.advertisement.sequence > stored.advertisement.sequence {
+                    results[index] = Some(candidate);
+                }
+            } else if results.len() < query.max_peers {
+                freshest_by_peer.insert(seen_key, results.len());
+                results.push(Some(candidate));
             }
         }
 
-        Ok(results)
+        Ok(results.into_iter().flatten().collect())
     }
 }
 
