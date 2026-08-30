@@ -1964,14 +1964,15 @@ Current baseline:
   requires a protocol materializer, without pretending the socketless fixture
   handle is the advertised network endpoint.
 - Profile-sync preview report JSON serialization now lives in
-  `slate-profile-sync` rather than chrome's Servo-backed resource protocol
-  module. Chrome keeps only thin timestamped report wrappers, and the low-memory
-  boundary script rejects reintroducing duplicated discovery JSON helpers there,
-  so the Settings sync data contract can be tested without compiling Servo.
+  `crates/profile-sync/src/preview_json.rs` rather than chrome's Servo-backed
+  resource protocol module. Chrome keeps only thin timestamped report wrappers,
+  and the low-memory boundary script rejects reintroducing duplicated discovery
+  JSON helpers there, so the Settings sync data contract can be tested without
+  compiling Servo.
 
 Next:
 
-- Continue extending the protocol-neutral `profile-sync` application service
+- Continue extending the protocol-neutral `profile-sync` application service.
   toward real protocol-backed provider materialization.
 - Extend the Settings discovery preflight from the local-simulation provider to
   configured IPNS, libp2p, Iroh, mDNS, or LAN discovery providers, then add
