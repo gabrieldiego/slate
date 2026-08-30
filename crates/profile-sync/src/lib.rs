@@ -11263,8 +11263,9 @@ mod tests {
         ProfileSyncResponse as BroadwebdProfileSyncResponse,
         ProfileSyncRootCandidate as BroadwebdProfileSyncRootCandidate,
         ProfileSyncRootHealth as BroadwebdProfileSyncRootHealth, ResourceBudget,
-        ServiceFrameBroadwebdClient, ServiceFrameCodec, ServiceRequest as BroadwebdServiceRequest,
-        ServiceResponse as BroadwebdServiceResponse, TemporaryDownloadRecord,
+        ServiceFrameBroadwebdClient, ServiceFrameCodec, ServiceFrameEndpointConnectorFactory,
+        ServiceRequest as BroadwebdServiceRequest, ServiceResponse as BroadwebdServiceResponse,
+        TemporaryDownloadRecord,
         test_fixtures::{
             InProcessBroadwebNetwork, InternalKuboRpcResponse, ProfileSyncFixtureCapacity,
         },
@@ -12042,9 +12043,10 @@ mod tests {
         endpoint_registry
             .register(provider_endpoint_ref, &provider_daemon)
             .expect("register deferred endpoint with socketless frame registry");
-        let provider_connector = endpoint_registry
-            .connector(provider_endpoint_ref)
-            .expect("build endpoint-registry connector");
+        let provider_connector =
+            ServiceFrameEndpointConnectorFactory::with_in_process_registry(&endpoint_registry)
+                .connector(provider_endpoint_ref)
+                .expect("build endpoint-registry connector through factory");
         let provider_client = ConnectorServiceFrameBroadwebdClient::with_codec(
             provider_connector,
             ServiceFrameCodec::new(4096),

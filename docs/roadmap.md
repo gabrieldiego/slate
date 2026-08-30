@@ -1901,6 +1901,11 @@ Current baseline:
   libp2p/IPNS/Iroh endpoint refs to in-process `BroadwebdClient` handlers while
   still exchanging bounded service-frame bytes over the same connector
   interface that future real transports must implement.
+- broadwebd now exposes a service-frame endpoint connector factory. It selects
+  TCP for literal socket endpoints, selects the socketless registry for
+  registered deferred endpoint refs, and leaves unregistered libp2p/IPNS/Iroh
+  refs on the same fail-closed deferred connector path that future live
+  adapters must replace.
 - `slate-profile-sync` materializer coverage now also consumes a provider
   client built from that socketless endpoint registry, proving selected
   deferred endpoint refs can become framed `BroadwebdClient` handles without

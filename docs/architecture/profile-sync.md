@@ -1331,7 +1331,11 @@ The socketless service-frame endpoint registry extends that harness boundary to
 deferred endpoint families. A fixture can register libp2p/IPNS/Iroh-shaped
 endpoint references against in-process handlers, while unregistered deferred
 endpoints and all TCP endpoints still fail closed unless an explicit connector
-is selected.
+is selected. The endpoint connector factory is the shared selection point:
+literal TCP endpoints become opt-in TCP clients, registered deferred endpoints
+become socketless framed clients in deterministic tests, and unregistered
+deferred endpoints keep returning the same fail-closed connector until a live
+libp2p, Iroh, IPNS, or future broadweb transport adapter is installed.
 
 `slate-broadwebd-net-probe` is the current manual harness binary:
 

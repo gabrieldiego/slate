@@ -227,6 +227,14 @@ require_text \
     'broadwebd must keep a socketless endpoint registry for deterministic deferred p2p/IPNS/Iroh service-frame tests.'
 require_text \
     crates/broadwebd/src/service_frame.rs \
+    'pub struct ServiceFrameEndpointConnectorFactory' \
+    'broadwebd must keep a shared endpoint connector factory for TCP, socketless deferred, and future live broadweb transports.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
+    'service_frame_endpoint_connector_factory_uses_socketless_registered_endpoint' \
+    'broadwebd must prove the endpoint connector factory can select socketless deferred endpoints.'
+require_text \
+    crates/broadwebd/src/service_frame.rs \
     'in_process_service_frame_endpoint_registry_models_deferred_connectors_without_sockets' \
     'broadwebd must prove deferred p2p/IPNS/Iroh service-frame endpoints can be modeled without sockets.'
 require_text \
@@ -898,6 +906,14 @@ require_text \
     docs/roadmap.md \
     'socketless service-frame endpoint registry' \
     'Roadmap must record socketless deferred endpoint modeling at the service-frame boundary.'
+require_text \
+    docs/architecture/profile-sync.md \
+    'endpoint connector factory is the shared selection point' \
+    'Profile-sync architecture must document the service-frame endpoint connector factory boundary.'
+require_text \
+    docs/roadmap.md \
+    'service-frame endpoint connector factory' \
+    'Roadmap must record the service-frame endpoint connector factory boundary.'
 require_text \
     docs/architecture/profile-sync.md \
     '`ProfileSyncObjectSource` trait over broadwebd'\''s `BroadwebdClient` boundary' \

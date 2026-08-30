@@ -366,6 +366,10 @@ impl<'a> InProcessServiceFrameEndpointRegistry<'a> {
         Ok(())
     }
 
+    pub fn contains_endpoint(&self, endpoint: &str) -> bool {
+        self.endpoints.contains_key(endpoint)
+    }
+
     pub fn connector(
         &self,
         endpoint: impl Into<String>,
@@ -394,6 +398,141 @@ impl<'a> InProcessServiceFrameEndpointRegistry<'a> {
                 "unregistered in-process service-frame endpoint: {endpoint}"
             ))
         })
+    }
+}
+
+pub struct ServiceFrameEndpointConnectorFactory<'registry, 'handler> {
+    registry: Option<&'registry InProcessServiceFrameEndpointRegistry<'handler>>,
+    tcp_timeout: Duration,
+}
+
+impl<'registry, 'handler> ServiceFrameEndpointConnectorFactory<'registry, 'handler> {
+    pub fn new() -> Self {
+        Self {
+            registry: None,
+            tcp_timeout: Duration::from_secs(12),
+        }
+    }
+
+    pub fn with_in_process_registry(
+        registry: &'registry InProcessServiceFrameEndpointRegistry<'handler>,
+    ) -> Self {
+        Self {
+            registry: Some(registry),
+            tcp_timeout: Duration::from_secs(12),
+        }
+    }
+
+    pub fn with_tcp_timeout(mut self, timeout: Duration) -> Self {
+        self.tcp_timeout = timeout;
+        self
+    }
+
+    pub fn connector(
+        &self,
+        endpoint: impl Into<String>,
+    ) -> Result<ServiceFrameEndpointConnector<'registry, 'handler>, BroadwebdError> {
+        let endpoint = endpoint.into();
+        let kind = service_frame_connector_kind_for_endpoint(endpoint.as_str())?;
+        if kind == ServiceFrameConnectorKind::Tcp {
+            return Ok(ServiceFrameEndpointConnector::Tcp(
+                TcpServiceFrameConnector::new(endpoint).with_timeout(self.tcp_timeout),
+            ));
+        }
+
+        if let Some(registry) = self.registry {
+            if registry.contains_endpoint(endpoint.as_str()) {
+                return Ok(ServiceFrameEndpointConnector::InProcess(
+                    registry.connector(endpoint)?,
+                ));
+            }
+        }
+
+        Ok(ServiceFrameEndpointConnector::Deferred(
+            DeferredServiceFrameConnector::new(endpoint)?,
+        ))
+    }
+}
+
+impl<'registry, 'handler> Default for ServiceFrameEndpointConnectorFactory<'registry, 'handler> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub enum ServiceFrameEndpointConnector<'registry, 'handler> {
+    Tcp(TcpServiceFrameConnector),
+    Deferred(DeferredServiceFrameConnector),
+    InProcess(InProcessServiceFrameEndpointConnector<'registry, 'handler>),
+}
+
+impl<'registry, 'handler> ServiceFrameEndpointConnector<'registry, 'handler> {
+    pub fn endpoint(&self) -> &str {
+        match self {
+            Self::Tcp(connector) => connector.address(),
+            Self::Deferred(connector) => connector.endpoint(),
+            Self::InProcess(connector) => connector.endpoint(),
+        }
+    }
+
+    pub fn kind(&self) -> Result<ServiceFrameConnectorKind, BroadwebdError> {
+        match self {
+            Self::Tcp(_) => Ok(ServiceFrameConnectorKind::Tcp),
+            Self::Deferred(connector) => Ok(connector.kind()),
+            Self::InProcess(connector) => connector.kind(),
+        }
+    }
+}
+
+pub enum ServiceFrameEndpointStream<'handler> {
+    Tcp(TcpStream),
+    Deferred(Cursor<Vec<u8>>),
+    InProcess(InProcessServiceFrameStream<'handler>),
+}
+
+impl Read for ServiceFrameEndpointStream<'_> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::Tcp(stream) => stream.read(buffer),
+            Self::Deferred(stream) => stream.read(buffer),
+            Self::InProcess(stream) => stream.read(buffer),
+        }
+    }
+}
+
+impl Write for ServiceFrameEndpointStream<'_> {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        match self {
+            Self::Tcp(stream) => stream.write(buffer),
+            Self::Deferred(stream) => stream.write(buffer),
+            Self::InProcess(stream) => stream.write(buffer),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            Self::Tcp(stream) => stream.flush(),
+            Self::Deferred(stream) => stream.flush(),
+            Self::InProcess(stream) => stream.flush(),
+        }
+    }
+}
+
+impl<'handler> ServiceFrameConnector for ServiceFrameEndpointConnector<'_, 'handler> {
+    type Stream = ServiceFrameEndpointStream<'handler>;
+
+    fn connect(&self, codec: ServiceFrameCodec) -> Result<Self::Stream, BroadwebdError> {
+        match self {
+            Self::Tcp(connector) => connector
+                .connect(codec)
+                .map(ServiceFrameEndpointStream::Tcp),
+            Self::Deferred(connector) => connector
+                .connect(codec)
+                .map(ServiceFrameEndpointStream::Deferred),
+            Self::InProcess(connector) => connector
+                .connect(codec)
+                .map(ServiceFrameEndpointStream::InProcess),
+        }
     }
 }
 
@@ -1275,6 +1414,121 @@ mod tests {
             response,
             ProfileSyncResponse::RetainedObjects {
                 object_ids: vec!["registered-endpoint-object".to_string()],
+            }
+        );
+    }
+
+    #[test]
+    fn service_frame_endpoint_connector_factory_selects_tcp_and_deferred_boundaries() {
+        let factory = ServiceFrameEndpointConnectorFactory::new();
+        let tcp_endpoint = "/ip4/127.0.0.1/tcp/9443";
+        let tcp_connector = factory
+            .connector(tcp_endpoint)
+            .expect("build TCP endpoint connector");
+        assert_eq!(tcp_connector.endpoint(), tcp_endpoint);
+        assert_eq!(
+            tcp_connector.kind().expect("TCP connector kind"),
+            ServiceFrameConnectorKind::Tcp
+        );
+
+        let deferred_endpoint = "/dnsaddr/rendezvous.slate.test/tcp/443/wss/p2p/12D3KooWDeviceA";
+        let deferred_connector = factory
+            .connector(deferred_endpoint)
+            .expect("build deferred endpoint connector");
+        assert_eq!(deferred_connector.endpoint(), deferred_endpoint);
+        assert_eq!(
+            deferred_connector.kind().expect("deferred connector kind"),
+            ServiceFrameConnectorKind::Libp2p
+        );
+        let error = match deferred_connector.connect(ServiceFrameCodec::new(4096)) {
+            Ok(_) => panic!("unregistered deferred endpoint must fail closed"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("service-frame libp2p connector is not implemented yet")
+        );
+    }
+
+    #[test]
+    fn service_frame_endpoint_connector_factory_uses_socketless_registered_endpoint() {
+        struct EchoClient;
+
+        impl BroadwebdClient for EchoClient {
+            fn health(&self) -> DaemonHealth {
+                DaemonHealth {
+                    lifecycle: DaemonLifecycle::Ready,
+                    plugins: Vec::new(),
+                }
+            }
+
+            fn status_snapshot(&self) -> BroadwebStatusSnapshot {
+                BroadwebStatusSnapshot::idle()
+            }
+
+            fn dispatch_service_request(
+                &self,
+                request: ServiceRequest,
+            ) -> Result<ServiceResponse, BroadwebdError> {
+                assert_eq!(
+                    request,
+                    ServiceRequest::ProfileSync(ProfileSyncRequest::DiscoverProviders(
+                        ProfileSyncProfileRequest::new("default")
+                    ))
+                );
+                Ok(ServiceResponse::ProfileSync(
+                    ProfileSyncResponse::RetainedObjects {
+                        object_ids: vec!["factory-endpoint-object".to_string()],
+                    },
+                ))
+            }
+
+            fn temporary_downloads(
+                &self,
+                _profile: &str,
+            ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+                Ok(Vec::new())
+            }
+
+            fn downloads(
+                &self,
+                _profile: &str,
+            ) -> Result<Vec<TemporaryDownloadRecord>, BroadwebdError> {
+                Ok(Vec::new())
+            }
+        }
+
+        let handler = EchoClient;
+        let endpoint = "iroh-node:factory-node-a";
+        let mut registry = InProcessServiceFrameEndpointRegistry::new();
+        registry
+            .register(endpoint, &handler)
+            .expect("register socketless Iroh-shaped endpoint");
+        let factory = ServiceFrameEndpointConnectorFactory::with_in_process_registry(&registry);
+        let connector = factory
+            .connector(endpoint)
+            .expect("build connector through endpoint factory");
+        assert_eq!(connector.endpoint(), endpoint);
+        assert_eq!(
+            connector.kind().expect("factory connector kind"),
+            ServiceFrameConnectorKind::Iroh
+        );
+        let client = ConnectorServiceFrameBroadwebdClient::with_codec(
+            connector,
+            ServiceFrameCodec::new(4096),
+        );
+
+        let response = client
+            .profile_sync(ProfileSyncRequest::DiscoverProviders(
+                ProfileSyncProfileRequest::new("default"),
+            ))
+            .expect("exchange request through factory-selected socketless endpoint");
+
+        assert_eq!(
+            response,
+            ProfileSyncResponse::RetainedObjects {
+                object_ids: vec!["factory-endpoint-object".to_string()],
             }
         );
     }
