@@ -1368,6 +1368,13 @@ advertisement JSON file or generate one from
 The generated file is local temp state only and is removed after the manual
 smoke run; the remote process still receives only the already-signed
 advertisement.
+Generated advertisements always retain the base service-frame capability and
+may add role capabilities with repeated `--capability` arguments, or with the
+helper's space-separated `SLATE_P2P_LAN_DISCOVERY_CAPABILITIES`. The first
+manual roles are discovery, local connectivity, object transfer, local
+retention, mutable roots, and availability provider. This lets a later broadweb
+trial distinguish a peer that can merely be discovered from a peer that is
+expected to transfer objects or durably retain encrypted profile state.
 
 `slate-profile-sync-discovery-check` is the companion manual trust preflight.
 It reads one or more captured or generated advertisement files, opens an
@@ -1379,6 +1386,11 @@ advertisement and resolved service address, checks that advertisement against
 local trust, and then probes the same resolved address. This is still not the
 final automatic live-discovery gate; future transport harnesses should pass
 discovered candidates into the same profile-sync trust layer before connecting.
+The trust preflight can also require advertised roles with repeated
+`--require-capability` arguments, or with the helper's
+`SLATE_P2P_LAN_DISCOVERY_CHECK_REQUIRED_CAPABILITIES`. A signed and otherwise
+trusted peer that lacks a required role is rejected before the manual follow-up
+probe connects.
 
 ## Privacy Boundaries
 

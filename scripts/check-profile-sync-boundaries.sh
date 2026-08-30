@@ -219,6 +219,22 @@ require_text \
     'broadwebd must keep a typed profile-sync peer advertisement DTO for discovery adapters.'
 require_text \
     crates/broadwebd/src/peer_discovery.rs \
+    'PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER' \
+    'profile-sync peer discovery advertisements must expose object-transfer role capabilities.'
+require_text \
+    crates/broadwebd/src/peer_discovery.rs \
+    'PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION' \
+    'profile-sync peer discovery advertisements must expose local-retention role capabilities.'
+require_text \
+    crates/broadwebd/src/peer_discovery.rs \
+    'supports_durable_profile_sync_retention' \
+    'profile-sync peer discovery advertisements must distinguish durable retention providers from discovery-only peers.'
+require_text \
+    crates/broadwebd/src/peer_discovery.rs \
+    'validate_profile_sync_peer_discovery_capability' \
+    'manual profile-sync discovery tooling must share broadwebd capability validation.'
+require_text \
+    crates/broadwebd/src/peer_discovery.rs \
     'pub enum ProfileSyncPeerDiscoveryMessage' \
     'broadwebd must keep bounded solicit/advertisement messages for peer discovery adapters.'
 require_text \
@@ -266,6 +282,14 @@ require_text \
     'SlateSyncSecretExport::from_bytes' \
     'signed discovery advertisement tooling must use the existing enrollment-key export boundary.'
 require_text \
+    crates/profile-sync/src/bin/slate-profile-sync-advertisement.rs \
+    '--capability' \
+    'signed discovery advertisement tooling must allow manual harnesses to declare peer role capabilities.'
+require_text \
+    crates/profile-sync/src/bin/slate-profile-sync-advertisement.rs \
+    'advertisement_capabilities' \
+    'signed discovery advertisement tooling must keep the service-frame capability while adding role capabilities.'
+require_text \
     crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
     'filter_trusted_profile_sync_peer_discovery_results' \
     'profile-sync must own manual discovery trust checks against slate-settings.db.'
@@ -277,6 +301,22 @@ require_text \
     crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
     '--advertisement-file' \
     'manual discovery trust checks must consume captured or generated discovery advertisement files.'
+require_text \
+    crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
+    '--require-capability' \
+    'manual discovery trust checks must support role capability requirements before probes connect.'
+require_text \
+    crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
+    'MissingRequiredCapability' \
+    'manual discovery trust checks must reject otherwise trusted peers that lack required role capabilities.'
+require_text \
+    crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
+    'required_capabilities' \
+    'manual discovery trust check reports must surface required peer role capabilities.'
+require_text \
+    crates/profile-sync/src/bin/slate-profile-sync-discovery-check.rs \
+    'validate_profile_sync_peer_discovery_capability' \
+    'manual discovery trust checks must validate requested role capability names at the adapter boundary.'
 require_text \
     Makefile \
     'profile-sync-advertisement-tool' \
@@ -351,12 +391,28 @@ require_text \
     'P2P LAN smoke helpers must expose membership epoch metadata for generated discovery advertisements.'
 require_text \
     scripts/profile-sync-p2p-lan-smoke.sh \
+    'SLATE_P2P_LAN_DISCOVERY_CAPABILITIES' \
+    'P2P LAN smoke helpers must allow generated discovery advertisements to declare role capabilities.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    'SLATE_P2P_LAN_DISCOVERY_CHECK_REQUIRED_CAPABILITIES' \
+    'P2P LAN smoke helpers must allow manual trust preflights to require role capabilities.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
     'SLATE_P2P_LAN_SERVER_BIND' \
     'P2P LAN smoke helpers must allow a fixed service-frame bind address for signed discovery advertisements.'
 require_text \
     scripts/profile-sync-p2p-lan-smoke.sh \
     'SLATE_P2P_LAN_REQUIRE_SIGNED_DISCOVERY' \
     'P2P LAN smoke helpers must allow manual runs to require signed discovery advertisements.'
+require_text \
+    docs/architecture/profile-sync.md \
+    '--require-capability' \
+    'profile-sync architecture docs must describe role capability requirements for manual discovery trust checks.'
+require_text \
+    docs/roadmap.md \
+    'SLATE_P2P_LAN_DISCOVERY_CHECK_REQUIRED_CAPABILITIES' \
+    'profile-sync roadmap must record role-aware manual discovery trust preflight support.'
 require_text \
     crates/broadwebd/src/lib.rs \
     'daemon_dispatches_profile_sync_through_service_request_envelope' \

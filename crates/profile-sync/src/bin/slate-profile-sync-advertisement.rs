@@ -9,7 +9,8 @@ use std::process::ExitCode;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use slate_broadwebd::{
-    DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH, ProfileSyncPeerAdvertisement,
+    DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY, ProfileSyncPeerAdvertisement,
 };
 use slate_profile_sync::sign_profile_sync_peer_advertisement;
 use slate_storage::{SlateSyncSecret, SlateSyncSecretExport};
@@ -18,7 +19,7 @@ const USAGE: &str = "\
 Generate a signed Slate profile-sync peer discovery advertisement.
 
 Usage:
-  slate-profile-sync-advertisement --key-file <path> --network-id <id> --device-id <id> --provider-id <id> --service-addr <addr> [--profile <profile>] [--membership-epoch <n>] [--sequence <n>] [--output <path>]
+  slate-profile-sync-advertisement --key-file <path> --network-id <id> --device-id <id> --provider-id <id> --service-addr <addr> [--profile <profile>] [--membership-epoch <n>] [--sequence <n>] [--capability <name>...] [--output <path>]
 ";
 
 fn main() -> ExitCode {
@@ -63,6 +64,7 @@ struct AdvertisementArgs {
     device_id: String,
     provider_id: String,
     service_addr: String,
+    capabilities: Vec<String>,
     membership_epoch: i64,
     sequence: u64,
     output: Option<PathBuf>,
@@ -86,6 +88,9 @@ impl AdvertisementArgs {
                 "--service-addr" => {
                     parsed.service_addr = Some(next_string(&mut args, "--service-addr")?)
                 }
+                "--capability" => parsed
+                    .capabilities
+                    .push(next_string(&mut args, "--capability")?),
                 "--membership-epoch" => {
                     parsed.membership_epoch =
                         Some(parse_i64(next_string(&mut args, "--membership-epoch")?)?)
@@ -115,6 +120,7 @@ impl AdvertisementArgs {
             service_addr: parsed
                 .service_addr
                 .ok_or_else(|| format!("missing required --service-addr\n\n{USAGE}"))?,
+            capabilities: advertisement_capabilities(parsed.capabilities),
             membership_epoch: parsed
                 .membership_epoch
                 .unwrap_or(DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH),
@@ -132,6 +138,7 @@ struct ParsedAdvertisementArgs {
     device_id: Option<String>,
     provider_id: Option<String>,
     service_addr: Option<String>,
+    capabilities: Vec<String>,
     membership_epoch: Option<i64>,
     sequence: Option<u64>,
     output: Option<PathBuf>,
@@ -150,17 +157,28 @@ fn signed_advertisement_from_key_export(
     let signer = sync_secret
         .derive_profile_sync_device_signer(profile, args.device_id.as_str(), args.membership_epoch)
         .map_err(|error| format!("derive device signer: {error}"))?;
-    let advertisement = ProfileSyncPeerAdvertisement::new(
+    let advertisement = ProfileSyncPeerAdvertisement::with_capabilities(
         args.network_id.as_str(),
         args.device_id.as_str(),
         args.provider_id.as_str(),
         args.service_addr.as_str(),
+        args.capabilities.iter().map(String::as_str),
         args.sequence,
     )
     .and_then(|advertisement| advertisement.with_membership_epoch(args.membership_epoch))
     .map_err(|error| format!("create peer discovery advertisement: {error}"))?;
     sign_profile_sync_peer_advertisement(advertisement, &signer)
         .map_err(|error| format!("sign peer discovery advertisement: {error}"))
+}
+
+fn advertisement_capabilities(extra_capabilities: Vec<String>) -> Vec<String> {
+    let mut capabilities = vec![PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY.to_string()];
+    for capability in extra_capabilities {
+        if !capabilities.iter().any(|stored| stored == &capability) {
+            capabilities.push(capability);
+        }
+    }
+    capabilities
 }
 
 fn next_string(args: &mut impl Iterator<Item = OsString>, name: &str) -> Result<String, String> {
@@ -204,6 +222,11 @@ fn unix_sequence() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{AdvertisementArgs, signed_advertisement_from_key_export};
+    use slate_broadwebd::{
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+    };
     use slate_storage::{DEFAULT_PROFILE_ID, SLATE_SYNC_SECRET_BYTES, SlateSyncSecret};
     use std::ffi::OsString;
     use std::path::PathBuf;
@@ -225,6 +248,10 @@ mod tests {
             "3",
             "--sequence",
             "7",
+            "--capability",
+            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+            "--capability",
+            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
             "--output",
             "advertisement.json",
         ]))
@@ -236,6 +263,14 @@ mod tests {
         assert_eq!(args.device_id, "device-a");
         assert_eq!(args.provider_id, "provider-a");
         assert_eq!(args.service_addr, "127.0.0.1:39000");
+        assert_eq!(
+            args.capabilities,
+            vec![
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY.to_string(),
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER.to_string(),
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION.to_string(),
+            ]
+        );
         assert_eq!(args.membership_epoch, 3);
         assert_eq!(args.sequence, 7);
         assert_eq!(args.output, Some(PathBuf::from("advertisement.json")));
@@ -260,6 +295,10 @@ mod tests {
             "5",
             "--sequence",
             "9",
+            "--capability",
+            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+            "--capability",
+            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
         ]))
         .expect("parse args");
 
@@ -270,6 +309,8 @@ mod tests {
         assert_eq!(advertisement.node_id, "device-a");
         assert_eq!(advertisement.provider_id, "provider-a");
         assert_eq!(advertisement.service_addr, "/ip4/127.0.0.1/tcp/39000");
+        assert!(advertisement.supports_profile_sync_service_frames());
+        assert!(advertisement.supports_durable_profile_sync_retention());
         assert_eq!(advertisement.membership_epoch, 5);
         assert_eq!(advertisement.sequence, 9);
         assert!(advertisement.identity_signature.is_some());

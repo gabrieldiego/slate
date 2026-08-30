@@ -21,12 +21,14 @@ discovery_key_file=${SLATE_P2P_LAN_DISCOVERY_KEY_FILE:-}
 discovery_profile=${SLATE_P2P_LAN_DISCOVERY_PROFILE:-}
 discovery_node_id=${SLATE_P2P_LAN_DISCOVERY_NODE_ID:-remote_probe}
 discovery_provider_id=${SLATE_P2P_LAN_DISCOVERY_PROVIDER_ID:-remote_probe_provider}
+discovery_capabilities=${SLATE_P2P_LAN_DISCOVERY_CAPABILITIES:-}
 discovery_membership_epoch=${SLATE_P2P_LAN_DISCOVERY_MEMBERSHIP_EPOCH:-1}
 discovery_sequence=${SLATE_P2P_LAN_DISCOVERY_SEQUENCE:-$(date +%s)}
 discovery_check_db=${SLATE_P2P_LAN_DISCOVERY_CHECK_DB:-}
 discovery_check_profile=${SLATE_P2P_LAN_DISCOVERY_CHECK_PROFILE:-}
 discovery_check_local_device_id=${SLATE_P2P_LAN_DISCOVERY_CHECK_LOCAL_DEVICE_ID:-}
 discovery_check_protocol=${SLATE_P2P_LAN_DISCOVERY_CHECK_PROTOCOL:-local-simulation}
+discovery_check_required_capabilities=${SLATE_P2P_LAN_DISCOVERY_CHECK_REQUIRED_CAPABILITIES:-}
 discovery_check_report=${SLATE_P2P_LAN_DISCOVERY_CHECK_REPORT:-}
 require_signed_discovery=${SLATE_P2P_LAN_REQUIRE_SIGNED_DISCOVERY:-0}
 local_tmp_dir=${SLATE_P2P_LAN_LOCAL_TMPDIR:-target/tmp}
@@ -118,30 +120,23 @@ if [ -n "$discovery_key_file" ]; then
     fi
     mkdir -p "$local_tmp_dir"
     generated_discovery_advertisement_file=$(mktemp "$local_tmp_dir/slate-profile-sync-advertisement.XXXXXX.json")
+    set -- \
+        "$advertisement_binary" \
+        --key-file "$discovery_key_file" \
+        --network-id "$network_id" \
+        --device-id "$discovery_node_id" \
+        --provider-id "$discovery_provider_id" \
+        --service-addr "$discovery_service_addr" \
+        --membership-epoch "$discovery_membership_epoch" \
+        --sequence "$discovery_sequence" \
+        --output "$generated_discovery_advertisement_file"
     if [ -n "$discovery_profile" ]; then
-        SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh \
-            "$advertisement_binary" \
-            --key-file "$discovery_key_file" \
-            --profile "$discovery_profile" \
-            --network-id "$network_id" \
-            --device-id "$discovery_node_id" \
-            --provider-id "$discovery_provider_id" \
-            --service-addr "$discovery_service_addr" \
-            --membership-epoch "$discovery_membership_epoch" \
-            --sequence "$discovery_sequence" \
-            --output "$generated_discovery_advertisement_file"
-    else
-        SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh \
-            "$advertisement_binary" \
-            --key-file "$discovery_key_file" \
-            --network-id "$network_id" \
-            --device-id "$discovery_node_id" \
-            --provider-id "$discovery_provider_id" \
-            --service-addr "$discovery_service_addr" \
-            --membership-epoch "$discovery_membership_epoch" \
-            --sequence "$discovery_sequence" \
-            --output "$generated_discovery_advertisement_file"
+        set -- "$@" --profile "$discovery_profile"
     fi
+    for discovery_capability in $discovery_capabilities; do
+        set -- "$@" --capability "$discovery_capability"
+    done
+    SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh "$@"
     discovery_advertisement_file=$generated_discovery_advertisement_file
 fi
 
@@ -218,6 +213,9 @@ if [ -n "$discovery_check_db" ]; then
     if [ -n "$discovery_check_local_device_id" ]; then
         set -- "$@" --local-device-id "$discovery_check_local_device_id"
     fi
+    for required_capability in $discovery_check_required_capabilities; do
+        set -- "$@" --require-capability "$required_capability"
+    done
     if [ -n "$discovery_check_report" ]; then
         set -- "$@" --output "$discovery_check_report"
     fi

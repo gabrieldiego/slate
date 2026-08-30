@@ -1,3 +1,11 @@
+use crate::peer_discovery::{
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_AVAILABILITY_PROVIDER,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_CONNECTIVITY,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_MUTABLE_ROOT,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_PROVIDER_DISCOVERY,
+};
 use crate::{
     ApplicationServicePlugin, BroadwebdError, PROFILE_SYNC_PLUGIN, PluginKind, PluginMetadata,
     PluginRegistry, ProfileSyncObjectRequest, ProfileSyncProfileRequest, ProfileSyncProviderHealth,
@@ -1425,10 +1433,10 @@ impl ApplicationServicePlugin for ProfileSyncService {
         if let Some(backend) = &self.kubo_backend {
             let mut capabilities = vec![
                 "profile-sync/kubo-rpc",
-                "profile-sync/object-transfer",
-                "profile-sync/local-retention",
-                "profile-sync/mutable-root",
-                "profile-sync/provider-discovery",
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_MUTABLE_ROOT,
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_PROVIDER_DISCOVERY,
             ];
             capabilities.extend(backend.capabilities.iter().map(String::as_str));
             return PluginMetadata::new(PROFILE_SYNC_PLUGIN, PluginKind::ApplicationService)
@@ -1439,21 +1447,21 @@ impl ApplicationServicePlugin for ProfileSyncService {
 
         let mut capabilities = vec!["profile-sync/local-preview"];
         if self.roles.discovery {
-            capabilities.push("profile-sync/provider-discovery");
+            capabilities.push(PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_PROVIDER_DISCOVERY);
         }
         if self.roles.connectivity {
-            capabilities.push("profile-sync/local-connectivity");
+            capabilities.push(PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_CONNECTIVITY);
         }
         if self.roles.object_transfer {
-            capabilities.push("profile-sync/object-transfer");
+            capabilities.push(PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER);
         }
         if self.roles.availability {
-            capabilities.push("profile-sync/local-retention");
+            capabilities.push(PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION);
         }
         if self.roles.mutable_roots {
-            capabilities.push("profile-sync/mutable-root");
+            capabilities.push(PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_MUTABLE_ROOT);
         } else if self.roles.availability {
-            capabilities.push("profile-sync/availability-provider");
+            capabilities.push(PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_AVAILABILITY_PROVIDER);
         }
         PluginMetadata::new(PROFILE_SYNC_PLUGIN, PluginKind::ApplicationService)
             .with_capabilities(capabilities.as_slice())

@@ -367,6 +367,12 @@ Current baseline:
   caller also supplies `SLATE_P2P_LAN_DISCOVERY_SERVICE_ADDR`. The generated
   JSON stays under caller-controlled local temp storage and is deleted after
   the smoke run; random-port unsigned smoke runs still work unchanged.
+- Generated signed discovery advertisements can now include explicit role
+  capabilities with `--capability` or
+  `SLATE_P2P_LAN_DISCOVERY_CAPABILITIES`. The initial roles cover discovery,
+  local connectivity, object transfer, local retention, mutable roots, and
+  availability providers, while keeping broadwebd as a carrier instead of an
+  account-trust authority.
 - `slate-profile-sync-discovery-check` now gives manual harnesses a
   profile-sync-owned trust preflight for captured or generated advertisement
   files. It opens an explicit `slate-settings.db`, applies the same signed
@@ -377,6 +383,11 @@ Current baseline:
   discovered advertisement and resolved service address, checks the
   advertisement against local profile trust, and only then probes the same
   resolved address.
+- That trust preflight can require advertised roles with
+  `--require-capability` or
+  `SLATE_P2P_LAN_DISCOVERY_CHECK_REQUIRED_CAPABILITIES`, so a signed and
+  trusted discovery candidate can still be rejected before connection if it
+  cannot serve the role being tested.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the

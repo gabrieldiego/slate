@@ -112,7 +112,13 @@ pub use peer_discovery::{
     PROFILE_SYNC_DISCOVERY_PROTOCOL_LOCAL_SIMULATION,
     PROFILE_SYNC_PEER_ADVERTISEMENT_SCHEMA_VERSION,
     PROFILE_SYNC_PEER_ADVERTISEMENT_SIGNATURE_ALGORITHM_ED25519,
-    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY, ProfileSyncPeerAdvertisement,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_AVAILABILITY_PROVIDER,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_CONNECTIVITY,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_MUTABLE_ROOT,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_PROVIDER_DISCOVERY, ProfileSyncPeerAdvertisement,
     ProfileSyncPeerAdvertisementSignature, ProfileSyncPeerDiscoveryMessage,
     ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryProvider,
     ProfileSyncPeerDiscoveryPublication, ProfileSyncPeerDiscoveryQuery,
@@ -120,6 +126,7 @@ pub use peer_discovery::{
     decode_profile_sync_peer_discovery_message, discover_profile_sync_peers,
     encode_profile_sync_peer_discovery_message, recv_profile_sync_peer_discovery_message,
     respond_to_profile_sync_peer_solicit, send_profile_sync_peer_discovery_message,
+    validate_profile_sync_peer_discovery_capability,
 };
 pub use protocols::ipfs::{
     IpfsConfig, IpfsGatewayEndpoint, IpfsGatewayScope, IpfsGatewayTransport,

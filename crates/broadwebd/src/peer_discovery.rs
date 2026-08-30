@@ -14,6 +14,17 @@ pub const PROFILE_SYNC_PEER_ADVERTISEMENT_SCHEMA_VERSION: u8 = 1;
 pub const DEFAULT_PROFILE_SYNC_PEER_ADVERTISEMENT_MEMBERSHIP_EPOCH: i64 = 1;
 pub const PROFILE_SYNC_PEER_ADVERTISEMENT_SIGNATURE_ALGORITHM_ED25519: &str = "ed25519";
 pub const PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY: &str = "profile-sync/service-frame-tcp";
+pub const PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_PROVIDER_DISCOVERY: &str =
+    "profile-sync/provider-discovery";
+pub const PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_CONNECTIVITY: &str =
+    "profile-sync/local-connectivity";
+pub const PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER: &str =
+    "profile-sync/object-transfer";
+pub const PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION: &str =
+    "profile-sync/local-retention";
+pub const PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_MUTABLE_ROOT: &str = "profile-sync/mutable-root";
+pub const PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_AVAILABILITY_PROVIDER: &str =
+    "profile-sync/availability-provider";
 pub const PROFILE_SYNC_DISCOVERY_PROTOCOL_LIBP2P_RENDEZVOUS: &str = "libp2p-rendezvous";
 pub const PROFILE_SYNC_DISCOVERY_PROTOCOL_LIBP2P_KADEMLIA: &str = "libp2p-kademlia";
 pub const PROFILE_SYNC_DISCOVERY_PROTOCOL_IPNS: &str = "ipns";
@@ -177,10 +188,40 @@ impl ProfileSyncPeerAdvertisement {
         Ok(SocketAddr::new(ip, service_addr.port()).to_string())
     }
 
-    pub fn supports_profile_sync_service_frames(&self) -> bool {
+    pub fn has_capability(&self, capability: &str) -> bool {
         self.capabilities
             .iter()
-            .any(|capability| capability == PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY)
+            .any(|advertised| advertised == capability)
+    }
+
+    pub fn supports_profile_sync_service_frames(&self) -> bool {
+        self.has_capability(PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY)
+    }
+
+    pub fn supports_profile_sync_provider_discovery(&self) -> bool {
+        self.has_capability(PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_PROVIDER_DISCOVERY)
+    }
+
+    pub fn supports_profile_sync_local_connectivity(&self) -> bool {
+        self.has_capability(PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_CONNECTIVITY)
+    }
+
+    pub fn supports_profile_sync_object_transfer(&self) -> bool {
+        self.has_capability(PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER)
+    }
+
+    pub fn supports_profile_sync_local_retention(&self) -> bool {
+        self.has_capability(PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION)
+    }
+
+    pub fn supports_profile_sync_mutable_roots(&self) -> bool {
+        self.has_capability(PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_MUTABLE_ROOT)
+    }
+
+    pub fn supports_durable_profile_sync_retention(&self) -> bool {
+        self.supports_profile_sync_service_frames()
+            && self.supports_profile_sync_object_transfer()
+            && self.supports_profile_sync_local_retention()
     }
 }
 
@@ -694,6 +735,12 @@ fn validate_capability(capability: &str) -> Result<(), BroadwebdError> {
     Ok(())
 }
 
+pub fn validate_profile_sync_peer_discovery_capability(
+    capability: &str,
+) -> Result<(), BroadwebdError> {
+    validate_capability(capability)
+}
+
 fn validate_namespace(namespace: &str) -> Result<(), BroadwebdError> {
     if namespace.is_empty()
         || namespace.len() > 256
@@ -890,6 +937,57 @@ mod tests {
             message
         );
         assert!(advertisement.supports_profile_sync_service_frames());
+    }
+
+    #[test]
+    fn peer_discovery_advertisement_exposes_role_capabilities() {
+        let advertisement = ProfileSyncPeerAdvertisement::with_capabilities(
+            "local",
+            "node-a",
+            "provider-a",
+            "/ip4/127.0.0.1/tcp/39000",
+            [
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_PROVIDER_DISCOVERY,
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_CONNECTIVITY,
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_MUTABLE_ROOT,
+            ],
+            7,
+        )
+        .expect("role-capable advertisement");
+
+        assert!(advertisement.supports_profile_sync_service_frames());
+        assert!(advertisement.supports_profile_sync_provider_discovery());
+        assert!(advertisement.supports_profile_sync_local_connectivity());
+        assert!(advertisement.supports_profile_sync_object_transfer());
+        assert!(advertisement.supports_profile_sync_local_retention());
+        assert!(advertisement.supports_profile_sync_mutable_roots());
+        assert!(advertisement.supports_durable_profile_sync_retention());
+        assert!(
+            validate_profile_sync_peer_discovery_capability(
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_AVAILABILITY_PROVIDER
+            )
+            .is_ok()
+        );
+
+        let live_transfer_only = ProfileSyncPeerAdvertisement::with_capabilities(
+            "local",
+            "node-b",
+            "provider-b",
+            "/iroh/node-b/x/slate-profile-sync",
+            [
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+            ],
+            8,
+        )
+        .expect("live-transfer-only advertisement");
+
+        assert!(live_transfer_only.supports_profile_sync_object_transfer());
+        assert!(!live_transfer_only.supports_profile_sync_local_retention());
+        assert!(!live_transfer_only.supports_durable_profile_sync_retention());
     }
 
     #[test]

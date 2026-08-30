@@ -15,10 +15,11 @@ use slate_broadwebd::{
     PROFILE_SYNC_DISCOVERY_PROTOCOL_LIBP2P_RENDEZVOUS,
     PROFILE_SYNC_DISCOVERY_PROTOCOL_LOCAL_SIMULATION, ProfileSyncPeerAdvertisement,
     ProfileSyncPeerDiscoveryProtocol, ProfileSyncPeerDiscoveryResult,
+    validate_profile_sync_peer_discovery_capability,
 };
 use slate_profile_sync::{
-    RejectedProfileSyncPeerDiscoveryCandidate, TrustedProfileSyncPeerDiscoveryReport,
-    filter_trusted_profile_sync_peer_discovery_results,
+    ProfileSyncPeerDiscoveryTrustRejection, RejectedProfileSyncPeerDiscoveryCandidate,
+    TrustedProfileSyncPeerDiscoveryReport, filter_trusted_profile_sync_peer_discovery_results,
 };
 use slate_storage::{DEFAULT_PROFILE_ID, SlateProfileDatabase};
 
@@ -26,7 +27,7 @@ const USAGE: &str = "\
 Check Slate profile-sync discovery advertisements against local profile trust.
 
 Usage:
-  slate-profile-sync-discovery-check --settings-db <path> --network-id <id> --advertisement-file <path>... [--profile <profile>] [--local-device-id <id>] [--protocol <name>] [--namespace <name>] [--require-trusted] [--output <path>]
+  slate-profile-sync-discovery-check --settings-db <path> --network-id <id> --advertisement-file <path>... [--profile <profile>] [--local-device-id <id>] [--protocol <name>] [--namespace <name>] [--require-capability <name>...] [--require-trusted] [--output <path>]
 ";
 
 fn main() -> ExitCode {
@@ -49,6 +50,7 @@ fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
     let mut bytes = serde_json::to_vec_pretty(&discovery_check_report_json(
         &args.profile,
         &args.network_id,
+        args.required_capabilities.as_slice(),
         &report,
     ))
     .map_err(|error| format!("encode discovery check report JSON: {error}"))?;
@@ -74,6 +76,7 @@ struct DiscoveryCheckArgs {
     protocol: ProfileSyncPeerDiscoveryProtocol,
     namespace: String,
     advertisement_files: Vec<PathBuf>,
+    required_capabilities: Vec<String>,
     require_trusted: bool,
     output: Option<PathBuf>,
 }
@@ -103,6 +106,9 @@ impl DiscoveryCheckArgs {
                 "--advertisement-file" => parsed
                     .advertisement_files
                     .push(next_path(&mut args, "--advertisement-file")?),
+                "--require-capability" => parsed
+                    .required_capabilities
+                    .push(next_string(&mut args, "--require-capability")?),
                 "--require-trusted" => parsed.require_trusted = true,
                 "--output" => parsed.output = Some(next_path(&mut args, "--output")?),
                 _ => return Err(format!("unknown argument: {arg}\n\n{USAGE}")),
@@ -111,6 +117,11 @@ impl DiscoveryCheckArgs {
 
         if parsed.advertisement_files.is_empty() {
             return Err(format!("missing required --advertisement-file\n\n{USAGE}"));
+        }
+        for capability in &parsed.required_capabilities {
+            validate_profile_sync_peer_discovery_capability(capability.as_str()).map_err(
+                |error| format!("invalid required profile-sync discovery capability: {error}"),
+            )?;
         }
 
         Ok(Self {
@@ -131,6 +142,7 @@ impl DiscoveryCheckArgs {
                 .namespace
                 .unwrap_or_else(|| DEFAULT_PROFILE_SYNC_DISCOVERY_NAMESPACE.to_string()),
             advertisement_files: parsed.advertisement_files,
+            required_capabilities: parsed.required_capabilities,
             require_trusted: parsed.require_trusted,
             output: parsed.output,
         })
@@ -146,6 +158,7 @@ struct ParsedDiscoveryCheckArgs {
     protocol: Option<ProfileSyncPeerDiscoveryProtocol>,
     namespace: Option<String>,
     advertisement_files: Vec<PathBuf>,
+    required_capabilities: Vec<String>,
     require_trusted: bool,
     output: Option<PathBuf>,
 }
@@ -169,13 +182,57 @@ fn trusted_discovery_report_from_advertisement_files(
     })?;
 
     let candidates = advertisement_file_candidates(args)?;
-    filter_trusted_profile_sync_peer_discovery_results(
+    let report = filter_trusted_profile_sync_peer_discovery_results(
         &database,
         args.profile.as_str(),
         args.network_id.as_str(),
         candidates,
     )
-    .map_err(|error| format!("check discovery candidates against local trust: {error}"))
+    .map_err(|error| format!("check discovery candidates against local trust: {error}"))?;
+    Ok(require_advertised_capabilities(
+        report,
+        args.required_capabilities.as_slice(),
+    ))
+}
+
+fn require_advertised_capabilities(
+    report: TrustedProfileSyncPeerDiscoveryReport,
+    required_capabilities: &[String],
+) -> TrustedProfileSyncPeerDiscoveryReport {
+    if required_capabilities.is_empty() {
+        return report;
+    }
+
+    let mut filtered = TrustedProfileSyncPeerDiscoveryReport {
+        trusted_peers: Vec::new(),
+        rejected_peers: report.rejected_peers,
+    };
+    for peer in report.trusted_peers {
+        if required_capabilities
+            .iter()
+            .all(|capability| peer.advertisement.has_capability(capability))
+        {
+            filtered.trusted_peers.push(peer);
+        } else {
+            filtered
+                .rejected_peers
+                .push(rejected_missing_required_capability_peer(peer));
+        }
+    }
+    filtered
+}
+
+fn rejected_missing_required_capability_peer(
+    peer: ProfileSyncPeerDiscoveryResult,
+) -> RejectedProfileSyncPeerDiscoveryCandidate {
+    RejectedProfileSyncPeerDiscoveryCandidate {
+        protocol: peer.protocol,
+        namespace: peer.namespace,
+        network_id: peer.advertisement.network_id,
+        node_id: peer.advertisement.node_id,
+        provider_id: peer.advertisement.provider_id,
+        reason: ProfileSyncPeerDiscoveryTrustRejection::MissingRequiredCapability,
+    }
 }
 
 fn advertisement_file_candidates(
@@ -205,11 +262,13 @@ fn advertisement_file_candidates(
 fn discovery_check_report_json(
     profile: &str,
     network_id: &str,
+    required_capabilities: &[String],
     report: &TrustedProfileSyncPeerDiscoveryReport,
 ) -> serde_json::Value {
     json!({
         "profile": profile,
         "network_id": network_id,
+        "required_capabilities": required_capabilities,
         "trusted_peer_count": report.trusted_peer_count(),
         "rejected_peer_count": report.rejected_peer_count(),
         "trusted_peers": report.trusted_peers.iter().map(trusted_peer_json).collect::<Vec<_>>(),
@@ -226,6 +285,7 @@ fn trusted_peer_json(peer: &ProfileSyncPeerDiscoveryResult) -> serde_json::Value
         "node_id": advertisement.node_id.as_str(),
         "provider_id": advertisement.provider_id.as_str(),
         "service_addr": advertisement.service_addr.as_str(),
+        "capabilities": advertisement.capabilities.as_slice(),
         "membership_epoch": advertisement.membership_epoch,
         "sequence": advertisement.sequence,
         "signed": advertisement.identity_signature.is_some(),
@@ -290,7 +350,9 @@ mod tests {
         trusted_discovery_report_from_advertisement_files,
     };
     use slate_broadwebd::{
-        PROFILE_SYNC_DISCOVERY_PROTOCOL_IPNS, ProfileSyncPeerAdvertisement,
+        PROFILE_SYNC_DISCOVERY_PROTOCOL_IPNS, PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+        PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER, ProfileSyncPeerAdvertisement,
         ProfileSyncPeerDiscoveryProtocol,
     };
     use slate_profile_sync::sign_profile_sync_peer_advertisement;
@@ -316,6 +378,10 @@ mod tests {
             "a.json",
             "--advertisement-file",
             "b.json",
+            "--require-capability",
+            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+            "--require-capability",
+            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
             "--require-trusted",
             "--output",
             "report.json",
@@ -327,6 +393,13 @@ mod tests {
         assert_eq!(args.network_id, "manual-net");
         assert_eq!(args.protocol, ProfileSyncPeerDiscoveryProtocol::Ipns);
         assert_eq!(args.advertisement_files.len(), 2);
+        assert_eq!(
+            args.required_capabilities,
+            vec![
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER.to_string(),
+                PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION.to_string(),
+            ]
+        );
         assert!(args.require_trusted);
         assert_eq!(args.output, Some(PathBuf::from("report.json")));
     }
@@ -334,6 +407,139 @@ mod tests {
     #[test]
     fn checks_signed_discovery_advertisement_against_settings_db() {
         let root = test_root("manual-discovery-check-trusted");
+        let settings_db = root.join("slate-settings.db");
+        let advertisement_file = root.join("advertisement.json");
+        let database = SlateProfileDatabase::open_resolved_with_device_id(
+            settings_db.clone(),
+            "local-checker",
+        )
+        .expect("open settings db");
+        let signer =
+            ProfileSyncDeviceSigner::generate("remote-checker").expect("generate remote signer");
+        database
+            .register_sync_device_public_key(&SyncDevicePublicKeyRegistration {
+                profile: DEFAULT_PROFILE_ID.to_string(),
+                public_key: signer.public_key().expect("remote public key"),
+                membership_epoch: DEFAULT_PROFILE_SYNC_MEMBERSHIP_EPOCH,
+            })
+            .expect("register remote public key");
+        let advertisement = sign_profile_sync_peer_advertisement(
+            ProfileSyncPeerAdvertisement::with_capabilities(
+                "manual-net",
+                signer.device_id(),
+                "remote-provider",
+                "/ip4/127.0.0.1/tcp/39000",
+                [
+                    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY,
+                    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+                    PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+                ],
+                7,
+            )
+            .expect("advertisement"),
+            &signer,
+        )
+        .expect("sign advertisement");
+        write_advertisement(&advertisement_file, &advertisement);
+
+        let args = DiscoveryCheckArgs::parse(os_args([
+            "--settings-db",
+            path_str(&settings_db),
+            "--local-device-id",
+            "local-checker",
+            "--network-id",
+            "manual-net",
+            "--advertisement-file",
+            path_str(&advertisement_file),
+            "--require-capability",
+            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_OBJECT_TRANSFER,
+            "--require-capability",
+            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
+            "--require-trusted",
+        ]))
+        .expect("parse args");
+        let report =
+            trusted_discovery_report_from_advertisement_files(&args).expect("check discovery");
+        let json = discovery_check_report_json(
+            DEFAULT_PROFILE_ID,
+            "manual-net",
+            args.required_capabilities.as_slice(),
+            &report,
+        );
+
+        assert_eq!(report.trusted_peer_count(), 1);
+        assert_eq!(report.rejected_peer_count(), 0);
+        assert_eq!(json["trusted_peer_count"], 1);
+        assert_eq!(
+            json["required_capabilities"][0],
+            "profile-sync/object-transfer"
+        );
+        assert_eq!(
+            json["required_capabilities"][1],
+            "profile-sync/local-retention"
+        );
+        assert_eq!(json["trusted_peers"][0]["node_id"], "remote-checker");
+        assert_eq!(json["trusted_peers"][0]["signed"], true);
+        assert_eq!(
+            json["trusted_peers"][0]["capabilities"][2],
+            "profile-sync/local-retention"
+        );
+    }
+
+    #[test]
+    fn reports_unknown_signed_discovery_advertisement_as_rejected() {
+        let root = test_root("manual-discovery-check-unknown");
+        let settings_db = root.join("slate-settings.db");
+        let advertisement_file = root.join("advertisement.json");
+        SlateProfileDatabase::open_resolved_with_device_id(settings_db.clone(), "local-checker")
+            .expect("open settings db");
+        let signer =
+            ProfileSyncDeviceSigner::generate("unknown-checker").expect("generate unknown signer");
+        let advertisement = sign_profile_sync_peer_advertisement(
+            ProfileSyncPeerAdvertisement::new(
+                "manual-net",
+                signer.device_id(),
+                "unknown-provider",
+                "127.0.0.1:39000",
+                7,
+            )
+            .expect("advertisement"),
+            &signer,
+        )
+        .expect("sign advertisement");
+        write_advertisement(&advertisement_file, &advertisement);
+
+        let args = DiscoveryCheckArgs::parse(os_args([
+            "--settings-db",
+            path_str(&settings_db),
+            "--local-device-id",
+            "local-checker",
+            "--network-id",
+            "manual-net",
+            "--advertisement-file",
+            path_str(&advertisement_file),
+        ]))
+        .expect("parse args");
+        let report =
+            trusted_discovery_report_from_advertisement_files(&args).expect("check discovery");
+        let json = discovery_check_report_json(
+            DEFAULT_PROFILE_ID,
+            "manual-net",
+            args.required_capabilities.as_slice(),
+            &report,
+        );
+
+        assert_eq!(report.trusted_peer_count(), 0);
+        assert_eq!(report.rejected_peer_count(), 1);
+        assert_eq!(
+            json["rejected_peers"][0]["reason"],
+            "unknown_device_public_key"
+        );
+    }
+
+    #[test]
+    fn rejects_trusted_discovery_peer_missing_required_capability() {
+        let root = test_root("manual-discovery-check-missing-capability");
         let settings_db = root.join("slate-settings.db");
         let advertisement_file = root.join("advertisement.json");
         let database = SlateProfileDatabase::open_resolved_with_device_id(
@@ -373,63 +579,24 @@ mod tests {
             "manual-net",
             "--advertisement-file",
             path_str(&advertisement_file),
-            "--require-trusted",
+            "--require-capability",
+            PROFILE_SYNC_PEER_DISCOVERY_CAPABILITY_LOCAL_RETENTION,
         ]))
         .expect("parse args");
         let report =
             trusted_discovery_report_from_advertisement_files(&args).expect("check discovery");
-        let json = discovery_check_report_json(DEFAULT_PROFILE_ID, "manual-net", &report);
-
-        assert_eq!(report.trusted_peer_count(), 1);
-        assert_eq!(report.rejected_peer_count(), 0);
-        assert_eq!(json["trusted_peer_count"], 1);
-        assert_eq!(json["trusted_peers"][0]["node_id"], "remote-checker");
-        assert_eq!(json["trusted_peers"][0]["signed"], true);
-    }
-
-    #[test]
-    fn reports_unknown_signed_discovery_advertisement_as_rejected() {
-        let root = test_root("manual-discovery-check-unknown");
-        let settings_db = root.join("slate-settings.db");
-        let advertisement_file = root.join("advertisement.json");
-        SlateProfileDatabase::open_resolved_with_device_id(settings_db.clone(), "local-checker")
-            .expect("open settings db");
-        let signer =
-            ProfileSyncDeviceSigner::generate("unknown-checker").expect("generate unknown signer");
-        let advertisement = sign_profile_sync_peer_advertisement(
-            ProfileSyncPeerAdvertisement::new(
-                "manual-net",
-                signer.device_id(),
-                "unknown-provider",
-                "127.0.0.1:39000",
-                7,
-            )
-            .expect("advertisement"),
-            &signer,
-        )
-        .expect("sign advertisement");
-        write_advertisement(&advertisement_file, &advertisement);
-
-        let args = DiscoveryCheckArgs::parse(os_args([
-            "--settings-db",
-            path_str(&settings_db),
-            "--local-device-id",
-            "local-checker",
-            "--network-id",
+        let json = discovery_check_report_json(
+            DEFAULT_PROFILE_ID,
             "manual-net",
-            "--advertisement-file",
-            path_str(&advertisement_file),
-        ]))
-        .expect("parse args");
-        let report =
-            trusted_discovery_report_from_advertisement_files(&args).expect("check discovery");
-        let json = discovery_check_report_json(DEFAULT_PROFILE_ID, "manual-net", &report);
+            args.required_capabilities.as_slice(),
+            &report,
+        );
 
         assert_eq!(report.trusted_peer_count(), 0);
         assert_eq!(report.rejected_peer_count(), 1);
         assert_eq!(
             json["rejected_peers"][0]["reason"],
-            "unknown_device_public_key"
+            "missing_required_capability"
         );
     }
 
