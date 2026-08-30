@@ -238,15 +238,12 @@
     }
 
     .profile-sync-file {
-      box-sizing: border-box;
-      width: 100%;
-      margin-top: 10px;
-      color: #393a37;
-      font: 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-
-    .profile-sync-primary-actions {
-      align-items: center;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
     }
 
     .profile-sync-diagnostics {
@@ -358,7 +355,7 @@
         accept="application/json,.json"
         aria-label="Profile sync enrollment key"
       />
-      <div class="actions profile-sync-primary-actions">
+      <div class="actions">
         <button id="profile-sync-handoff-download" class="primary">Download enrollment key</button>
         <button id="profile-sync-handoff-import">Import enrollment key</button>
       </div>
@@ -1323,27 +1320,19 @@
     function renderProfileSyncDetails(state) {
       profileSyncDetails.textContent = "";
       const localSync = state && state.local_sync ? state.local_sync : null;
+      const latestIssueStatus = profileSyncIssueStatus(state);
+      const latestHealthStatus = profileSyncHealthStatus(state);
+      const localSyncStatus = localSync && localSync.ready_for_manual_sync ?
+        "ready" :
+        profileSyncText(localSync && localSync.blocked_reason, "not ready");
       const rows = [
+        ["Profile", profileSyncText(state && state.profile, "default")],
         ["Device", profileSyncText(state && state.local_device_id, "none")],
-        ["Key", profileSyncKeyStatus(state)],
-        ["Provider", profileSyncProviderStatus(state)],
-        ["Trusted devices", localSync ? profileSyncCount(localSync.trusted_device_count) : "0"],
-        ["Provider-authority devices", localSync ? profileSyncCount(localSync.trusted_provider_authority_device_count) + " / " + profileSyncCount(localSync.provider_authority_device_count) : "0 / 0"],
-        ["App domains", localSync ? profileSyncCount(localSync.app_domain_count) : "0"],
-        ["Enabled domains", profileSyncEnabledAppDomainStatus(state)],
-        ["Domain heads", profileSyncAppDomainHeadStatus(state)],
-        ["Content domains", profileSyncContentAppDomainStatus(state)],
-        ["Active providers", profileSyncActiveProviderStatus(state)],
-        ["Authorized providers", profileSyncAuthorizedProviderStatus(state)],
-        ["Provider endpoints", profileSyncProviderEndpointStatus(state)],
         ["Enrollment key", state && state.has_secret ? "available" : "not loaded"],
-        ["Current sync", profileSyncCurrentSyncStatus(state)],
-        ["Local trial", profileSyncLocalTrialStatus(state)],
-        ["Two-device trial", profileSyncTwoDeviceTrialStatus(state)],
-        ["Discovery", profileSyncDiscoveryStatus(state)],
-        ["Endpoint status", profileSyncEndpointMaterializationStatus(state)],
-        ["Sync health", profileSyncHealthStatus(state)],
-        ["Sync issues", profileSyncIssueStatus(state)]
+        ["Local sync", localSyncStatus],
+        ["Trusted devices", localSync ? profileSyncCount(localSync.trusted_device_count) : "0"],
+        ["Enabled domains", profileSyncEnabledAppDomainStatus(state)],
+        ["Last check", latestHealthStatus === "not checked" ? "not checked" : `${latestHealthStatus}; ${latestIssueStatus}`]
       ];
       const issueDetails = profileSyncIssueDetails(state);
       if (issueDetails) {
@@ -1429,8 +1418,21 @@
     }
 
     function ensureProfileSyncKeyForDownload(state) {
-      if (!state || !state.last_error || state.has_secret || state.metadata_ready) {
+      if (!state) {
         return Promise.resolve(state);
+      }
+      if (state.has_secret && state.key_export_text) {
+        return Promise.resolve(state);
+      }
+      if (state.has_secret) {
+        return fetchProfileSyncState("key/export");
+      }
+      if (state.metadata_ready) {
+        const blockedState = Object.assign({}, state, {
+          last_error: "enrollment key is not loaded on this device; import it before downloading it again"
+        });
+        setProfileSyncState(blockedState);
+        return Promise.resolve(blockedState);
       }
       return fetchProfileSyncState("create").then((createdState) => {
         if (!createdState || createdState.last_error) {
@@ -1479,7 +1481,14 @@
         });
       }).catch((error) => {
         setProfileSyncState({ last_error: String(error) });
+      }).then(() => {
+        profileSyncHandoffFile.value = "";
       });
+    }
+
+    function chooseProfileSyncHandoffBundle() {
+      profileSyncHandoffFile.value = "";
+      profileSyncHandoffFile.click();
     }
 
     function readSelectedProfileSyncFile(input, label, maxBytes) {
@@ -1521,17 +1530,39 @@
       return value;
     }
 
+    function triggerProfileSyncEnrollmentKeyDownload(state) {
+      const keyText = state && state.key_export_text ? String(state.key_export_text) : "";
+      if (!keyText) {
+        setProfileSyncState(Object.assign({}, state || {}, {
+          last_error: "enrollment key export was empty"
+        }));
+        return;
+      }
+      const link = document.createElement("a");
+      let objectUrl = "";
+      link.download = handoffFilename(state);
+      if (window.Blob && window.URL && window.URL.createObjectURL) {
+        objectUrl = window.URL.createObjectURL(new Blob([keyText], {
+          type: "application/json"
+        }));
+        link.href = objectUrl;
+      } else {
+        link.href = `data:application/json;charset=utf-8,${encodeURIComponent(keyText)}`;
+      }
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      if (objectUrl && window.URL && window.URL.revokeObjectURL) {
+        window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 0);
+      }
+    }
+
     function downloadProfileSyncHandoffBundle() {
-      fetchProfileSyncState("key/export").then(ensureProfileSyncKeyForDownload).then((state) => {
+      fetchProfileSyncState("state").then(ensureProfileSyncKeyForDownload).then((state) => {
         if (!state || state.last_error) {
           return;
         }
-        const link = document.createElement("a");
-        link.download = handoffFilename(state);
-        link.href = profileSyncUrl("key/export", { download: "1" });
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+        triggerProfileSyncEnrollmentKeyDownload(state);
       }).catch((error) => {
         setProfileSyncState({ last_error: String(error) });
       });
@@ -1560,10 +1591,13 @@
     profileSyncRunCurrentButton.addEventListener("click", runProfileSyncCurrentSync);
     profileSyncRunLocalButton.addEventListener("click", runProfileSyncLocalTrial);
     profileSyncRunLocalTwoDeviceButton.addEventListener("click", runProfileSyncLocalTwoDeviceTrial);
-    profileSyncHandoffImportButton.addEventListener("click", importProfileSyncHandoffBundle);
+    profileSyncHandoffImportButton.addEventListener("click", chooseProfileSyncHandoffBundle);
     profileSyncHandoffDownloadButton.addEventListener("click", downloadProfileSyncHandoffBundle);
     profileSyncHandoffFile.addEventListener("change", () => {
       const file = profileSyncHandoffFile.files && profileSyncHandoffFile.files[0];
+      if (!file) {
+        return;
+      }
       if (
         file &&
         Number.isFinite(PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES) &&
@@ -1573,7 +1607,10 @@
         setProfileSyncState({
           last_error: `enrollment key is too large; maximum is ${PROFILE_SYNC_HANDOFF_FILE_MAX_BYTES} bytes`
         });
+        profileSyncHandoffFile.value = "";
+        return;
       }
+      importProfileSyncHandoffBundle();
     });
     document.getElementById("reset").addEventListener("click", () => {
       setSliderValue(DEFAULT_ZOOM, true);

@@ -365,8 +365,10 @@ impl SlateProtocolHandler {
             match state.active_export.clone() {
                 Some(export) => export,
                 None => {
-                    state.last_error =
-                        Some("profile enrollment key is not loaded in this session".to_string());
+                    state.last_error = Some(
+                        "profile enrollment key is not loaded on this device; import it before downloading it again"
+                            .to_string(),
+                    );
                     let readiness = self.profile_sync_local_readiness_report().ok().flatten();
                     return json_response(request, 400, state.to_json(readiness.as_ref()));
                 }
@@ -2520,9 +2522,15 @@ mod tests {
         assert!(settings_page.contains("profileSyncBoundedFileText"));
         assert!(settings_page.contains("Download enrollment key"));
         assert!(settings_page.contains("Import enrollment key"));
+        assert!(settings_page.contains("triggerProfileSyncEnrollmentKeyDownload"));
+        assert!(settings_page.contains("key_export_text"));
+        assert!(settings_page.contains("window.URL.createObjectURL"));
+        assert!(settings_page.contains("data:application/json"));
+        assert!(settings_page.contains("chooseProfileSyncHandoffBundle"));
+        assert!(settings_page.contains("profileSyncHandoffFile.click()"));
         assert!(settings_page.contains("Enrollment key"));
         assert!(settings_page.contains("Local diagnostics"));
-        assert!(settings_page.contains("profileSyncUrl(\"key/export\""));
+        assert!(settings_page.contains("fetchProfileSyncState(\"key/export\""));
         assert!(settings_page.contains("fetchProfileSyncState(\"key/import\""));
         assert!(!settings_page.contains("id=\"profile-sync-handoff-device\""));
         assert!(!settings_page.contains("profileSyncHandoffDevice"));
@@ -2536,22 +2544,15 @@ mod tests {
         assert!(!settings_page.contains("id=\"profile-sync-enrollment\""));
         assert!(!settings_page.contains("id=\"profile-sync-handoff-create\""));
         assert!(!settings_page.contains("id=\"profile-sync-handoff\""));
-        assert!(settings_page.contains("Current sync"));
-        assert!(settings_page.contains("Two-device trial"));
         assert!(settings_page.contains("Enabled domains"));
+        assert!(settings_page.contains("Local sync"));
+        assert!(settings_page.contains("Last check"));
         assert!(settings_page.contains("profileSyncEnabledAppDomainStatus"));
-        assert!(settings_page.contains("Domain heads"));
         assert!(settings_page.contains("profileSyncAppDomainHeadStatus"));
-        assert!(settings_page.contains("Content domains"));
         assert!(settings_page.contains("profileSyncContentAppDomainStatus"));
-        assert!(settings_page.contains("Active providers"));
         assert!(settings_page.contains("profileSyncActiveProviderStatus"));
-        assert!(settings_page.contains("Authorized providers"));
         assert!(settings_page.contains("profileSyncAuthorizedProviderStatus"));
-        assert!(settings_page.contains("Discovery"));
         assert!(settings_page.contains("profileSyncDiscoveryStatus"));
-        assert!(settings_page.contains("Sync issues"));
-        assert!(settings_page.contains("Sync health"));
         assert!(settings_page.contains("profileSyncHealthStatus"));
         assert!(settings_page.contains("profileSyncIssueStatus"));
         assert!(settings_page.contains("Issue details"));

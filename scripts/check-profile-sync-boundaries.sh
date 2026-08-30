@@ -258,6 +258,18 @@ require_text \
     '--discovery-advertisement-file' \
     'manual broadwebd discovery probes must be able to carry a caller-supplied signed advertisement DTO without signing inside broadwebd.'
 require_text \
+    crates/profile-sync/src/bin/slate-profile-sync-advertisement.rs \
+    'sign_profile_sync_peer_advertisement' \
+    'profile-sync must own signed discovery advertisement production from enrollment keys.'
+require_text \
+    crates/profile-sync/src/bin/slate-profile-sync-advertisement.rs \
+    'SlateSyncSecretExport::from_bytes' \
+    'signed discovery advertisement tooling must use the existing enrollment-key export boundary.'
+require_text \
+    Makefile \
+    'profile-sync-advertisement-tool' \
+    'manual profile-sync harnesses must expose a low-memory build target for signed advertisement generation.'
+require_text \
     crates/broadwebd/src/bin/slate-broadwebd-net-probe.rs \
     '--require-signed-discovery' \
     'manual broadwebd discovery probes must be able to reject unsigned candidates before connecting in signed-harness runs.'
@@ -277,6 +289,18 @@ require_text \
     scripts/profile-sync-p2p-lan-smoke.sh \
     'SLATE_P2P_LAN_DISCOVERY_ADVERTISEMENT_FILE' \
     'P2P LAN smoke helpers must allow signed discovery advertisement files to be staged explicitly.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    'SLATE_P2P_LAN_DISCOVERY_KEY_FILE' \
+    'P2P LAN smoke helpers must be able to generate signed discovery advertisements from exported enrollment keys.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    'SLATE_P2P_LAN_DISCOVERY_SERVICE_ADDR' \
+    'P2P LAN smoke helpers must require an explicit signed service address before generating discovery advertisements.'
+require_text \
+    scripts/profile-sync-p2p-lan-smoke.sh \
+    'SLATE_P2P_LAN_LOCAL_TMPDIR' \
+    'P2P LAN smoke helpers must keep generated local advertisement files under caller-controlled temporary storage.'
 require_text \
     scripts/profile-sync-p2p-lan-smoke.sh \
     'SLATE_P2P_LAN_DISCOVERY_MEMBERSHIP_EPOCH' \
@@ -889,72 +913,40 @@ require_text \
     'Slate settings profile-sync JSON must expose retained-object issue summaries.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'Sync issues' \
-    'Slate settings page must show profile-sync issue status.'
+    'Last check' \
+    'Slate settings page must show compact profile-sync health and issue status.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'Enabled domains' \
     'Slate settings page must show enabled app sync domains.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'Domain heads' \
-    'Slate settings page must show app-domain sync revision heads.'
+    'Local sync' \
+    'Slate settings page must show compact local sync readiness.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'profileSyncAppDomainHeadStatus' \
     'Slate settings page must render app-domain sync revision heads.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'Content domains' \
-    'Slate settings page must show enabled sync-content app domains.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
     'profileSyncContentAppDomainStatus' \
     'Slate settings page must render sync-content app domain status.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'Active providers' \
-    'Slate settings page must show active profile-sync storage providers.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'Authorized providers' \
-    'Slate settings page must show account-authorized profile-sync storage providers.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'profileSyncAuthorizedProviderStatus' \
     'Slate settings page must render authorized provider status.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'Provider-authority devices' \
-    'Slate settings page must show trusted/total provider-authority device status.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'Provider endpoints' \
-    'Slate settings page must show provider endpoint metadata for sync trials.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
     'profileSyncProviderEndpointStatus' \
     'Slate settings page must render provider endpoint metadata without scheduler internals.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'Endpoint status' \
-    'Slate settings page must show selected endpoint materialization status.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'profileSyncEndpointMaterializationStatus' \
     'Slate settings page must render endpoint materialization status from protocol-neutral reports.'
 require_text \
     resources/resource_protocol/slate-settings.html \
-    'Sync health' \
-    'Slate settings page must show profile-sync health after local sync checks.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
     'profileSyncHealthStatus' \
     'Slate settings page must distinguish healthy, recovered, and degraded profile-sync health.'
-require_text \
-    resources/resource_protocol/slate-settings.html \
-    'Discovery' \
-    'Slate settings page must show profile-sync discovery preflight status.'
 require_text \
     resources/resource_protocol/slate-settings.html \
     'profileSyncDiscoveryStatus' \

@@ -357,6 +357,16 @@ Current baseline:
   for producing signatures and checking membership trust. The helper script can
   also pin the remote service-frame bind address for signed advertisements,
   whose service address is part of the signature payload.
+- `slate-profile-sync` now has a small offline
+  `slate-profile-sync-advertisement` harness tool. It reads an exported
+  enrollment key, derives the device signer in the profile-sync layer, writes a
+  signed `ProfileSyncPeerAdvertisement` JSON file, and leaves broadwebd as a
+  carrier for manual LAN or later broadweb discovery smoke tests.
+- `scripts/profile-sync-p2p-lan-smoke.sh` can now generate that signed
+  advertisement file on demand from `SLATE_P2P_LAN_DISCOVERY_KEY_FILE` when the
+  caller also supplies `SLATE_P2P_LAN_DISCOVERY_SERVICE_ADDR`. The generated
+  JSON stays under caller-controlled local temp storage and is deleted after
+  the smoke run; random-port unsigned smoke runs still work unchanged.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the
@@ -1886,12 +1896,12 @@ Current baseline:
   cleanup-oriented while the default regression suite continues to use
   socketless deterministic fixtures.
 - The first peer-discovery LAN smoke is also available as an opt-in probe. It
-  currently uses unauthenticated UDP multicast advertisements, so the next
-  production step is to bind advertisements to enrolled device identity,
-  membership epoch, and signed provider records before any automatic sync policy
-  trusts discovered peers. libp2p, IPNS, Iroh, or mDNS adapters should implement
-  the same advertisement semantics rather than bypassing the profile-sync
-  scheduler/provider boundary.
+  can now be paired with a profile-sync-generated signed advertisement file, so
+  manual runs may reject unsigned discovery before connecting. The next
+  production step is full enrolled-membership verification before automatic
+  sync policy trusts discovered peers. libp2p, IPNS, Iroh, or mDNS adapters
+  should implement the same advertisement semantics rather than bypassing the
+  profile-sync scheduler/provider boundary.
 - Profile-sync discovery now has a protocol-neutral provider boundary in
   broadwebd. The in-process broadweb fixture can publish and discover
   libp2p-rendezvous and IPNS-shaped multiaddr advertisements without opening
@@ -2023,11 +2033,10 @@ Next:
 - Add a libp2p rendezvous/Kademlia discovery adapter behind
   `ProfileSyncPeerDiscoveryProvider` if its dependency footprint remains
   acceptable under Slate's low-memory development profile.
-- Extend the opt-in LAN discovery smoke from signed-advertisement carrier
-  support into full profile-sync trust verification: produce signed records
-  from enrolled test profiles, reject untrusted membership epochs before
-  connecting, and only then treat it as representative of automatic
-  enrolled-account discovery.
+- Extend the opt-in LAN discovery smoke from profile-sync-generated signed
+  advertisement files into full profile-sync trust verification: reject
+  untrusted membership epochs before connecting, verify provider authority, and
+  only then treat it as representative of automatic enrolled-account discovery.
 - Continue splitting sync backends into discovery, connectivity, transfer,
   availability, and mutable-root implementations so different broadweb
   protocols can be combined behind the typed provider role records.

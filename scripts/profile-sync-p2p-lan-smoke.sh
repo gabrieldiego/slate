@@ -2,6 +2,7 @@
 set -eu
 
 binary=${SLATE_P2P_LAN_SMOKE_BINARY:-target/debug/slate-broadwebd-net-probe}
+advertisement_binary=${SLATE_P2P_LAN_ADVERTISEMENT_BINARY:-target/debug/slate-profile-sync-advertisement}
 ssh_target=${1:-${SLATE_P2P_LAN_SMOKE_SSH:-}}
 frame_max_bytes=${SLATE_P2P_LAN_FRAME_MAX_BYTES:-1048576}
 remote_memory_mb=${SLATE_P2P_LAN_REMOTE_MEMORY_MB:-256}
@@ -9,13 +10,23 @@ local_memory_mb=${SLATE_P2P_LAN_LOCAL_MEMORY_MB:-256}
 payload=${SLATE_P2P_LAN_PAYLOAD:-slate broadwebd p2p LAN profile sync smoke}
 network_id=${SLATE_P2P_LAN_NETWORK_ID:-slate_p2p_$$}
 server_bind=${SLATE_P2P_LAN_SERVER_BIND:-0.0.0.0:0}
+discovery_service_addr=${SLATE_P2P_LAN_DISCOVERY_SERVICE_ADDR:-}
 multicast_group=${SLATE_P2P_LAN_MULTICAST_GROUP:-239.255.85.83}
 discovery_port=${SLATE_P2P_LAN_DISCOVERY_PORT:-47883}
 discovery_target=${SLATE_P2P_LAN_DISCOVERY_TARGET:-$multicast_group:$discovery_port}
 runtime_profile_sync=${SLATE_P2P_LAN_RUNTIME_PROFILE_SYNC:-0}
 discovery_advertisement_file=${SLATE_P2P_LAN_DISCOVERY_ADVERTISEMENT_FILE:-}
+discovery_key_file=${SLATE_P2P_LAN_DISCOVERY_KEY_FILE:-}
+discovery_profile=${SLATE_P2P_LAN_DISCOVERY_PROFILE:-}
+discovery_node_id=${SLATE_P2P_LAN_DISCOVERY_NODE_ID:-remote_probe}
+discovery_provider_id=${SLATE_P2P_LAN_DISCOVERY_PROVIDER_ID:-remote_probe_provider}
 discovery_membership_epoch=${SLATE_P2P_LAN_DISCOVERY_MEMBERSHIP_EPOCH:-1}
+discovery_sequence=${SLATE_P2P_LAN_DISCOVERY_SEQUENCE:-$(date +%s)}
 require_signed_discovery=${SLATE_P2P_LAN_REQUIRE_SIGNED_DISCOVERY:-0}
+local_tmp_dir=${SLATE_P2P_LAN_LOCAL_TMPDIR:-target/tmp}
+remote_dir=
+remote_pid=
+generated_discovery_advertisement_file=
 
 if [ -z "$ssh_target" ]; then
     printf 'usage: %s <ssh-target>\n' "$0" >&2
@@ -29,6 +40,16 @@ if [ ! -x "$binary" ]; then
     printf '  SLATE_BUILD_MEMORY_LIMIT_MB=2048 CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 scripts/with-build-limits.sh cargo build -j 1 -p slate-broadwebd --bin slate-broadwebd-net-probe\n' >&2
     exit 2
 fi
+
+cleanup() {
+    if [ -n "${generated_discovery_advertisement_file:-}" ]; then
+        rm -f -- "$generated_discovery_advertisement_file" >/dev/null 2>&1 || true
+    fi
+    if [ -n "${remote_dir:-}" ]; then
+        ssh "$ssh_target" "set +e; if [ -n '${remote_pid:-}' ]; then kill '${remote_pid:-}' 2>/dev/null; fi; rm -rf -- '$remote_dir'" >/dev/null 2>&1 || true
+    fi
+}
+trap cleanup EXIT INT TERM
 
 runtime_profile_sync_arg=
 case "$runtime_profile_sync" in
@@ -61,17 +82,58 @@ if [ -n "$discovery_advertisement_file" ] && [ ! -f "$discovery_advertisement_fi
     exit 2
 fi
 
+if [ -n "$discovery_advertisement_file" ] && [ -n "$discovery_key_file" ]; then
+    printf 'set either SLATE_P2P_LAN_DISCOVERY_ADVERTISEMENT_FILE or SLATE_P2P_LAN_DISCOVERY_KEY_FILE, not both\n' >&2
+    exit 2
+fi
+
+if [ -n "$discovery_key_file" ]; then
+    if [ ! -x "$advertisement_binary" ]; then
+        printf 'profile-sync advertisement binary is missing or not executable: %s\n' "$advertisement_binary" >&2
+        printf 'build it first with the low-memory wrapper, for example:\n' >&2
+        printf '  make profile-sync-advertisement-tool\n' >&2
+        exit 2
+    fi
+    if [ ! -f "$discovery_key_file" ]; then
+        printf 'SLATE_P2P_LAN_DISCOVERY_KEY_FILE does not exist: %s\n' "$discovery_key_file" >&2
+        exit 2
+    fi
+    if [ -z "$discovery_service_addr" ]; then
+        printf 'SLATE_P2P_LAN_DISCOVERY_SERVICE_ADDR is required when generating a signed discovery advertisement from an enrollment key\n' >&2
+        exit 2
+    fi
+    mkdir -p "$local_tmp_dir"
+    generated_discovery_advertisement_file=$(mktemp "$local_tmp_dir/slate-profile-sync-advertisement.XXXXXX.json")
+    if [ -n "$discovery_profile" ]; then
+        SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh \
+            "$advertisement_binary" \
+            --key-file "$discovery_key_file" \
+            --profile "$discovery_profile" \
+            --network-id "$network_id" \
+            --device-id "$discovery_node_id" \
+            --provider-id "$discovery_provider_id" \
+            --service-addr "$discovery_service_addr" \
+            --membership-epoch "$discovery_membership_epoch" \
+            --sequence "$discovery_sequence" \
+            --output "$generated_discovery_advertisement_file"
+    else
+        SLATE_BUILD_MEMORY_LIMIT_MB=$local_memory_mb scripts/with-build-limits.sh \
+            "$advertisement_binary" \
+            --key-file "$discovery_key_file" \
+            --network-id "$network_id" \
+            --device-id "$discovery_node_id" \
+            --provider-id "$discovery_provider_id" \
+            --service-addr "$discovery_service_addr" \
+            --membership-epoch "$discovery_membership_epoch" \
+            --sequence "$discovery_sequence" \
+            --output "$generated_discovery_advertisement_file"
+    fi
+    discovery_advertisement_file=$generated_discovery_advertisement_file
+fi
+
 remote_dir=$(
     ssh "$ssh_target" 'set -eu; base=${TMPDIR:-/tmp}; dir=$(mktemp -d "$base/slate-broadwebd-p2p-lan.XXXXXX"); printf "%s\n" "$dir"'
 )
-remote_pid=
-
-cleanup() {
-    if [ -n "${remote_dir:-}" ]; then
-        ssh "$ssh_target" "set +e; if [ -n '${remote_pid:-}' ]; then kill '${remote_pid:-}' 2>/dev/null; fi; rm -rf -- '$remote_dir'" >/dev/null 2>&1 || true
-    fi
-}
-trap cleanup EXIT INT TERM
 
 scp -q "$binary" "$ssh_target:$remote_dir/slate-broadwebd-net-probe"
 ssh "$ssh_target" "set -eu; chmod 700 '$remote_dir/slate-broadwebd-net-probe'"

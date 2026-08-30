@@ -1351,6 +1351,20 @@ server bind address. The P2P LAN helper keeps its random port default for
 ordinary smoke tests, but `SLATE_P2P_LAN_SERVER_BIND=0.0.0.0:<port>` can pin
 the remote service-frame port for signed advertisement files.
 
+`slate-profile-sync-advertisement` is the first offline producer for those
+manual signed advertisements. It reads an exported enrollment key, derives the
+profile device signer inside `slate-profile-sync`, signs a
+`ProfileSyncPeerAdvertisement`, and writes JSON that
+`slate-broadwebd-net-probe serve --discovery-advertisement-file` can carry.
+This keeps secret material and signing policy out of broadwebd while still
+allowing opt-in LAN or later broadweb smoke runs to exercise signed discovery.
+`scripts/profile-sync-p2p-lan-smoke.sh` can either stage a caller-provided
+advertisement JSON file or generate one from
+`SLATE_P2P_LAN_DISCOVERY_KEY_FILE` with `SLATE_P2P_LAN_DISCOVERY_SERVICE_ADDR`.
+The generated file is local temp state only and is removed after the manual
+smoke run; the remote process still receives only the already-signed
+advertisement.
+
 ## Privacy Boundaries
 
 - Sync must be opt-in per profile.
