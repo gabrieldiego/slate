@@ -149,6 +149,8 @@ const LOCAL_SETTINGS_SYNC_PREVIEW_IPNS_DISCOVERY_KEY: &str =
     "slate-profile-sync-preview/local-preview-provider";
 pub const PROFILE_SYNC_DEFERRED_PROVIDER_PROTOCOL: &str = "provider";
 pub const PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL: &str = "iroh-node";
+pub const PROFILE_SYNC_DEFERRED_TOR_ONION_PROTOCOL: &str = "tor-onion";
+pub const PROFILE_SYNC_DEFERRED_I2P_DESTINATION_PROTOCOL: &str = "i2p-destination";
 const PROFILE_SYNC_PROVIDER_MULTIADDR_PRIVACY_BOUNDARY: &str =
     "profile-sync provider endpoint; no browser navigation or public gateway fallback";
 
@@ -2876,6 +2878,8 @@ impl SettingsSyncProtocolProviderMaterializerPolicy {
             vec![
                 PROFILE_SYNC_DEFERRED_PROVIDER_PROTOCOL.to_string(),
                 PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL.to_string(),
+                PROFILE_SYNC_DEFERRED_TOR_ONION_PROTOCOL.to_string(),
+                PROFILE_SYNC_DEFERRED_I2P_DESTINATION_PROTOCOL.to_string(),
             ],
         )
     }
@@ -5294,6 +5298,11 @@ fn parse_deferred_protocol_endpoint(endpoint_ref: &str) -> Option<DeferredProtoc
     for (prefix, protocol) in [
         ("provider:", PROFILE_SYNC_DEFERRED_PROVIDER_PROTOCOL),
         ("iroh-node:", PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL),
+        ("tor-onion:", PROFILE_SYNC_DEFERRED_TOR_ONION_PROTOCOL),
+        (
+            "i2p-destination:",
+            PROFILE_SYNC_DEFERRED_I2P_DESTINATION_PROTOCOL,
+        ),
     ] {
         if let Some(target) = endpoint_ref.strip_prefix(prefix) {
             if is_endpoint_token(target) {
@@ -11556,6 +11565,31 @@ mod tests {
         assert_eq!(
             super::classify_stored_provider_endpoint(
                 "provider-a",
+                Some("tor-onion:provider-a.onion")
+            ),
+            SettingsSyncStoredProviderEndpointStatus::DeferredProtocol
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint(
+                "provider-a",
+                Some("tor-onion:bad target.onion")
+            ),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint(
+                "provider-a",
+                Some("i2p-destination:provider-a.b32.i2p")
+            ),
+            SettingsSyncStoredProviderEndpointStatus::DeferredProtocol
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint("provider-a", Some("i2p-destination:")),
+            SettingsSyncStoredProviderEndpointStatus::Unsupported
+        );
+        assert_eq!(
+            super::classify_stored_provider_endpoint(
+                "provider-a",
                 Some("provider:contracted-pinning")
             ),
             SettingsSyncStoredProviderEndpointStatus::DeferredProtocol
@@ -11564,6 +11598,31 @@ mod tests {
             super::classify_stored_provider_endpoint("provider-a", None),
             SettingsSyncStoredProviderEndpointStatus::Missing
         );
+    }
+
+    #[test]
+    fn deferred_protocol_endpoint_parser_models_private_network_refs() {
+        for (endpoint_ref, expected_protocol, expected_target) in [
+            (
+                "tor-onion:provider-a.onion",
+                super::PROFILE_SYNC_DEFERRED_TOR_ONION_PROTOCOL,
+                "provider-a.onion",
+            ),
+            (
+                "i2p-destination:provider-a.b32.i2p",
+                super::PROFILE_SYNC_DEFERRED_I2P_DESTINATION_PROTOCOL,
+                "provider-a.b32.i2p",
+            ),
+        ] {
+            let parsed = super::parse_deferred_protocol_endpoint(endpoint_ref)
+                .expect("parse future private-network deferred endpoint");
+            assert_eq!(parsed.protocol, expected_protocol);
+            assert_eq!(parsed.target, expected_target);
+        }
+
+        assert!(super::parse_deferred_protocol_endpoint("tor-onion:").is_none());
+        assert!(super::parse_deferred_protocol_endpoint("i2p-destination:bad target").is_none());
+        assert!(super::parse_deferred_protocol_endpoint("onion:provider-a.onion").is_none());
     }
 
     #[test]
@@ -11674,6 +11733,14 @@ mod tests {
         assert!(
             simulation_policy
                 .supports_deferred_protocol(super::PROFILE_SYNC_DEFERRED_IROH_NODE_PROTOCOL)
+        );
+        assert!(
+            simulation_policy
+                .supports_deferred_protocol(super::PROFILE_SYNC_DEFERRED_TOR_ONION_PROTOCOL)
+        );
+        assert!(
+            simulation_policy
+                .supports_deferred_protocol(super::PROFILE_SYNC_DEFERRED_I2P_DESTINATION_PROTOCOL)
         );
     }
 
