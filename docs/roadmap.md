@@ -342,6 +342,14 @@ Current baseline:
   on an SSH target, answer multicast discovery, let the local node discover the
   peer, and then run the same put/publish/resolve/get/retain/root-health
   sequence through the discovered endpoint under 256 MiB runtime caps.
+- The manual network probes now share the same bounded service-frame stream
+  helpers as the socketless fixture client. This keeps in-process tests,
+  direct TCP probes, discovered-peer probes, and future runtime-backed manual
+  broadweb experiments on the same length-prefixed request/response boundary.
+  The manual `serve` mode still defaults to the local preview backend; an
+  explicit `--runtime-profile-sync` flag and matching script environment
+  switches are required before it reads runtime profile-sync backend settings
+  such as a local Kubo RPC endpoint.
 - The in-memory `LocalProfileSyncFixture` is no longer re-exported from
   broadwebd's normal root API. Local preview helpers that still need the
   deterministic model import it through `slate_broadwebd::test_fixtures`, so the
@@ -383,6 +391,12 @@ Current baseline:
   IPFS/IPNS, and future broadweb backends. Kubo fixture shims are exported
   only through broadwebd's `test_fixtures` module now, not through the normal
   `protocols::ipfs` API.
+- The profile-sync provider endpoint classifier and local deterministic
+  materializer policy now reserve `tor-onion:<service>` and
+  `i2p-destination:<destination>` as deferred private-network provider refs.
+  They are parsed, planned, and tested through the same socketless
+  materialization boundary as the existing `provider:` and `iroh-node:` refs,
+  but no live Tor/I2P adapter or socket path is enabled yet.
 - The opt-in Kubo RPC endpoint validator and local IPFS gateway validator now
   accept only numeric loopback addresses, plus synthetic in-process fixture URLs
   in tests. Hostname-shaped endpoints such as `localhost` are rejected before
@@ -1801,6 +1815,12 @@ Current baseline:
   Production multi-device use still needs QR rendering, encrypted
   handoff/recovery files, real provider daemons, conflict handling, and cadence
   policy.
+- `slate://settings` now presents the profile-sync enrollment surface as two
+  primary actions: download the current profile's enrollment key or import an
+  enrollment key from a JSON file. The diagnostic local-key, provider,
+  preflight, and local-trial controls remain available under an expandable
+  local diagnostics section for development without crowding the normal
+  user-facing flow.
 - The profile-sync scheduler retention-provider boundary now takes
   `BroadwebdClient` trait objects instead of concrete `BroadwebDaemon`
   references. Fixture and protocol materializers can still hand over in-process
@@ -2046,10 +2066,10 @@ Next:
 
 Backlog:
 
-- Add manual real-network probes after deterministic models are stable, then
-  compare observed IPFS/IPNS, Iroh-like, Tor/I2P, LAN, and retention-provider
-  behavior against the internal fixtures and refine the models where reality
-  differs.
+- Exercise the manual real-network probes with test profiles once the user has
+  a disposable host ready, then compare observed IPFS/IPNS, Iroh-like,
+  Tor/I2P, LAN, and retention-provider behavior against the internal fixtures
+  and refine the models where reality differs.
 - Add ignored/manual loopback Kubo integration tests for add, pin, publish, and
   resolve.
 - Add leak tests proving profile sync does not use OS DNS, public gateways, or

@@ -1058,6 +1058,13 @@ provider-role contracts. The model also treats an Iroh-shaped live-transfer
 peer without the durable availability role as ineligible for retention even
 when stored metadata claims it can retain data. That keeps simulated discovery
 and transfer behavior from bypassing the real provider-role contract.
+The same deferred endpoint parser and local deterministic materializer policy
+now reserve `tor-onion:<service>` and `i2p-destination:<destination>` endpoint
+refs for future private-network provider adapters. These refs are classified
+and planned through the same provider-materialization boundary as
+`iroh-node:<node>` and `provider:<name>`, but they do not open sockets, start
+Tor/I2P services, or route profile bytes until runtime code supplies a matching
+adapter handle.
 
 The local Settings preview now uses composed socketless discovery before each
 fixture sync run. It queries IPNS, libp2p-rendezvous, and local-simulation
@@ -1300,6 +1307,35 @@ trials should compare observed IPFS/IPNS, Iroh, Tor/I2P, LAN, and provider
 behavior against the internal models. When the real networks expose behavior
 the fixture did not model, the next step should be to refine the deterministic
 model and regression tests before relying on that behavior in production.
+
+## Manual Broadweb Harnesses
+
+Manual profile-sync harnesses are opt-in probes while the local deterministic
+model remains the regression source of truth. The shared service-frame helpers
+operate over `Read + Write` streams, so socketless fixtures and TCP probes
+exercise the same length-prefixed request and response bytes. Tests may replace
+the stream with an in-process shim, but the profile-sync client and server code
+must still use the normal service request envelope.
+
+`slate-broadwebd-net-probe` is the current manual harness binary:
+
+- `serve` starts a temporary broadwebd service-frame server with an explicit
+  state root and optional peer-discovery responder.
+- `probe` connects to a supplied `host:port` and exercises provider discovery,
+  object put/get, mutable-root publish/resolve, retention, and root health.
+- `discover-probe` sends the local peer-discovery solicit message first, then
+  runs the same service-frame probe against the discovered endpoint.
+
+By default, `serve` uses the local preview profile-sync backend. Passing
+`--runtime-profile-sync` makes it build the profile-sync registry from runtime
+environment variables, for example a loopback Kubo/IPNS backend selected with
+`SLATE_PROFILE_SYNC_BACKEND=kubo-rpc`. This option is intentionally explicit so
+normal manual LAN probes do not accidentally depend on local daemons or real
+broadweb services. The helper scripts `scripts/profile-sync-lan-smoke.sh` and
+`scripts/profile-sync-p2p-lan-smoke.sh` stage the probe binary over SSH, cap
+remote memory, use temporary remote state, and clean up on exit. Their
+`SLATE_*_RUNTIME_PROFILE_SYNC=1` switches forward `--runtime-profile-sync` to
+the remote server for manual backend experiments.
 
 ## Privacy Boundaries
 
