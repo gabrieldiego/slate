@@ -6,6 +6,11 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+default = ["bundled-runtime"]
+bundled-runtime = ["slate-chrome/default"]
+ubuntu-system-libraries = ["slate-chrome/system-native-libraries"]
+
 [dependencies]
 slate-chrome.workspace = true
 

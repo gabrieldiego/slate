@@ -1,0 +1,15 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Slate
+Source: https://github.com/gabrieldiego/slate
+
+Files: *
+Copyright: 2026 Slate Project Developers
+License: GPL-3+
+ On Debian and Ubuntu systems, the complete text of the GNU General Public
+ License version 3 can be found in /usr/share/common-licenses/GPL-3.
+
+Files: third_party/servo/*
+Copyright: Servo Project Developers
+License: MPL-2.0
+ On Debian and Ubuntu systems, the complete text of the Mozilla Public License
+ version 2.0 can be found in /usr/share/common-licenses/MPL-2.0.

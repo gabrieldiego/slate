@@ -101,6 +101,18 @@ or:
 scripts/check.sh
 ```
 
+### Ubuntu 26.04 package
+
+Build a distributable Ubuntu 26.04 testing package with:
+
+```bash
+make deb
+```
+
+This writes `slate-browser_<version>_amd64.deb` and its SHA-256 checksum under
+`dist/`. See [the Debian package notes](docs/packaging/debian.md) for the
+installed layout, profile location, verification, and clean-machine test plan.
+
 Broadwebd has focused test targets:
 
 ```bash

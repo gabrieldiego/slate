@@ -38,7 +38,7 @@ SLATE_BROADWEBD_NET_PROBE_BIN ?= target/debug/slate-broadwebd-net-probe
 SLATE_PROFILE_SYNC_ADVERTISEMENT_BIN ?= target/debug/slate-profile-sync-advertisement
 SLATE_PROFILE_SYNC_DISCOVERY_CHECK_BIN ?= target/debug/slate-profile-sync-discovery-check
 
-.PHONY: check chrome-verify profile-sync-boundary-check profile-sync-boundary-static-check check-tools setup-local-rust ensure-local-rust slate-bin slate-release-bin slate-shared-bin slate-shared-release-bin release shared share shared-release share-release run run-release run-shared run-share run-shared-release run-share-release test-broadwebd test-network test-external-network profile-sync-net-probe profile-sync-advertisement-tool profile-sync-discovery-check-tool profile-sync-lan-smoke profile-sync-p2p-lan-smoke clean-slate-bin clean-object-data
+.PHONY: check chrome-verify profile-sync-boundary-check profile-sync-boundary-static-check check-tools setup-local-rust ensure-local-rust slate-bin slate-release-bin slate-shared-bin slate-shared-release-bin release shared share shared-release share-release deb deb-clean run run-release run-shared run-share run-shared-release run-share-release test-broadwebd test-network test-external-network profile-sync-net-probe profile-sync-advertisement-tool profile-sync-discovery-check-tool profile-sync-lan-smoke profile-sync-p2p-lan-smoke clean-slate-bin clean-object-data
 
 check: ensure-local-rust
 	$(SLATE_LIMITED_CARGO) check --workspace -j "$(CARGO_BUILD_JOBS)"
@@ -121,6 +121,13 @@ share: shared
 shared-release: slate-shared-release-bin
 
 share-release: shared-release
+
+deb: ensure-local-rust
+	$(SLATE_LIMITED_CARGO) run -p xtask -j "$(CARGO_BUILD_JOBS)" -- package-deb
+
+deb-clean:
+	$(SLATE_CARGO) clean --target-dir "$(CURDIR)/target/slate-deb"
+	rm -rf "$(CURDIR)/target/package/deb/slate-browser"
 
 run: slate-bin
 	./$(ROOT_SLATE_BIN) $(ARGS)

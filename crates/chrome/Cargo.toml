@@ -30,6 +30,16 @@ bench = false
 # based on the copied shell code.
 default = ["default_without_allocator", "servo-allocator/use-jemalloc"]
 default_without_allocator = ["bundled", "default_web_features", "max_log_level", "js_jit"]
+# Ubuntu packages keep Servo and its default resources embedded, but use the
+# system allocator and dynamically linked FreeType instead of the bundled
+# native copies used by portable development builds.
+system-native-libraries = [
+    "baked-in-resources",
+    "default_web_features",
+    "max_log_level",
+    "js_jit",
+    "servo/dynamic_freetype",
+]
 default_web_features = ["servo/clipboard"]
 bundled = ["servo/bundled"]
 baked-in-resources = ["servo/baked-in-resources"]

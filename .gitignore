@@ -1,4 +1,5 @@
 target/
+/dist/
 /slate
 /slate-chrome-headless.png
 /slate-settings.db

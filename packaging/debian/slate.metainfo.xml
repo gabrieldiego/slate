@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.gabrieldiego.Slate</id>
+  <name>Slate</name>
+  <summary>A privacy-focused broadweb browser</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      Slate is a desktop browser built around Servo. It brings conventional,
+      distributed, peer-to-peer, local-first, and privacy-preserving protocols
+      into one browser interface with explicit routing and privacy boundaries.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.gabrieldiego.Slate.desktop</launchable>
+  <provides>
+    <binary>slate</binary>
+  </provides>
+  <url type="homepage">https://github.com/gabrieldiego/slate</url>
+  <developer id="io.github.gabrieldiego">
+    <name>Slate Developers</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+</component>

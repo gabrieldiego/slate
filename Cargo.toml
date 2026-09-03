@@ -42,7 +42,7 @@ url = "2.5"
 slate-apps = { path = "crates/apps" }
 slate-browser-core = { path = "crates/browser-core" }
 slate-broadwebd = { path = "crates/broadwebd" }
-slate-chrome = { path = "crates/chrome" }
+slate-chrome = { path = "crates/chrome", default-features = false }
 slate-net = { path = "crates/net" }
 slate-platform = { path = "crates/platform" }
 slate-profile-sync = { path = "crates/profile-sync" }
@@ -65,3 +65,7 @@ debug = "line-tables-only"
 
 [profile.test]
 debug = "line-tables-only"
+
+[profile.production]
+inherits = "release"
+strip = "debuginfo"

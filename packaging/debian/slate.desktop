@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Slate
+GenericName=Broadweb Browser
+Comment=Browse the conventional and broad web
+TryExec=slate
+Exec=slate %U
+Icon=slate
+Terminal=false
+StartupNotify=true
+Categories=Network;WebBrowser;
+Keywords=web;browser;privacy;IPFS;IPNS;broadweb;
+MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/ipfs;x-scheme-handler/ipns;
