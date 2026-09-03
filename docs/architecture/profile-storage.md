@@ -22,13 +22,15 @@ At startup, Slate resolves the database path in this order:
    directory when it already exists.
 3. If no launch-directory file exists, use `~/.slate/slate-settings.db` when it
    already exists.
-4. If neither implicit file exists, create a new `./slate-settings.db` in the
-   launch working directory with default schema and settings.
+4. If neither implicit file exists, create a new
+   `~/.slate/slate-settings.db` with default schema and settings.
+5. If a home directory is unavailable, fall back to creating
+   `./slate-settings.db` in the launch working directory.
 
 This means a local project or portable folder can carry its own Slate state by
-placing `slate-settings.db` next to the command invocation. Existing
-`~/.slate/slate-settings.db` remains a fallback for users who want a home-level
-profile without passing a flag.
+placing `slate-settings.db` next to the command invocation. New installed and
+desktop-launched profiles use `~/.slate/` rather than writing into an arbitrary
+launch directory.
 
 ## SQLite Choice
 

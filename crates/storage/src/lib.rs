@@ -184,6 +184,7 @@ pub enum DatabasePathSource {
     Explicit,
     LaunchDirectoryExisting,
     HomeDirectoryExisting,
+    HomeDirectoryCreated,
     LaunchDirectoryCreated,
 }
 
@@ -9081,16 +9082,25 @@ pub fn resolve_database_path(
         };
     }
 
-    if let Some(home_directory) = home_directory {
-        let home_database = home_directory
+    let home_database = home_directory.map(|home_directory| {
+        home_directory
             .join(DEFAULT_HOME_DIRECTORY_NAME)
-            .join(DEFAULT_DATABASE_FILE_NAME);
+            .join(DEFAULT_DATABASE_FILE_NAME)
+    });
+    if let Some(home_database) = home_database.as_ref() {
         if home_database.is_file() {
             return ResolvedDatabasePath {
-                path: home_database,
+                path: home_database.clone(),
                 source: DatabasePathSource::HomeDirectoryExisting,
             };
         }
+    }
+
+    if let Some(home_database) = home_database {
+        return ResolvedDatabasePath {
+            path: home_database,
+            source: DatabasePathSource::HomeDirectoryCreated,
+        };
     }
 
     ResolvedDatabasePath {
@@ -12241,11 +12251,26 @@ mod tests {
     }
 
     #[test]
-    fn database_resolution_creates_in_launch_directory_when_no_database_exists() {
+    fn database_resolution_creates_in_home_directory_when_no_database_exists() {
         let launch_dir = test_dir("created-launch");
         let home_dir = test_dir("created-home");
 
         let resolved = resolve_database_path(None, &launch_dir, Some(&home_dir));
+
+        assert_eq!(
+            resolved.path,
+            home_dir
+                .join(DEFAULT_HOME_DIRECTORY_NAME)
+                .join(DEFAULT_DATABASE_FILE_NAME)
+        );
+        assert_eq!(resolved.source, DatabasePathSource::HomeDirectoryCreated);
+    }
+
+    #[test]
+    fn database_resolution_uses_launch_directory_without_a_home_directory() {
+        let launch_dir = test_dir("created-no-home");
+
+        let resolved = resolve_database_path(None, &launch_dir, None);
 
         assert_eq!(resolved.path, launch_dir.join(DEFAULT_DATABASE_FILE_NAME));
         assert_eq!(resolved.source, DatabasePathSource::LaunchDirectoryCreated);

@@ -150,7 +150,7 @@ impl Default for ServoShellPreferences {
 ))]
 pub fn default_config_dir() -> Option<PathBuf> {
     let mut config_dir = ::dirs::config_dir().unwrap();
-    config_dir.push("servo");
+    config_dir.push("slate");
     config_dir.push("default");
     Some(config_dir)
 }
