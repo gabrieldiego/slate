@@ -4,10 +4,18 @@ Slate's desktop chrome currently starts from Servo's default desktop shell and u
 
 Current layers:
 
-- `crates/chrome/`: Slate browser chrome model, egui layout, desktop shell integration, and chrome rendering tests.
-- `crates/platform/`: isolated OS shims when the browser needs platform-specific behavior.
-- `crates/rendering/`: Slate-owned boundary into Servo rendering.
+- `crates/chrome/`: Slate browser chrome model, egui layout, direct Servo webview
+  integration, inherited native shell code, and chrome rendering tests.
+- `crates/platform/`: intended home for isolated OS integration; inherited shell
+  platform code currently also lives under `crates/chrome/`.
+- `crates/rendering/`: the software-rendered `ServoBackend` adapter used by
+  browser-core and rendering tests, separate from the desktop embedding.
 - `crates/slate/`: binary composition root.
+
+The architecture target is to keep Servo and native integration behind narrow
+boundaries. The desktop shell currently imports Servo directly and retains
+unsafe inherited code; see [Servo integration](servo.md) and the
+[safe Rust migration TODO](../roadmap.md#chrome-safe-rust-migration).
 
 The first screen should keep the core Slate shape visible: left app rail,
 navigation controls, address bar, rail-scoped Web tab previews, and a home

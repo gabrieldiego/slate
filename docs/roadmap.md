@@ -82,20 +82,22 @@ the safe Rust requirement remains the target for Slate-owned code.
 
 ## Developer Environment
 
-- Add a Makefile setup target that prepares the local development environment
-  without changing the rest of the machine. It should install or verify the
-  pinned Rust toolchain under `./.rustup` and use `./.cargo` for project-local
-  Cargo state.
-- Make the main build targets consistently use the local Rust environment when
-  it exists, so `make shared-release` does not fall back to `~/.rustup` on a
-  small root filesystem.
+- `make setup-local-rust` installs the pinned Rust toolchain under `./.rustup`
+  and prepares `./.cargo` for project-local Cargo state. Main Makefile build and
+  test targets use these locations by default, including `make shared-release`.
 - Keep build-tool auxiliary caches on the source-code filesystem. The Makefile
   and profile-sync boundary checks now default `XDG_CACHE_HOME` and
   `UV_CACHE_DIR` under `target/cache` so Servo helper tooling does not spill
   into `/home` while `/` is constrained.
-- Add a check target for required host tools and libraries. Missing tools should
-  be reported with install guidance, while setup actions that download or
-  install software should stay explicit.
+- `make check-tools` checks the pinned toolchain and basic compiler tools. Extend
+  it to check the native libraries required by the desktop shell and Servo;
+  it does not currently establish full browser build readiness. Downloads and
+  installation remain explicit setup actions.
+- Repair the stale `test-network` browser-core filter
+  `navigating_http_hands_page_to_servo`. The current test is named
+  `navigating_http_hands_address_to_surface_loader` and uses an injected loader;
+  it does not demonstrate live Servo or loopback fetching. Verify actual test
+  execution and document the coverage when repairing the target.
 - Keep memory-heavy browser builds conservative by default. Shared release
   builds should continue to prefer one Cargo job unless a developer opts into
   more parallelism.
