@@ -55,6 +55,31 @@ Next:
   produce the crops and metadata needed for review instead of relying only on
   full-window screenshots.
 
+## Chrome Safe Rust Migration
+
+TODO: bring `crates/chrome/` into compliance with the
+[Slate-owned safe Rust policy](../AGENTS.md#safe-rust-policy).
+
+The chrome crate contains code copied from Servo's desktop and mobile shell,
+including unsafe signal handling, backtraces, native window and console access,
+mobile bindings, and profiling hooks. Its own Cargo lint table does not inherit
+the workspace's `unsafe_code = "forbid"` setting. This is an implementation gap;
+the safe Rust requirement remains the target for Slate-owned code.
+
+- Inventory unsafe blocks, functions, traits, attributes, and FFI declarations
+  across Linux, macOS, Windows, Android, OpenHarmony, and conditional profiling
+  builds. Record the behavior each call supports and its replacement boundary.
+- Replace those calls with safe dependency or upstream Servo APIs. Keep OS
+  integration behind narrow interfaces and preserve copied-code attribution.
+  Servo internals under `third_party/servo/` keep their own safety policy.
+- Once the call sites are migrated, enforce `#![forbid(unsafe_code)]` for the
+  chrome library and binaries and restore Cargo unsafe-code lint enforcement
+  while retaining the crate's conditional-compilation checks.
+- Validate affected platform builds, window/input behavior, crash reporting,
+  and headless chrome verification. Keep unavailable platform checks explicit;
+  do not satisfy the TODO by hiding unsafe code, disabling supported behavior,
+  or weakening checks.
+
 ## Developer Environment
 
 - Add a Makefile setup target that prepares the local development environment
