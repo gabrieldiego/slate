@@ -260,10 +260,15 @@ This sends requested CIDs, IPNS names, timing, and client network metadata to
 the configured gateway operator.
 
 `BroadwebDaemon::start_default_session` reads `SLATE_IPFS_GATEWAY` and
-`SLATE_IPFS_GATEWAY_SCOPE` to support local manual configuration while keeping
-the same policy boundary. `SLATE_IPFS_GATEWAY_SCOPE=public` is required before
+`SLATE_IPFS_GATEWAY_SCOPE` to support local manual configuration.
+`SLATE_IPFS_GATEWAY_SCOPE=public` is required before
 a non-loopback public gateway is accepted as the first-choice gateway. A public
 scope without an explicit gateway uses the default public gateway list.
+That scope check does not gate the local-first constructor's public fallback.
+Fallback currently has no consent prompt; enforcing the
+[consent requirement](../../AGENTS.md#privacy-and-security-requirements) remains
+deferred work. See [IPFS browsing](../../README.md#ipfs-browsing) for the current
+behavior and the data exposed to public gateways.
 
 Public gateway fallback is useful for resource-constrained devices and early
 interoperability tests, but it is not a privacy-preserving substitute for a

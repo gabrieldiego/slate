@@ -34,6 +34,12 @@ The name Slate can be understood as a nod to a very early surface for expression
 
 Start with portable Rust UI code and avoid full GUI toolkits unless they become strictly necessary. Slate-owned UI should render the browser chrome itself and keep native OS shims isolated in `crates/platform/`.
 
+The current desktop implementation uses a Servo-derived `egui`/`winit` shell.
+See [UI architecture](docs/architecture/ui.md) for its current boundaries and
+the [chrome safe Rust TODO](docs/roadmap.md#chrome-safe-rust-migration) for the
+inherited shell code that still needs migration. The isolation and safe Rust
+requirements remain in force.
+
 The initial browser shell should be inspired by the Slate concept direction: a left app rail, traditional top tab strip, navigation toolbar, address bar, and quiet home viewport. Use the concept screenshot as visual guidance, not as the UI asset itself.
 
 ## Broadweb Purpose

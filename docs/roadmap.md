@@ -55,22 +55,49 @@ Next:
   produce the crops and metadata needed for review instead of relying only on
   full-window screenshots.
 
+## Chrome Safe Rust Migration
+
+TODO: bring `crates/chrome/` into compliance with the
+[Slate-owned safe Rust policy](../AGENTS.md#safe-rust-policy).
+
+The chrome crate contains code copied from Servo's desktop and mobile shell,
+including unsafe signal handling, backtraces, native window and console access,
+mobile bindings, and profiling hooks. Its own Cargo lint table does not inherit
+the workspace's `unsafe_code = "forbid"` setting. This is an implementation gap;
+the safe Rust requirement remains the target for Slate-owned code.
+
+- Inventory unsafe blocks, functions, traits, attributes, and FFI declarations
+  across Linux, macOS, Windows, Android, OpenHarmony, and conditional profiling
+  builds. Record the behavior each call supports and its replacement boundary.
+- Replace those calls with safe dependency or upstream Servo APIs. Keep OS
+  integration behind narrow interfaces and preserve copied-code attribution.
+  Servo internals under `third_party/servo/` keep their own safety policy.
+- Once the call sites are migrated, enforce `#![forbid(unsafe_code)]` for the
+  chrome library and binaries and restore Cargo unsafe-code lint enforcement
+  while retaining the crate's conditional-compilation checks.
+- Validate affected platform builds, window/input behavior, crash reporting,
+  and headless chrome verification. Keep unavailable platform checks explicit;
+  do not satisfy the TODO by hiding unsafe code, disabling supported behavior,
+  or weakening checks.
+
 ## Developer Environment
 
-- Add a Makefile setup target that prepares the local development environment
-  without changing the rest of the machine. It should install or verify the
-  pinned Rust toolchain under `./.rustup` and use `./.cargo` for project-local
-  Cargo state.
-- Make the main build targets consistently use the local Rust environment when
-  it exists, so `make shared-release` does not fall back to `~/.rustup` on a
-  small root filesystem.
+- `make setup-local-rust` installs the pinned Rust toolchain under `./.rustup`
+  and prepares `./.cargo` for project-local Cargo state. Main Makefile build and
+  test targets use these locations by default, including `make shared-release`.
 - Keep build-tool auxiliary caches on the source-code filesystem. The Makefile
   and profile-sync boundary checks now default `XDG_CACHE_HOME` and
   `UV_CACHE_DIR` under `target/cache` so Servo helper tooling does not spill
   into `/home` while `/` is constrained.
-- Add a check target for required host tools and libraries. Missing tools should
-  be reported with install guidance, while setup actions that download or
-  install software should stay explicit.
+- `make check-tools` checks the pinned toolchain and basic compiler tools. Extend
+  it to check the native libraries required by the desktop shell and Servo;
+  it does not currently establish full browser build readiness. Downloads and
+  installation remain explicit setup actions.
+- Repair the stale `test-network` browser-core filter
+  `navigating_http_hands_page_to_servo`. The current test is named
+  `navigating_http_hands_address_to_surface_loader` and uses an injected loader;
+  it does not demonstrate live Servo or loopback fetching. Verify actual test
+  execution and document the coverage when repairing the target.
 - Keep memory-heavy browser builds conservative by default. Shared release
   builds should continue to prefer one Cargo job unless a developer opts into
   more parallelism.
